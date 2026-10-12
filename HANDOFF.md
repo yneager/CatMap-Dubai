@@ -38,13 +38,13 @@ Feature-to-code map: `README.md`. Firebase, Blaze, MapTiler, GitHub releases and
 * **Strings:** 1065 per language (no missing or unused keys).
 * **Release APK:** `app/build/outputs/apk/release/app-release.apk`, about 22 MB, ARM only, signed with the new
   release key (SHA-256 `25:6D:F9:05:…:CD:F4:28:87`, verified with apksigner).
-* **Git:** a local repo was initialised (`git init`, branch `main`) with **no commits and no remote**.
-  * The `git add --dry-run` list is 158 files.
-  * A scan of those files for every local password found **none**.
+* **Git:** pushed to the public repo **https://github.com/yneager/CatMap-Dubai** (branch `main`) on 12 Oct 2026, with the owner's approval.
+  * Commits use the repo-local identity `mohammad <mohammed.duae@gmail.com>` (`git config` in this repo only).
+  * A scan of all 160 committed files for every local password found **none**. `.gitattributes` keeps `gradlew` and `*.sh` LF for the Linux runners.
   * `.gitignore` covers `keystore.properties`, `release-keys/`, `*.jks`, `app/google-services.json`, `local.properties`, `test-accounts.local.txt`, `tools/seed/demo-accounts.local.json`, `.emulator-data/` and `node_modules`.
 * **Not done (owner setup):**
   * The real Firebase project. `google-services.json` is still missing, so normal builds show "Firebase setup required".
-  * The GitHub repo and its secrets.
+  * The GitHub repo **secrets** (SETUP.md §9). The repo exists; no `v*` tag has been pushed, because a tag starts the release build, which fails without the secrets.
   * Blaze (optional).
   * A MapTiler key (optional).
   * Exact steps are in SETUP.md §1–9.
@@ -66,7 +66,7 @@ Feature-to-code map: `README.md`. Firebase, Blaze, MapTiler, GitHub releases and
   4. Runs `testDebugUnitTest assembleRelease` with `-Pcatmap.versionName=<tag> -Pcatmap.githubRepo=$GITHUB_REPOSITORY`.
   5. Verifies the signature and creates or updates the GitHub Release with `CatMap-<version>.apk`.
 * `ci.yml`: unit tests, lint and a debug build, plus the rules suite through `firebase emulators:exec`.
-* Neither has been run on GitHub yet, because there is no repo. The steps were checked locally: the same Gradle tasks, apksigner verify and the base64 secrets.
+* `ci.yml` ran on GitHub for the first push (see "CI on GitHub" below). `release.yml` has not run yet: it needs the secrets and a tag.
 * **The updater needs a public repo** (it calls `api.github.com/repos/<owner>/<repo>/releases/latest` without a login). It picks the first `.apk` asset. The version comes from `tag_name` minus `v`, and the release body is shown as the notes.
 
 ## Verified live on emulator-5554 (12 Oct, against the Firebase emulators)
@@ -223,5 +223,5 @@ Package `com.catmap.dubai`, no DI framework.
 
 1. Back up `release-keys/` and `keystore.properties`.
 2. Create the Firebase project (SETUP.md §1–6), then test the signed release with real accounts.
-3. Choose a GitHub repo name. Then commit, add the remote, push, add the secrets (§9) and push tag `v2.0.0`. Before step 3, the assistant must get the owner's approval and repo name.
+3. Add the four signing secrets plus `GOOGLE_SERVICES_JSON` to https://github.com/yneager/CatMap-Dubai (SETUP.md §9), then push tag `v2.0.0`. Ask the owner before pushing any tag or further commits.
 4. Optional: Blaze (videos and push) and a MapTiler key.
