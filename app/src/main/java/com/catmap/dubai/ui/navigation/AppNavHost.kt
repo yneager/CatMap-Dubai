@@ -153,7 +153,6 @@ import com.catmap.dubai.ui.stations.StationDetailScreen
 import com.catmap.dubai.ui.stations.StationEditScreen
 import com.catmap.dubai.ui.stations.StationsScreen
 import com.catmap.dubai.ui.theme.BrandGradient
-import com.catmap.dubai.update.UpdatePrompt
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -344,7 +343,6 @@ fun AppNavHost(pendingRoute: MutableState<String?>) {
     }
 
     if (choosingPost) PostChooserSheet(nav, onDismiss = { choosingPost = false })
-    if (user != null && current !in Routes.authRoutes) UpdatePrompt()
 }
 
 private fun NavBackStackEntry.arg(name: String) = arguments?.getString(name).orEmpty()

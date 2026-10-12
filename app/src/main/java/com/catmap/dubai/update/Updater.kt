@@ -80,7 +80,8 @@ class Updater(private val context: Context, private val settings: SettingsReposi
         if (!configured) return null
         val s = settings.settings.first()
         if (System.currentTimeMillis() - s.lastUpdateCheck < CHECK_INTERVAL_MS) return null
-        val release = runCatching { latest() }.getOrNull()
+        // A failed check (offline, GitHub busy) isn't recorded, so the next launch tries again.
+        val release = runCatching { latest() }.getOrElse { return null }
         settings.setLastUpdateCheck(System.currentTimeMillis())
         return release?.takeIf { isNewer(it.version) && it.version != s.skippedVersion }
     }

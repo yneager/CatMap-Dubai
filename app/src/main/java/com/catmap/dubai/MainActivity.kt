@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.catmap.dubai.data.AppSettings
 import com.catmap.dubai.notifications.SystemNotifications
 import com.catmap.dubai.ui.auth.SetupRequiredScreen
+import com.catmap.dubai.update.UpdatePrompt
 import com.catmap.dubai.ui.components.LocalContainer
 import com.catmap.dubai.ui.components.LocalIsDark
 import com.catmap.dubai.ui.components.LocalSnackbar
@@ -69,6 +70,9 @@ class MainActivity : AppCompatActivity() {
                             AskForNotificationPermission()
                             AppNavHost(pendingRoute)
                         }
+                        // Offered on every screen, signed in or not: a build without Firebase (or a signed-out
+                        // user) must still be able to receive the update that fixes things.
+                        UpdatePrompt()
                     }
                 }
             }

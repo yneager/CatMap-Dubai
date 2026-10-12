@@ -47,7 +47,7 @@ import com.catmap.dubai.ui.components.LocalContainer
 import com.catmap.dubai.ui.theme.BrandGradient
 import kotlinx.coroutines.launch
 
-/** Checks GitHub quietly after sign-in and offers a newer version when there is one. */
+/** Checks GitHub quietly (at most every 12 hours) and offers a newer version when there is one. */
 @Composable
 fun UpdatePrompt() {
     val container = LocalContainer.current
