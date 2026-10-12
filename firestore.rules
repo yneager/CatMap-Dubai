@@ -1,0 +1,391 @@
+rules_version = '2';
+
+// Security rules for CatMap Dubai.
+// Roles live in users/{uid}.role: user, volunteer, moderator, admin.
+// Writes require a verified email address; posting is rate limited per user.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    // Suspended accounts (set by an admin) can still read, but every write that needs verified() is refused.
+    function verified() { return signedIn() && request.auth.token.email_verified == true && !suspended(); }
+    function suspended() { return exists(userPath()) && get(userPath()).data.get('suspended', false) == true; }
+    function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function role() { return exists(userPath()) ? get(userPath()).data.role : 'user'; }
+    function isVolunteer() { return signedIn() && role() in ['volunteer', 'moderator', 'admin']; }
+    function isMod() { return signedIn() && role() in ['moderator', 'admin']; }
+    function isAdmin() { return signedIn() && role() == 'admin'; }
+
+    function incoming() { return request.resource.data; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function onlyChanging(fields) { return changed().hasOnly(fields); }
+    function notChanging(fields) { return !changed().hasAny(fields); }
+
+    // The client writes users/{uid}.lastPostAt = serverTimestamp() in the same batch as the post.
+    // That proves the timestamp is fresh, and the previous value enforces a gap between posts.
+    function rateLimited() {
+      let before = get(userPath()).data;
+      let after = getAfter(userPath()).data;
+      return after.lastPostAt == request.time
+        && (before.get('lastPostAt', null) == null || request.time > before.lastPostAt + duration.value(10, 's'));
+    }
+
+    // ---------- users ----------
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && uid() == userId
+        && incoming().role == 'user'
+        && incoming().volunteerStatus == 'none'
+        && incoming().points == 0
+        && incoming().get('suspended', false) == false;
+      // Only admins can change a role or suspend an account.
+      allow update: if
+        (signedIn() && uid() == userId
+          && notChanging(['role', 'suspended'])
+          && (notChanging(['lastPostAt']) || incoming().lastPostAt == request.time)
+          && (notChanging(['volunteerStatus']) || incoming().volunteerStatus == 'applied'))
+        || (isMod() && notChanging(['role', 'volunteerStatus', 'lastPostAt', 'suspended']))
+        || isAdmin();
+      allow delete: if (signedIn() && uid() == userId) || isAdmin();
+
+      // Email address and other account data only the owner may see.
+      match /private/{doc} {
+        allow read, write: if signedIn() && uid() == userId;
+      }
+
+      match /notifications/{notificationId} {
+        allow read, update, delete: if signedIn() && uid() == userId;
+        allow create: if (signedIn() && uid() == userId)
+          || (verified() && incoming().fromUid == uid());
+      }
+
+      // Saved posts and blocked people are private to their owner.
+      match /favorites/{postId} {
+        allow read, write: if signedIn() && uid() == userId;
+      }
+      match /blocked/{otherId} {
+        allow read, write: if signedIn() && uid() == userId;
+      }
+    }
+
+    // Username -> uid, so names stay unique. Readable before sign-in for the registration check.
+    // The app may only write `uid`; `loginEmail` (username sign-in for demo accounts) is set by admin tooling.
+    match /usernames/{name} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if signedIn() && incoming().uid == uid() && incoming().keys().hasOnly(['uid']);
+      allow delete: if signedIn() && (resource.data.uid == uid() || isAdmin());
+      allow update: if false;
+    }
+
+    // ---------- cats ----------
+    function communityCatFields() {
+      return ['sightingCount', 'lastSeen', 'lat', 'lng', 'neighborhood', 'neighborhoods', 'photoIds',
+              'coverPhotoId', 'contributors', 'followers', 'aliases', 'tnrStatus', 'healthStatus',
+              'features', 'updatedAt'];
+    }
+    // Only volunteers may mark a cat as verified neutered.
+    function tnrAllowed() {
+      return isVolunteer()
+        || (resource.data.tnrVerified == true
+            ? incoming().tnrStatus == resource.data.tnrStatus
+            : incoming().tnrStatus != 'neutered_verified');
+    }
+
+    match /cats/{catId} {
+      allow read: if signedIn();
+      allow create: if verified()
+        && incoming().createdBy == uid()
+        && incoming().hidden == false
+        && incoming().mergedInto == ''
+        && incoming().tnrVerified == false
+        && incoming().tnrStatus != 'neutered_verified';
+      allow update: if isMod()
+        || (verified() && resource.data.createdBy == uid()
+            && notChanging(['createdBy', 'createdByName', 'createdAt', 'hidden', 'mergedInto', 'tnrVerified'])
+            && tnrAllowed())
+        || (isVolunteer() && onlyChanging(communityCatFields().concat(['tnrVerified'])))
+        || (verified() && onlyChanging(communityCatFields()) && tnrAllowed());
+      allow delete: if isMod();
+    }
+
+    // ---------- sightings ----------
+    match /sightings/{sightingId} {
+      allow read: if signedIn();
+      allow create: if verified()
+        && incoming().userId == uid()
+        && incoming().status == 'pending'
+        && rateLimited();
+      allow update: if isMod()
+        || (verified() && resource.data.userId == uid()
+            && onlyChanging(['notes', 'healthTags', 'behaviorTags', 'earTipped', 'possiblyNotNeutered',
+                             'needsMedical', 'lat', 'lng', 'neighborhood', 'locationSource', 'updatedAt']));
+      allow delete: if signedIn() && (resource.data.userId == uid() || isMod());
+    }
+
+    // Exact coordinates of a sighting: author and volunteers only.
+    match /privateLocations/{sightingId} {
+      allow read: if signedIn() && (resource.data.ownerId == uid() || isVolunteer());
+      // A location belongs to its sighting, and ownership cannot be reassigned.
+      allow create: if verified() && incoming().ownerId == uid()
+        && getAfter(/databases/$(database)/documents/sightings/$(sightingId)).data.userId == uid();
+      allow update: if verified() && resource.data.ownerId == uid()
+        && incoming().ownerId == resource.data.ownerId;
+      allow delete: if signedIn() && (resource == null || resource.data.ownerId == uid() || isMod());
+    }
+
+    // Verified medical information, written by volunteers and staff.
+    match /medicalRecords/{recordId} {
+      allow read: if signedIn();
+      allow create: if isVolunteer() && incoming().byUid == uid();
+      allow update: if isMod();
+      allow delete: if isAdmin();
+    }
+
+    // ---------- rescue reports ----------
+    function volunteerVisible() { return ['approved', 'in_progress', 'resolved']; }
+
+    match /rescues/{reportId} {
+      allow read: if signedIn() && (
+        isMod()
+        || resource.data.reporterId == uid()
+        || (isVolunteer() && resource.data.status in volunteerVisible()));
+      allow create: if verified()
+        && incoming().reporterId == uid()
+        && incoming().status == 'submitted'
+        && rateLimited();
+      allow update: if isMod()
+        || (isVolunteer()
+            && resource.data.status in volunteerVisible()
+            && incoming().status in volunteerVisible()
+            && onlyChanging(['status', 'updates', 'assignedTo', 'assignedName', 'updatedAt']))
+        || (verified() && resource.data.reporterId == uid() && onlyChanging(['updates', 'updatedAt']));
+      allow delete: if isAdmin() || (signedIn() && resource.data.reporterId == uid());
+    }
+
+    // ---------- Ehsan feeding stations ----------
+    match /stations/{stationId} {
+      allow read: if signedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (verified() && onlyChanging(['checkinCount', 'lastCheckinAt', 'lastCheckinBy']));
+    }
+
+    match /checkins/{checkinId} {
+      allow read: if signedIn();
+      allow create: if verified() && incoming().userId == uid();
+      allow delete: if signedIn() && (resource.data.userId == uid() || isAdmin());
+    }
+
+    match /maintenance/{reportId} {
+      allow read: if signedIn();
+      allow create: if verified()
+        && incoming().userId == uid()
+        && incoming().status == 'open'
+        && rateLimited();
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (signedIn() && resource.data.userId == uid());
+    }
+
+    // ---------- moderation ----------
+    match /mergeRequests/{requestId} {
+      allow read: if signedIn();
+      allow create: if verified() && incoming().requestedBy == uid() && incoming().status == 'pending';
+      allow update: if isMod();
+      allow delete: if signedIn() && resource.data.requestedBy == uid();
+    }
+
+    match /contentReports/{reportId} {
+      allow read: if isMod() || (signedIn() && resource.data.reporterId == uid());
+      allow create: if verified()
+        && incoming().reporterId == uid()
+        && incoming().status == 'open'
+        && rateLimited();
+      allow update: if isMod();
+      allow delete: if signedIn() && resource.data.reporterId == uid();
+    }
+
+    match /modActions/{actionId} {
+      allow read: if isMod();
+      allow create: if isMod() && incoming().moderatorId == uid();
+    }
+
+    match /volunteerApplications/{applicantId} {
+      allow read: if signedIn() && (uid() == applicantId || isAdmin());
+      allow create, update: if (signedIn() && uid() == applicantId
+                                && incoming().userId == uid()
+                                && incoming().status == 'pending')
+                            || isAdmin();
+      allow delete: if signedIn() && (uid() == applicantId || isAdmin());
+    }
+
+    // ---------- animal posts: lost, found, spotted, needs help, street, adoption, other ----------
+    function validPost() {
+      let d = incoming();
+      return d.category in ['lost', 'found', 'spotted', 'needs_help', 'street', 'adoption', 'other']
+        && d.animalType in ['cat', 'dog', 'bird', 'rabbit', 'other']
+        && d.status in ['open', 'reunited', 'resolved']
+        && d.adoptionStatus in ['available', 'pending', 'adopted']
+        && d.description.size() <= 2000 && d.name.size() <= 60
+        && d.photoIds.size() <= 6
+        && d.reward is int && d.reward >= 0 && d.reward < 1000000
+        && d.areaRadiusM is int && d.areaRadiusM >= 0 && d.areaRadiusM <= 5000;
+    }
+
+    match /posts/{postId} {
+      // Hidden posts stay visible to their author and to moderators only.
+      allow get: if signedIn() && (resource == null || resource.data.hidden == false || resource.data.ownerId == uid() || isMod());
+      allow list: if signedIn() && (resource.data.hidden == false || resource.data.ownerId == uid() || isMod());
+      allow create: if verified()
+        && incoming().ownerId == uid()
+        && incoming().hidden == false
+        && incoming().updatesCount == 0
+        && validPost()
+        && rateLimited();
+      allow update: if isMod()
+        || (verified() && resource.data.ownerId == uid()
+            && notChanging(['ownerId', 'hidden', 'createdAt', 'updatesCount'])
+            && validPost())
+        // Anyone adding a sighting moves the counter by exactly one, in the same batch as the update.
+        || (verified() && onlyChanging(['updatesCount', 'updatedAt'])
+            && (incoming().updatesCount == resource.data.updatesCount + 1
+                // Removing an update (by its author or the post owner) moves it back down, never below zero.
+                || (incoming().updatesCount == resource.data.updatesCount - 1 && resource.data.updatesCount > 0)));
+      allow delete: if signedIn() && (resource.data.ownerId == uid() || isMod());
+
+      match /updates/{updateId} {
+        allow read: if signedIn();
+        allow create: if verified() && incoming().byUid == uid() && incoming().postId == postId
+          && incoming().text.size() <= 1000 && rateLimited();
+        allow delete: if signedIn() && (resource.data.byUid == uid() || isMod()
+          || get(/databases/$(database)/documents/posts/$(postId)).data.ownerId == uid());
+      }
+    }
+
+    // Followed areas for lost-pet alerts. Readable by members so a poster can find who to alert.
+    match /areaFollows/{followerId} {
+      allow read: if verified();
+      allow write: if signedIn() && uid() == followerId;
+    }
+
+    // ---------- adoption requests: id = "{postId}_{requesterId}" ----------
+    match /adoptionRequests/{requestId} {
+      // A missing request can be looked up, so the app can show "not requested yet" without failing.
+      allow get: if signedIn() && (resource == null || resource.data.requesterId == uid() || resource.data.ownerId == uid() || isMod());
+      allow list: if signedIn() && (resource.data.requesterId == uid() || resource.data.ownerId == uid() || isMod());
+      allow create: if verified()
+        && incoming().requesterId == uid()
+        && incoming().ownerId != uid()
+        && incoming().status == 'pending'
+        && requestId == incoming().postId + '_' + uid()
+        && get(/databases/$(database)/documents/posts/$(incoming().postId)).data.ownerId == incoming().ownerId;
+      allow update: if
+        (signedIn() && resource.data.ownerId == uid()
+          && onlyChanging(['status', 'ownerNote', 'decidedAt'])
+          && resource.data.status == 'pending' && incoming().status in ['approved', 'declined'])
+        || (signedIn() && resource.data.requesterId == uid()
+          && onlyChanging(['status']) && resource.data.status == 'pending' && incoming().status == 'withdrawn')
+        || isMod();
+      allow delete: if signedIn() && (resource.data.requesterId == uid() || isMod());
+    }
+
+    // ---------- pet sitting ----------
+    function reviewAfter(id) { return getAfter(/databases/$(database)/documents/reviews/$(id)).data; }
+
+    match /sitters/{sitterId} {
+      allow read: if signedIn();
+      allow create: if verified() && sitterId == uid()
+        && incoming().ratingSum == 0 && incoming().ratingCount == 0;
+      allow update: if
+        (verified() && sitterId == uid() && notChanging(['ratingSum', 'ratingCount', 'lastReviewId']))
+        // A reviewer adds exactly their new review's rating, in the same transaction that creates the review.
+        || (verified() && onlyChanging(['ratingSum', 'ratingCount', 'lastReviewId', 'updatedAt'])
+            && !exists(/databases/$(database)/documents/reviews/$(incoming().lastReviewId))
+            && reviewAfter(incoming().lastReviewId).authorId == uid()
+            && reviewAfter(incoming().lastReviewId).sitterId == sitterId
+            && incoming().ratingCount == resource.data.ratingCount + 1
+            && incoming().ratingSum == resource.data.ratingSum + reviewAfter(incoming().lastReviewId).rating)
+        || isMod();
+      allow delete: if signedIn() && (sitterId == uid() || isMod());
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if signedIn() && (resource.data.ownerId == uid() || resource.data.sitterId == uid() || isMod());
+      allow create: if verified()
+        && incoming().ownerId == uid()
+        && incoming().sitterId != uid()
+        && incoming().status == 'requested'
+        && incoming().reviewed == false
+        && exists(/databases/$(database)/documents/sitters/$(incoming().sitterId))
+        && rateLimited();
+      allow update: if
+        (signedIn() && resource.data.sitterId == uid()
+          && onlyChanging(['status', 'sitterNote', 'updatedAt'])
+          && ((resource.data.status == 'requested' && incoming().status in ['accepted', 'declined'])
+              || (resource.data.status == 'accepted' && incoming().status in ['completed', 'cancelled'])))
+        || (signedIn() && resource.data.ownerId == uid()
+          && onlyChanging(['status', 'updatedAt'])
+          && ((resource.data.status in ['requested', 'accepted'] && incoming().status == 'cancelled')
+              || (resource.data.status == 'accepted' && incoming().status == 'completed')))
+        // Marking a completed booking as reviewed must happen together with creating its review.
+        || (signedIn() && resource.data.ownerId == uid()
+          && onlyChanging(['reviewed', 'updatedAt'])
+          && resource.data.status == 'completed' && resource.data.reviewed == false && incoming().reviewed == true
+          && existsAfter(/databases/$(database)/documents/reviews/$(bookingId)))
+        || isMod();
+    }
+
+    // One review per completed booking (the id is the booking id), written by the pet owner.
+    match /reviews/{bookingId} {
+      function booking() { return get(/databases/$(database)/documents/bookings/$(bookingId)).data; }
+      allow read: if signedIn();
+      allow create: if verified()
+        && incoming().authorId == uid()
+        && incoming().rating is int && incoming().rating >= 1 && incoming().rating <= 5
+        && incoming().text.size() <= 800
+        && booking().ownerId == uid()
+        && booking().status == 'completed'
+        && booking().sitterId == incoming().sitterId;
+      allow delete: if isMod();
+    }
+
+    // ---------- private messages: chat id = the two uids, sorted, joined with "_" ----------
+    match /chats/{chatId} {
+      // A missing chat can be looked up (so the app can create it); existing chats only by their members.
+      allow get: if signedIn() && (resource == null || uid() in resource.data.members);
+      allow list: if signedIn() && uid() in resource.data.members;
+      allow create: if verified()
+        && incoming().members.size() == 2
+        && uid() in incoming().members
+        && incoming().members[0] < incoming().members[1]
+        && chatId == incoming().members[0] + '_' + incoming().members[1];
+      allow update: if signedIn() && uid() in resource.data.members
+        && onlyChanging(['lastText', 'lastSender', 'lastAt', 'unread', 'names', 'photos']);
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        function chat() { return get(/databases/$(database)/documents/chats/$(chatId)).data; }
+        function otherMember() { return chat().members[0] == uid() ? chat().members[1] : chat().members[0]; }
+        allow read: if signedIn() && uid() in chat().members;
+        // Nobody can message a person who has blocked them.
+        allow create: if verified()
+          && incoming().senderId == uid()
+          && uid() in chat().members
+          && incoming().text.size() <= 2000
+          && !exists(/databases/$(database)/documents/users/$(otherMember())/blocked/$(uid()));
+        allow delete: if signedIn() && (resource.data.senderId == uid() || isAdmin());
+      }
+    }
+
+    // ---------- photos (JPEG blobs, EXIF already stripped on the phone) ----------
+    match /images/{imageId} {
+      allow read: if signedIn();
+      allow create: if verified()
+        && incoming().ownerId == uid()
+        && incoming().data.size() < 1000000;
+      allow delete: if signedIn() && (resource == null || resource.data.ownerId == uid() || isMod());
+    }
+  }
+}

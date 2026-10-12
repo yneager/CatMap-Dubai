@@ -1,0 +1,28 @@
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build/
+/app/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+.kotlin/
+# Firebase config is project-specific; keep it out of version control
+/app/google-services.json
+/keystore.properties
+*.jks
+*.keystore
+*-debug.log
+test-accounts.local.txt
+
+# Local testing data and tools
+/.emulator-data/
+/tools/rulestest/node_modules/
+__pycache__/
+
+# Demo-account passwords for the local emulator seed (see tools/seed/README)
+/tools/seed/demo-accounts.local.json
+/release-keys/
+/functions/node_modules/

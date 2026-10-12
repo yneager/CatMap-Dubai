@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cat head inside a map pin -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#F4A259"
+        android:pathData="M54,22c-14.4,0 -26,11.2 -26,25.2c0,18.9 26,40.8 26,40.8s26,-21.9 26,-40.8C80,33.2 68.4,22 54,22z" />
+    <path
+        android:fillColor="#3B2416"
+        android:pathData="M40,36l5,9h18l5,-9l2,14c0,8.3 -7.2,14 -16,14s-16,-5.7 -16,-14z" />
+    <path
+        android:fillColor="#F4A259"
+        android:pathData="M48.5,50a2.5,2.5 0,1 1,-5 0a2.5,2.5 0,1 1,5 0zM64.5,50a2.5,2.5 0,1 1,-5 0a2.5,2.5 0,1 1,5 0z" />
+    <path
+        android:fillColor="#FFB4A2"
+        android:pathData="M51.5,55h5l-2.5,3z" />
+</vector>

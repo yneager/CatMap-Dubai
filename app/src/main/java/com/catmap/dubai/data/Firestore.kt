@@ -1,0 +1,153 @@
+package com.catmap.dubai.data
+
+import android.content.Context
+import android.util.Log
+import androidx.annotation.StringRes
+import com.catmap.dubai.R
+import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.FirebaseTooManyRequestsException
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.auth.FirebaseAuthWeakPasswordException
+import com.google.firebase.firestore.DocumentReference
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.QuerySnapshot
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
+
+object Col {
+    const val USERS = "users"
+    const val PRIVATE = "private"
+    const val NOTIFICATIONS = "notifications"
+    const val USERNAMES = "usernames"
+    const val CATS = "cats"
+    const val SIGHTINGS = "sightings"
+    const val PRIVATE_LOCATIONS = "privateLocations"
+    const val MEDICAL = "medicalRecords"
+    const val RESCUES = "rescues"
+    const val STATIONS = "stations"
+    const val CHECKINS = "checkins"
+    const val MAINTENANCE = "maintenance"
+    const val MERGES = "mergeRequests"
+    const val REPORTS = "contentReports"
+    const val MOD_ACTIONS = "modActions"
+    const val VOLUNTEER_APPS = "volunteerApplications"
+    const val IMAGES = "images"
+    const val POSTS = "posts"
+    const val UPDATES = "updates"
+    const val ADOPTION_REQUESTS = "adoptionRequests"
+    const val SITTERS = "sitters"
+    const val BOOKINGS = "bookings"
+    const val REVIEWS = "reviews"
+    const val CHATS = "chats"
+    const val MESSAGES = "messages"
+    const val BLOCKED = "blocked"
+    const val FAVORITES = "favorites"
+    const val AREA_FOLLOWS = "areaFollows"
+}
+
+fun now() = System.currentTimeMillis()
+
+/** An error with a message that can be shown to people as-is. */
+class AppException(@StringRes val messageRes: Int) : Exception()
+
+/** Errors from background listeners end up here and are shown as a snackbar. */
+object AppErrors {
+    private lateinit var appContext: Context
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val messages: SharedFlow<String> = _messages
+
+    fun init(context: Context) {
+        appContext = context.applicationContext
+    }
+
+    fun report(t: Throwable) {
+        Log.w("CatMap", "Background error", t)
+        // Listeners are torn down with permission errors right after sign-out; those are expected.
+        val signedOut = runCatching { FirebaseAuth.getInstance().currentUser == null }.getOrDefault(true)
+        if (signedOut) return
+        if (::appContext.isInitialized) _messages.tryEmit(t.userMessage(appContext))
+    }
+
+    fun show(message: String) {
+        _messages.tryEmit(message)
+    }
+}
+
+fun Throwable.userMessage(context: Context): String {
+    val res = when (this) {
+        is AppException -> messageRes
+        is FirebaseAuthWeakPasswordException -> R.string.err_weak_password
+        is FirebaseAuthUserCollisionException -> R.string.err_email_in_use
+        is FirebaseAuthInvalidUserException -> R.string.err_no_account
+        is FirebaseAuthInvalidCredentialsException -> R.string.err_wrong_credentials
+        is FirebaseAuthRecentLoginRequiredException -> R.string.err_recent_login
+        is FirebaseNetworkException -> R.string.err_network
+        is FirebaseTooManyRequestsException -> R.string.err_too_many_requests
+        is FirebaseFirestoreException -> when (code) {
+            FirebaseFirestoreException.Code.PERMISSION_DENIED -> R.string.err_permission
+            FirebaseFirestoreException.Code.UNAVAILABLE -> R.string.err_network
+            FirebaseFirestoreException.Code.RESOURCE_EXHAUSTED -> R.string.err_too_many_requests
+            else -> null
+        }
+        else -> null
+    }
+    return if (res != null) context.getString(res) else (localizedMessage ?: context.getString(R.string.err_generic))
+}
+
+fun Query.snapshotFlow(): Flow<QuerySnapshot> = callbackFlow {
+    val registration = addSnapshotListener { snapshot, error ->
+        if (error != null) {
+            close(error)
+            return@addSnapshotListener
+        }
+        if (snapshot != null) trySend(snapshot)
+    }
+    awaitClose { registration.remove() }
+}
+
+fun DocumentReference.snapshotFlow(): Flow<DocumentSnapshot> = callbackFlow {
+    val registration = addSnapshotListener { snapshot, error ->
+        if (error != null) {
+            close(error)
+            return@addSnapshotListener
+        }
+        if (snapshot != null) trySend(snapshot)
+    }
+    awaitClose { registration.remove() }
+}
+
+inline fun <reified T : Any> Query.listFlow(): Flow<List<T>> =
+    snapshotFlow()
+        .map { it.toObjects(T::class.java) }
+        .catch {
+            AppErrors.report(it)
+            emit(emptyList())
+        }
+
+inline fun <reified T : Any> DocumentReference.objectFlow(): Flow<T?> =
+    snapshotFlow()
+        .map { it.toObject(T::class.java) }
+        .catch {
+            AppErrors.report(it)
+            emit(null)
+        }
+
+/** One finished document load; [value] is null when the document doesn't exist or can't be read. */
+data class Loaded<out T>(val value: T?)
+
+/**
+ * Lets a screen tell "still loading" (nothing collected yet) from "gone" (`Loaded(null)`), so links to
+ * deleted items show a message instead of a spinner that never stops.
+ */
+fun <T> Flow<T?>.loaded(): Flow<Loaded<T>> = map { Loaded(it) }

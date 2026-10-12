@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// Firebase Storage holds only optional post videos (photos live in Firestore, see firestore.rules).
+// Storage needs the Blaze plan on real Firebase; the app only uses it when built with catmap.blaze=true.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /videos/{ownerId}/{fileId} {
+      allow read: if request.auth != null;
+      // Each person writes only into their own folder: verified email, video files, at most 30 MB.
+      allow create: if request.auth != null
+        && request.auth.uid == ownerId
+        && request.auth.token.email_verified == true
+        && request.resource.size < 30 * 1024 * 1024
+        && request.resource.contentType.matches('video/.*');
+      allow delete: if request.auth != null && request.auth.uid == ownerId;
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,108 @@
+# Builds a signed release APK and publishes it as a GitHub Release whenever a version tag is pushed:
+#
+#   git tag v2.0.1 && git push origin v2.0.1
+#
+# Installed apps check this repo's latest release and offer the APK as an update. Every release must
+# be signed with the same key, so the keystore lives in repository secrets (see SETUP.md, "Releases").
+#
+# Required secrets:  CATMAP_KEYSTORE_BASE64, CATMAP_KEYSTORE_PASSWORD, CATMAP_KEY_ALIAS, CATMAP_KEY_PASSWORD
+# Optional secrets:  GOOGLE_SERVICES_JSON (the file's contents; without it the app shows "Firebase setup required"),
+#                    MAPTILER_KEY (satellite layer)
+# Optional variable: CATMAP_BLAZE = true (only once the Firebase project is on the Blaze plan)
+
+name: Release APK
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag must look like v1.2.3 (got $GITHUB_REF_NAME)"; exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-37.0 build-tools;36.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.CATMAP_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.CATMAP_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.CATMAP_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.CATMAP_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Signing secrets are missing. An unsigned or differently signed APK can't update installed apps."; exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "CATMAP_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Add Firebase config
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          else
+            echo "::warning::GOOGLE_SERVICES_JSON is not set; this APK will show the Firebase setup screen."
+          fi
+
+      - name: Test and build
+        env:
+          CATMAP_KEYSTORE_PASSWORD: ${{ secrets.CATMAP_KEYSTORE_PASSWORD }}
+          CATMAP_KEY_ALIAS: ${{ secrets.CATMAP_KEY_ALIAS }}
+          CATMAP_KEY_PASSWORD: ${{ secrets.CATMAP_KEY_PASSWORD }}
+          MAPTILER_KEY: ${{ secrets.MAPTILER_KEY }}
+          BLAZE: ${{ vars.CATMAP_BLAZE }}
+        run: |
+          ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleRelease \
+            -Pcatmap.versionName="$VERSION" \
+            -Pcatmap.githubRepo="$GITHUB_REPOSITORY" \
+            -Pcatmap.maptilerKey="$MAPTILER_KEY" \
+            -Pcatmap.blaze="${BLAZE:-false}"
+
+      - name: Verify signature
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -f "$APK" || { echo "::error::No signed APK was produced"; exit 1; }
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" | grep -E "Signer #1 certificate (DN|SHA-256)"
+          cp "$APK" "CatMap-$VERSION.apk"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "CatMap-$VERSION.apk" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "CatMap-$VERSION.apk" --title "CatMap $VERSION" --generate-notes
+          fi
+
+      - name: Remove secrets from the runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" app/google-services.json

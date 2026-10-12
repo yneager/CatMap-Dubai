@@ -1,0 +1,7 @@
+[
+  { "username": "admin", "displayName": "CatMap Admin", "role": "admin", "password": "<at least 6 characters>" },
+  { "username": "ali", "displayName": "Ali", "role": "user", "password": "<at least 6 characters>" },
+  { "username": "mohammad", "displayName": "Mohammad", "role": "user", "password": "<at least 6 characters>" },
+  { "username": "anirudh", "displayName": "Anirudh", "role": "user", "password": "<at least 6 characters>" },
+  { "username": "hassan", "displayName": "Hassan", "role": "user", "password": "<at least 6 characters>" }
+]
