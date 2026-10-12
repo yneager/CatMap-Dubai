@@ -118,13 +118,13 @@ and you can check any time from **Settings → Check for updates**.
 **Each release**
 
 ```bash
-git tag v2.0.1
-git push origin v2.0.1
+git tag v0.0.3
+git push origin v0.0.3
 ```
 
 The **Release APK** workflow runs the unit tests, builds the signed APK with that version, checks the
-signature, and attaches `CatMap-2.0.1.apk` to a new GitHub Release. The version must go up each time
-(2.0.1 → 2.0.2 → 2.1.0). Edit the release text on GitHub if you like, because it is shown in the update dialog.
+signature, and attaches `CatMap-0.0.3.apk` to a new GitHub Release. The version must go up each time
+(0.0.3 → 0.0.4 → 0.1.0 → 1.0.0). Releases so far: v0.0.1 and v0.0.2. Edit the release text on GitHub if you like, because it is shown in the update dialog.
 
 **First install on a phone:** download the APK from the release page and allow "Install unknown apps"
 for the browser. If the phone has a debug build from Android Studio, uninstall that first. It is signed

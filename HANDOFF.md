@@ -1,7 +1,7 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 12 Oct 2026 (version 2.0.0).**
+and what's left. **Last updated: 12 Oct 2026 (the 2.0 feature set, released as v0.0.1 and v0.0.2).**
 
 ## What this is
 
@@ -40,6 +40,8 @@ Feature-to-code map: `README.md`. Firebase, Blaze, MapTiler, GitHub releases and
   release key (SHA-256 `25:6D:F9:05:…:CD:F4:28:87`, verified with apksigner).
 * **Git:** pushed to the public repo **https://github.com/yneager/CatMap-Dubai** (branch `main`) on 12 Oct 2026, with the owner's approval.
   * Commits use the repo-local identity `mohammad <mohammed.duae@gmail.com>` (`git config` in this repo only).
+  * **Releases:** the owner chose 0.0.x numbering. `v0.0.1` is on commit `67d9b8b`; the original first commit `df8e0b9` can't be built because its `gradlew` isn't executable. `v0.0.2` is on the next commit. The next release is `v0.0.3`.
+  * The local default `versionName` is now `0.0.1` (versionCode 1). The emulator still has a debug build with versionCode 20000, so run `adb uninstall com.catmap.dubai` before the next `installDebug`, or Android refuses the downgrade.
   * A scan of all 160 committed files for every local password found **none**. `.gitattributes` keeps `gradlew` and `*.sh` LF for the Linux runners.
   * `.gitignore` covers `keystore.properties`, `release-keys/`, `*.jks`, `app/google-services.json`, `local.properties`, `test-accounts.local.txt`, `tools/seed/demo-accounts.local.json`, `.emulator-data/` and `node_modules`.
 * **Not done (owner setup):**
@@ -108,7 +110,7 @@ Debug build with `-Pcatmap.emulatorHost=10.0.2.2`:
 ## Remaining limits / not tested
 
 * **Nothing has run against a real Firebase project**, including Auth emails, index builds, quotas, Storage and FCM. Do this after SETUP.md §1–6.
-* **GitHub Actions** have not run, and nothing in-app has been tested against a real GitHub release. The download/install path (FileProvider + package installer) is implemented, but only "not configured" was exercised. Test it with the first real tag: install v2.0.0, tag v2.0.1, then Settings → Check for updates.
+* **GitHub Actions** have not run, and nothing in-app has been tested against a real GitHub release. The download/install path (FileProvider + package installer) is implemented, but only "not configured" was exercised. Test it now: install CatMap-0.0.1.apk from the Releases page, then Settings → Check for updates should offer 0.0.2.
 * **Real phone with the new build.** The phone (R5CW131KBSY) was not connected for this pass. To install it, see SETUP.md "Local demo" step 3: `adb reverse` for ports 9099/8080/9199 and `-Pcatmap.emulatorHost=127.0.0.1`.
 * **Video upload** works only with Storage: the emulator always, or real Firebase with Blaze. The video UI was built but not re-driven in this final pass.
 * **Instant push** depends on Blaze plus the deployed function. Without it, delivery is live while the app is open plus a background check about every 15 minutes.
@@ -223,5 +225,5 @@ Package `com.catmap.dubai`, no DI framework.
 
 1. Back up `release-keys/` and `keystore.properties`.
 2. Create the Firebase project (SETUP.md §1–6), then test the signed release with real accounts.
-3. Add the four signing secrets plus `GOOGLE_SERVICES_JSON` to https://github.com/yneager/CatMap-Dubai (SETUP.md §9), then push tag `v2.0.0`. Ask the owner before pushing any tag or further commits.
+3. Add the four signing secrets plus `GOOGLE_SERVICES_JSON` to https://github.com/yneager/CatMap-Dubai (SETUP.md §9), then cut the next release with tag `v0.0.3`. Ask the owner before pushing any tag or further commits.
 4. Optional: Blaze (videos and push) and a MapTiler key.

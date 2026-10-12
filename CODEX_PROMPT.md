@@ -5,7 +5,7 @@ Copy everything below the line into Codex. Run it from the project root (`C:\Use
 ---
 
 You are working on **CatMap Dubai**, a native Android app (Kotlin + Jetpack Compose + Firebase) for Dubai's animal
-community: lost/found pets, adoption, pet sitting, messaging, street cats, admin tools. Version 2.0.0 is complete
+community: lost/found pets, adoption, pet sitting, messaging, street cats, admin tools. The 2.0 feature set is complete (published as test releases v0.0.1 and v0.0.2)
 and tested. Your job is the next round of improvements listed below.
 
 ## Read first (mandatory)

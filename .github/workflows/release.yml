@@ -1,6 +1,6 @@
 # Builds a signed release APK and publishes it as a GitHub Release whenever a version tag is pushed:
 #
-#   git tag v2.0.1 && git push origin v2.0.1
+#   git tag v0.0.3 && git push origin v0.0.3
 #
 # Installed apps check this repo's latest release and offer the APK as an update. Every release must
 # be signed with the same key, so the keystore lives in repository secrets (see SETUP.md, "Releases").

@@ -35,8 +35,11 @@ require(githubRepo.isEmpty() || githubRepo.matches(Regex("[A-Za-z0-9_.-]+/[A-Za-
  */
 val blazeEnabled = localSetting("catmap.blaze") == "true"
 
-/** CI passes the release version; local builds use the defaults below. */
-val appVersionName = localSetting("catmap.versionName").ifEmpty { "2.0.0" }
+/**
+ * CI passes the release version from the git tag. Local builds default to the lowest release, so a build
+ * installed from this PC still sees (and can install) every published update.
+ */
+val appVersionName = localSetting("catmap.versionName").ifEmpty { "0.0.1" }
 require(appVersionName.matches(Regex("""\d+\.\d+\.\d+"""))) { "versionName must look like 1.2.3" }
 val appVersionCode = appVersionName.split(".").map { it.toInt() }.let { (a, b, c) -> a * 10_000 + b * 100 + c }
 
