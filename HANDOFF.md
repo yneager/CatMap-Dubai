@@ -45,8 +45,13 @@ Feature-to-code map: `README.md`. Firebase, Blaze, MapTiler, GitHub releases and
   * The local default `versionName` is now `0.0.1` (versionCode 1). The emulator still has a debug build with versionCode 20000, so run `adb uninstall com.catmap.dubai` before the next `installDebug`, or Android refuses the downgrade.
   * A scan of all 160 committed files for every local password found **none**. `.gitattributes` keeps `gradlew` and `*.sh` LF for the Linux runners.
   * `.gitignore` covers `keystore.properties`, `release-keys/`, `*.jks`, `app/google-services.json`, `local.properties`, `test-accounts.local.txt`, `tools/seed/demo-accounts.local.json`, `.emulator-data/` and `node_modules`.
+* **Firebase (live since 12 Oct 2026):**
+  * Project `catmap-dubai`, Standard Firestore. `google-services.json` is in `app/` (git-ignored) and in the `GOOGLE_SERVICES_JSON` repo secret.
+  * Rules and the 4 indexes were deployed with `firebase deploy --only firestore`. `.firebaserc` makes it the default project.
+  * **v0.0.3** is the first release built with it: signed, and it opens the login screen.
+  * Not yet tested against real Firebase: registration, email verification and the owner's admin role.
+  * On Windows PowerShell, use `npx.cmd` (script execution is disabled). The Firebase CLI is logged in as the owner's account.
 * **Not done (owner setup):**
-  * The real Firebase project. `google-services.json` is still missing, so normal builds show "Firebase setup required".
   * The GitHub repo **secrets** (SETUP.md §9). The repo exists; no `v*` tag has been pushed, because a tag starts the release build, which fails without the secrets.
   * Blaze (optional).
   * A MapTiler key (optional).
