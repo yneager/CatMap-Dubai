@@ -41,6 +41,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
@@ -315,8 +316,23 @@ fun MapScreen(nav: NavHostController) {
                 })
             }
             LayerChips(filters, ::setFilters, onMore = { showFilters = true })
-            androidx.compose.material3.TextButton(onClick = { listMode = !listMode },modifier=Modifier.padding(horizontal=16.dp)) {
-                Text(stringResource(if(listMode) R.string.show_map_view else R.string.show_list_view))
+            // A solid pill like the search bar and chips, so the toggle stays readable over any map tile.
+            Surface(
+                onClick = { listMode = !listMode },
+                modifier = Modifier.padding(horizontal = 12.dp).heightIn(min = 40.dp),
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary,
+                shadowElevation = 4.dp,
+            ) {
+                Row(Modifier.padding(horizontal = 14.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        if (listMode) Icons.Outlined.Map else Icons.AutoMirrored.Outlined.ViewList, null,
+                        Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(if (listMode) R.string.show_map_view else R.string.show_list_view), style = MaterialTheme.typography.labelLarge)
+                }
             }
             if(listMode && fix==null) Text(stringResource(R.string.distance_from_map_center),Modifier.padding(horizontal=16.dp),style=MaterialTheme.typography.labelSmall)
         }
