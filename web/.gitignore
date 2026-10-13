@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dev-dist/
+coverage/
+playwright-report/
+test-results/
+# Firebase web config and optional keys for local runs (see .env.example)
+.env.local
+.env.*.local

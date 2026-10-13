@@ -29,4 +29,3 @@ __pycache__/
 /functions/node_modules/
 /app/src/staging/generated/
 
-# AI server (local virtualenv and downloaded model)

@@ -3,6 +3,24 @@
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
 and what's left. **Last updated: 13 Oct 2026 (v0.0.7 released at `356e18d`: live listener, AI server moved to `Desktop\cat-server`, demo-script fix. CI and the release passed. The owner still has to run `cat-server\setup.cmd`).**
 
+## 13 October 2026 - web app (iPhone) planned (Claude)
+
+The owner wants an iPhone version as a web app. It lives in **`web/`** in this repo, because it shares the Firebase
+project, `firestore.rules`, the string tables and these notes with the Android app. For now `web/` has only a README
+and a `.gitignore`. Codex will build it from the brief in **`CLAUDE_TO_CODEX.txt`**, with Claude as architect and
+reviewer.
+
+The brief specifies:
+* **Stack:** a Vite + React + TypeScript PWA with the Firebase JS SDK and MapLibre GL JS, hosted on Firebase Hosting.
+* **Data:** documents identical to Android's, with no rules changes, plus a shape-parity test.
+* **Shared assets:** strings generated from `tools/strings` (the Android XML must stay byte-identical) and icons
+  converted from the VectorDrawables.
+* **Matching:** the analyser maths ported, with a fingerprint parity test, and the AI check through `aiJobs` exactly
+  as `AiServer.kt` does it.
+* **Testing:** Playwright WebKit as the iPhone stand-in.
+
+Codex reports in `work done.txt`; review it with the `review-codex-work` skill.
+
 ## 13 October 2026 - AI server moved out of the repo (Claude)
 
 At the owner's request, the PC app now lives in its own folder, **`C:\Users\mohammad\Desktop\cat-server`**, outside

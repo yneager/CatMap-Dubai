@@ -1,0 +1,703 @@
+# CatMap Web: build the iPhone/browser version of CatMap Dubai (brief from Claude to Codex)
+
+Run from the project root, `C:\Users\mohammad\Desktop\cat`. Do the whole brief in one run.
+
+Claude is the architect and reviewer on this project; you are the implementer. Claude has made the decisions below
+from the Android code and the owner's requests. Follow them. Where something is left open, choose what keeps the web
+app closest to the Android app, and record the choice in your report.
+
+====================================================================================================================
+## 1. Goal
+
+Build **CatMap Web** in `web/`: a Progressive Web App that is a **near 1:1 copy of the Android app**
+(`app/src/main/java/com/catmap/dubai/`). It's for iPhone users, who open it in Safari and use "Add to Home Screen" so
+it runs full-screen like an app. It must also work in desktop browsers and Android Chrome.
+
+"1:1" means:
+* the same screens, in the same order and navigation;
+* the same features, fields, limits, wording, colours, icons, shapes and states (loading, empty, error, offline);
+* the same data.
+
+The web app talks to the **same Firebase project** (`catmap-dubai`) as the Android app, with the same Firestore
+documents, under the same security rules (`firestore.rules`). Concretely:
+* a post created on the web must look and behave exactly like one created on Android, and the reverse;
+* an Android user and a web user can chat with each other;
+* the admin can moderate from either app.
+
+**The Android app is the specification.** When this brief and the Kotlin code disagree about behaviour, the Kotlin
+code wins. Read the matching Kotlin file before building each screen or repository.
+
+The only deliberate differences are the platform adaptations in section 9.
+
+====================================================================================================================
+## 2. Read first (mandatory)
+
+1. `HANDOFF.md`: current state, design decisions, toolchain and the emulator workflow. The newest sections are at the
+   top; also read "Architecture in one screen", "Key design decisions" and "Local testing" further down.
+2. `C:\Users\mohammad\.claude\skills\catmap\SKILL.md`: Claude's working guide to the project (rules, layout, how
+   things work). Read it; don't edit it.
+3. `README.md` (feature to code map) and `SETUP.md` (Firebase, emulators).
+4. `firestore.rules`, end to end. Every write the web app makes must pass these rules exactly as they are.
+5. The Kotlin sources, as you build each area:
+   * `data/`, `data/model/`: repositories and models, the source of truth for document shapes and write order;
+   * `ui/`: screens and components;
+   * `ai/`: analyser maths;
+   * `util/`: images, poster, share, links;
+   * `gamification/`: badges;
+   * `notifications/`: inbox and quiet hours.
+
+====================================================================================================================
+## 3. Hard rules (never break these)
+
+* **Secrets.** Never read out, print, log, copy or modify any of these:
+  * `keystore.properties`, `release-keys/`, `*.jks`, `local.properties`;
+  * `app/google-services.json`;
+  * `tools/seed/demo-accounts.local.json`, `test-accounts.local.txt`;
+  * anything in `C:\Users\mohammad\Desktop\cat-server` (the owner's AI server; it's outside this repo, so don't touch it).
+
+  Don't put any password or key into a committed file.
+* **Git, deploys and production:**
+  * Don't commit, push, tag or change remotes.
+  * **Never deploy anything** (`firebase deploy` of any kind, hosting included), and don't change anything in the
+    Firebase console.
+  * The Firebase CLI on this PC is logged in to the owner's account: leave production completely alone.
+  * Develop and test **only against the local Firebase emulators**.
+* **Don't break Android.** Don't change Android app code, Gradle files or the Android build. Two exceptions, both
+  shared tooling:
+  * `tools/strings/build_strings.py`: section 10. The Android XML it writes must stay byte-for-byte identical.
+  * New scripts in `tools/icons/`: section 11.
+* **Security rules:** don't change `firestore.rules`, `storage.rules` or `firestore.indexes.json`. The web app must fit
+  them as they are; that's the whole point of sharing them. If you find something the web genuinely can't do under
+  the current rules, stop on that item, don't work around the rules, and describe it in your report. The rules suite
+  (`tools/rulestest`) must still pass unchanged.
+* **Free plan.** Everything must work on Firebase's free Spark plan:
+  * no Cloud Functions, no Cloud Storage writes (except video behind the Blaze flag, like Android);
+  * no paid APIs, no new API keys beyond the Firebase web config and the optional MapTiler key Android already uses.
+* **Dependencies:**
+  * Pin exact versions (no `^` or `~`). Use stable releases that are at least two weeks old.
+  * Keep the list short and list every dependency in your report.
+  * Allowed: the stack in section 5, plus small, well-known libraries when they clearly save work. Ask yourself first
+    whether the browser already does it.
+  * No UI component frameworks (no MUI, Chakra, Bootstrap, Tailwind UI kits); section 7 explains why.
+* **Arabic.** Reuse the existing Arabic strings exactly; don't translate, reword or review Arabic text. The Arabic
+  layout must be correct RTL, mirrored the way Compose mirrors it.
+* **Honesty.** Never claim something works unless you ran it. Say exactly what you couldn't verify. Real iPhone
+  testing isn't possible here, so Playwright's WebKit engine is the stand-in: say so.
+* **Windows environment:**
+  * PowerShell script execution is disabled, so use `npm.cmd` / `npx.cmd` in PowerShell, or use Git Bash.
+  * Node is v24 (installed). Java for the Firebase emulators is the Android Studio JBR: set
+    `JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'` and put its `bin` on PATH.
+
+====================================================================================================================
+## 4. What already exists
+
+* `web/README.md` (placeholder; rewrite it) and `web/.gitignore` (keep it, add to it).
+* **Android app:**
+  * Compose, Material 3, roughly 90 Kotlin files, 1157 strings per language, 60 custom icons (`ic_cm_*.xml`).
+  * MapLibre maps.
+  * Photos are stored as Firestore blobs.
+  * Username login, demo accounts with an admin switcher, and a full admin dashboard.
+* **Firebase:**
+  * Production project `catmap-dubai`.
+  * Emulators run on auth 9099, firestore 8080 and storage 9199, with project `demo-catmap`.
+  * Seed data is in `tools/seed/seed.mjs` (emulator only; it refuses other hosts).
+* **AI same-animal check:** the owner's PC runs an AI server that answers jobs written to Firestore `aiJobs/{uid}`.
+  The client is `data/AiServer.kt`. The web app uses the same mechanism (section 8.6).
+
+====================================================================================================================
+## 5. Tech stack (decided)
+
+Make `web/` its own npm project, with its own `package.json` and lockfile.
+
+* **Build and language:** Vite, React (function components and hooks) and TypeScript in `strict` mode.
+* **Routing:** React Router, in browser-history mode.
+* **Firebase:** the modular Firebase JS SDK (`firebase/app`, `firebase/auth`, `firebase/firestore`, and
+  `firebase/storage` only for the Blaze video path).
+  * Firestore uses `initializeFirestore(app, { localCache: persistentLocalCache({ tabManager:
+    persistentMultipleTabManager() }) })` for offline support.
+  * Auth uses `indexedDBLocalPersistence`.
+* **Map:** MapLibre GL JS.
+* **PWA:** `vite-plugin-pwa` (Workbox) for the manifest and service worker.
+* **Local storage:** `idb-keyval`, or a tiny IndexedDB wrapper, for drafts, caches and settings that must survive.
+* **Poster QR code:** a small QR library such as `qrcode`.
+* **Fonts:** self-hosted through `@fontsource` packages, so the app works offline: Roboto (the font Compose uses on
+  Android) and Noto Sans Arabic for Arabic. Fall back to the system font stack.
+* **Quality tools:**
+  * `vitest` for unit tests;
+  * `@playwright/test` for end-to-end tests, with the **WebKit** project (as the iPhone stand-in) and Chromium;
+  * ESLint with the TypeScript and React Hooks configs;
+  * `tsc --noEmit` in the checks.
+* **Styling:** plain CSS (CSS Modules, or one token stylesheet plus per-component CSS). No Tailwind, no UI kit.
+
+**npm scripts:**
+* `dev` and `dev:emulators`: the Vite dev server against the local emulators;
+* `build`, `preview`;
+* `lint`, `typecheck`;
+* `test` (vitest) and `test:e2e` (Playwright, against the emulators);
+* `screens`, which writes the screenshot set from section 12.
+
+====================================================================================================================
+## 6. Project layout, configuration and environments
+
+```
+web/
+  index.html                    (viewport-fit=cover, apple-mobile-web-app tags, theme-color for light and dark)
+  package.json  package-lock.json  vite.config.ts  tsconfig*.json  eslint.config.js  playwright.config.ts
+  .env.example                  (documents every VITE_* variable, no real values)
+  public/                       (PWA icons, apple-touch-icon, maskable icon, favicon)
+  src/
+    main.tsx  App.tsx
+    firebase.ts                 (initialisation, emulator wiring)
+    config.ts                   (feature flags: blaze, maptiler, githubRepo, hostUrl)
+    data/                       (one module per Kotlin repository, same names: PostRepository.ts, AuthRepository.ts, ...)
+    data/model/                 (TypeScript types mirroring Models.kt / Community.kt / Enums.kt, with fromDoc() defaults)
+    ai/                         (CatAnalyzer, PostAppearance, Similarity, RecognitionEvaluation, ported maths)
+    ui/                         (same sub-folders as Android: map, explore, posts, messages, profile, adoption, sitting,
+                                 cats, sighting, rescue, stations, help, admin, settings, auth, components, theme, icons)
+    i18n/                       (generated en.json and ar.json, the t() formatter, plurals, direction)
+    icons/generated/            (SVGs generated from res/drawable/ic_cm_*.xml)
+    util/                       (images, poster, share, links, dates, distance)
+  tests/                        (vitest unit tests)
+  e2e/                          (Playwright specs and emulator helpers)
+  docs/screens/                 (generated screenshots, section 12)
+```
+
+**Configuration through Vite env variables** (`web/.env.local` is git-ignored; document each one in `.env.example`):
+* `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`,
+  `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_STORAGE_BUCKET`.
+  * These come from a "Web app" the owner registers in the Firebase console. They are public by design, but stay out
+    of git anyway.
+* `VITE_USE_EMULATORS=true`.
+  * The app then uses project `demo-catmap` and connects Auth (`http://127.0.0.1:9099`), Firestore (`127.0.0.1:8080`)
+    and Storage (9199). No real config is needed.
+  * Show a small "Emulator" chip somewhere unobtrusive, so emulator builds are never mistaken for production.
+* `VITE_MAPTILER_KEY` (optional): the satellite layer, as on Android. Without it, hide the satellite toggle like Android
+  does.
+* `VITE_BLAZE` (default `false`): video upload and playback, the same switch as Android's `catmap.blaze`.
+* `VITE_PUBLIC_URL` (optional): the app's public address, used in share links and the poster QR code.
+
+**Missing configuration:** if the real config is missing and emulators aren't requested, show the same "Firebase setup
+required" screen Android shows (`MainActivity` / setup screen). Never crash.
+
+**Firebase Hosting:** add a `hosting` section to the root `firebase.json` (keep everything else in that file
+unchanged):
+* `public: "web/dist"`, SPA rewrite to `/index.html`;
+* long cache headers for hashed assets and no-cache for `index.html` and `sw.js`;
+* a strict Content-Security-Policy that still allows Firebase, OpenFreeMap tiles and fonts, MapTiler (when used) and
+  `api.github.com` (if you use it).
+
+Document the deploy command for the owner in `web/README.md`: `npx.cmd -y firebase-tools@latest deploy --only hosting`.
+**Don't run it.**
+
+====================================================================================================================
+## 7. Look and feel: match the Android app
+
+The web app should look like the Android app running on a phone. Build a small component library in `ui/components/`
+that mirrors the Compose components one-to-one, and use it everywhere.
+
+**Theme tokens.** Copy every colour from `ui/theme/Theme.kt` (light and dark schemes) into CSS custom properties on
+`:root`:
+* light under `:root`, dark under `[data-theme="dark"]`;
+* "system" follows `prefers-color-scheme`.
+
+Also copy:
+* the shapes (corner radii 8/12/18/24/32 px for extraSmall to extraLarge);
+* the brand gradient `#FF7A45 → #E5486B → #8E5CF7`;
+* the status and category colours from `data/model/Community.kt` and `Enums.kt`.
+
+**Typography.**
+* Use the Material 3 type scale (displaySmall to labelSmall) with the weights `Theme.kt` overrides: bold display and
+  headlines, semibold titles and labelLarge.
+* Large text (a Settings switch) scales all text by 1.18, like Android.
+* Body text uses `dir="auto"`, so user-typed text in the other language reads correctly. This is the equivalent of
+  `TextDirection.Content`.
+
+**Components to mirror** (read `ui/components/Components.kt`, `CommunityComponents.kt` and `PostDetailHeader.kt`):
+* bars and section structure: AppTopBar (with back), SectionHeader;
+* posts: PostCard, PostGridCard, StatusPill / StatusBadge, the post-detail header;
+* states: EmptyState, loading skeletons, the error banner with retry, the offline banner;
+* overlays: bottom sheets, dialogs, snackbars;
+* inputs: chips and filter chips, segmented buttons, text fields with counters and limits, switches, sliders, the date
+  and time pickers used by the app;
+* people and photos: avatars, the photo grid and pager.
+
+Match the sizes, paddings (16 px gutters), elevations, touch targets (at least 48 px) and Material 3 state layers
+(hover, pressed, focus-visible).
+
+**Phone layout first.**
+* The phone layout (iPhone 15: 393×852) is the reference.
+* On wide screens, keep the same layout in a centred column, about 480–520 px wide. Only the map may fill the screen
+  (the panels and sheets stay column-width).
+* There's no separate desktop design.
+
+**iOS specifics:**
+* Respect `env(safe-area-inset-*)` on every edge: the notch, the home indicator and the bottom bar.
+* Use `100dvh`, not `100vh`.
+* Prevent iOS input zoom: inputs are at least 16 px.
+* Use `-webkit-tap-highlight-color: transparent` and `overscroll-behavior` where Android has no bounce.
+* Set the status-bar style for standalone mode.
+* Use a sticky bottom navigation bar that sits above the home indicator.
+
+**Motion:** keep Compose's simple transitions (fade or slide between screens, sheet slide-up, marker scale on
+selection, the pulsing marker for urgent posts). Respect `prefers-reduced-motion`.
+
+**Icons** come from section 11. Material Symbols are allowed only for the same generic controls Android uses (back,
+close, search, settings, more). Draw them as inline SVG; don't load an icon font from the network at runtime.
+
+====================================================================================================================
+## 8. Data layer: identical documents
+
+Port each Kotlin repository to `web/src/data/<Name>Repository.ts`, with the same responsibilities and function names
+where sensible:
+
+| Area | Repositories |
+|---|---|
+| Accounts | Auth, User, DemoAccounts / DemoVault, UserDataExport, CommunityAccountCleanup |
+| Posts | Post, PostDraftStore, PostStaleness |
+| Community | Adoption, Sitting, Chat, Favorites, HelpDirectory |
+| Cats and care | Cat, Rescue, Station |
+| Admin | Admin, AdminAnalytics, Moderation |
+| Inbox | Notification |
+| Photos | Image |
+| App | Settings |
+| Places | Neighborhoods (`Dubai`) |
+| AI | AiServer |
+
+**8.1 Document shapes must match exactly.**
+* Same collection names (`data/Firestore.kt`, `Col`), field names, nesting and **document ids**.
+  * Deterministic ids include `{postId}_{requesterId}`, chat id = sorted uids joined with `_`, the review id = the
+    booking id, `usernames/{lowercase}`, and notification dedupe ids `msg_{chatId}`, `lost_{postId}`,
+    `match_{postId}`, `upd_{postId}`, `stale_{postId}_{window}`.
+  * Find every other deterministic id in the Kotlin code.
+* **Types must match the Kotlin models.**
+  * Kotlin `Long` fields (timestamps in epoch milliseconds, counts, `areaRadiusM`, `reward`, `rate`, ratings and so
+    on) must be written as **whole numbers** (`Math.round`).
+  * `Double` fields stay numbers.
+  * Android maps documents with `toObject()`, so a fractional value in a Long field breaks Android.
+* **Timestamps:**
+  * Use client milliseconds (`Date.now()`) wherever Kotlin uses `now()`.
+  * Use `serverTimestamp()` exactly where Kotlin uses `FieldValue.serverTimestamp()`. One example is `lastPostAt` in
+    `UserRepository.addStats`, which the rules compare with `request.time` for rate limiting.
+  * Use `increment()` where Kotlin uses `FieldValue.increment`.
+* **Writes:** use the same batching and transactions as Kotlin (`runBatch` → `writeBatch`, `runTransaction` →
+  `runTransaction`). The rules often depend on fields being written together in one batch, such as post plus stats or
+  update plus counter.
+* **Input limits:** apply the same trimming and limits before writing, for example name 60, description 2000,
+  features 400, 6 photos, area radius 0–5000 m, reward 0–999999 (lost posts only), message lengths and username
+  pattern `^[A-Za-z0-9_.]{3,20}$`. Find them in the Kotlin code.
+* **Derived fields:** compute `keywords` (`PostRepository.keywords`) and `neighborhood` (`Dubai.nearest`) exactly like
+  Kotlin, with the same splitting regex, minimum length and the cap of 80. Port `data/Neighborhoods.kt` verbatim.
+* **Reading:** each model gets a `fromDoc()` that applies the Kotlin defaults for missing fields. Older documents lack
+  newer fields, and the Kotlin defaults handle that.
+* **Feed and lists:** keep the same queries and limits, for example the feed is `hidden == false`, ordered by
+  `createdAt` descending, limit 400. Use one shared live feed subscription for the whole app, as Android does
+  (`AppContainer`), not one per screen.
+* **Listener errors:** show the shared error banner with Retry, like `AppErrors`. Expected permission errors right
+  after sign-out stay silent.
+* **Points, badges and stats** are client-managed on Android (`UserRepository.addStats`, `gamification/Badges.kt`).
+  Port them exactly, with the same point values.
+
+**8.2 Photos (Firestore blobs, like `data/ImageRepository.kt` and `util/ImageUtils.kt`).**
+* **Storage:** `images/{id}` holds the full JPEG; `images/{id}_t` holds the thumbnail. Each document is
+  `{ data: Bytes, ownerId, createdAt }`, both written in one batch, using `Bytes.fromUint8Array`.
+* **Processing** (match Android):
+  * Decode upright, applying EXIF orientation (`createImageBitmap(file, { imageOrientation: 'from-image' })`, with a
+    fallback).
+  * **Full image:** scaled to at most 1280 px on the long side, then re-encoded as JPEG to fit 650,000 bytes. Use the
+    same loop: quality 85, minus 10 while above 55; then shrink to 0.8× and reset quality to 80.
+  * **Thumbnail:** at most 360 px, quality 72.
+  * **Analysis image:** at most 512 px, kept in memory for the analyser.
+  * Re-encoding through a canvas strips EXIF, including GPS. Keep it that way: it's a privacy requirement.
+  * Accept HEIC from iPhones when the browser can decode it (Safari can). Otherwise show the same "couldn't read this
+    photo" error Android shows.
+* **Reading:**
+  * Feeds and cards always use `{id}_t`, falling back to the full image the way Kotlin does.
+  * Keep a memory LRU of object URLs, plus a persistent cache in IndexedDB or the Cache API with the same 40 MiB /
+    24 h policy as `ImageDiskCache`.
+  * Lazy-load images (IntersectionObserver).
+* **Deleting:** delete both documents and evict the caches.
+
+**8.3 Accounts (`data/AuthRepository.kt`, `UserRepository.kt`, `DemoAccounts.kt`).**
+* **Register:** email, password, username and display name. Mirror Android:
+  * the same validation (password at least 8 characters, username pattern, username free);
+  * the same batch: `usernames/{lower}` + `users/{uid}` + `users/{uid}/private/account`;
+  * the welcome notification;
+  * delete the auth user if creating the profile fails;
+  * send the verification email.
+* **Verify:** the VERIFY screen with resend and "I've verified" (reload, then refresh the ID token).
+* **Login:** by email, or by username.
+  * Demo usernames are listed in `DemoAccounts.kt`, with the domain `demo.catmap.test`.
+  * Other usernames are looked up through `usernames/{name}.loginEmail`.
+  * Show the same errors as Android.
+* **Profiles:** port `ensureProfile` and `ensureDemoProfile`. The admin role comes only from the `catmapAdmin` custom
+  claim, read from the ID token.
+* **Forgot password:** the same screen.
+* **Logout:** clears the demo vault.
+* **Delete account:** port the whole of `deleteAccount` and `CommunityAccountCleanup`, in the same order:
+  re-authentication with the password, transactions, chunked batches, and the profile removed last.
+* **Demo account switcher** (Settings → Demo accounts; shown only when signed in as a demo account with a saved
+  password):
+  * Android keeps the shared demo password encrypted with an Android Keystore key. On the web, encrypt it with
+    **WebCrypto AES-GCM** using a **non-extractable** `CryptoKey` stored in IndexedDB, and keep only the ciphertext and
+    IV.
+  * Never put the password in localStorage in plain text, in logs or in URLs.
+  * Switching signs straight into the next account, as Android does (no sign-out in between). Handle the same error
+    cases ("sign in again", "demo account missing").
+
+**8.4 Notifications (`data/NotificationRepository.kt`, `notifications/`).**
+* Port `send()` exactly: the recipient inbox `users/{uid}/notifications`, deterministic dedupe ids, params and route,
+  create-only.
+* Every place Android sends a notification, the web sends the same one: lost nearby, possible match, post update,
+  message, adoption, booking, review, moderation, rescue, welcome and so on.
+* **Inbox screen:** the same layout and actions (mark read, mark all read, delete, open route), the unread badge on the
+  bell (`ui/navigation/NotificationBell.kt`), and the same per-category switches in Settings.
+* **While the app is open:** show an in-app snackbar or toast for new inbox items. Optionally use the browser
+  Notification API, only after the person enables it in Settings and grants permission, and only while the app is
+  open.
+* Quiet hours (`notifications/QuietHours.kt`) suppress those pop-ups; the inbox still fills.
+* No FCM or web push: Android also only has push on Blaze. Note it in the report as a future item.
+
+**8.5 Settings (`data/SettingsRepository.kt`).** Store the same settings per device in IndexedDB:
+* appearance: theme (system/light/dark), large text, language (English/Arabic);
+* privacy: privacy level, share exact location;
+* notifications: notification categories, quiet hours;
+* map and filters: map mode (classic/modern), satellite, stations, heatmap, the filter layers, animals, distance, age,
+  reward and "include older";
+* app state: the "what's new" last-seen version, and the delivered-notification ids per user.
+
+Language switching changes `<html lang dir>` instantly, without a reload if possible.
+
+**8.6 AI same-animal check (`data/AiServer.kt`; read the whole file).** Port it exactly. It's how the owner's PC
+receives photos:
+* `health()` reads `config/aiWorker`: online only if `online == true` and `lastSeen` is within **390,000 ms**.
+* **`run()`:**
+  * Wait out the 1.2 s throttle after the previous job's `createdAt`.
+  * `setDoc(aiJobs/{uid}, { ...fields, uid, status: 'pending', requestId: <uuid>, createdAt: serverTimestamp() })`.
+  * Then `onSnapshot` that document until `answeredRequestId == requestId` and `status` is `done` or `error`.
+  * Time out after **15,000 ms**; unsubscribe on finish.
+* **`compare(query, candidates, labels)`:** `kind: 'compare'`, JPEG quality 85 crops, up to 8 candidates, labels cut
+  to 60 characters.
+* **`embed(crops)`:** `kind: 'embed'`, up to 16 images.
+* Every failure returns `null`, so the caller falls back.
+* Port `PostEditorViewModel.checkSameAnimal()` and the review-step UI:
+  * the candidates are open, unhidden street posts of the same animal type, with photos, within 1 km, nearest 8;
+  * the "same animal" card and the publish guard dialog ("Add to that post" / "Post anyway");
+  * `addToExisting()`, which adds the photo as a SIGHTING update on the existing post instead of creating a new post;
+  * the local fallback (`PostAppearance` similarity at least 0.85, top 3, marked "checked on this device").
+
+**8.7 On-device analysis (`ai/CatAnalyzer.kt`, `ai/PostAppearance.kt`).**
+* **No ML Kit on the web.**
+  * Image labelling ("is this an animal?") and subject segmentation are Android-only.
+  * Treat labelling as "not checked": never block the person.
+  * Use the **centre-weight path** exactly as Android does on emulators (`centreWeights`). `cropSubject` becomes the
+    same centre crop.
+* **Port all the pure maths exactly:**
+  * `describe`, `colourLayout`, `histBin`, `classify`, `coatColorFrom`, `stripeRate`, `patternFrom`, `breedHints`;
+  * `Similarity` (visual, score, proximity, strength, average, valid);
+  * `PostAppearance.describe` and `PostAppearance.similarity`, the 27-value fingerprint stored on posts.
+* **Fingerprints must be compatible across platforms**, so web and Android posts match each other. Prove it:
+  1. Add a small **web-side** fixture test using the PNG or JPEG images in `tools/testdata/` and `tools/seed/photos/`.
+  2. To get reference values, write a tiny Kotlin JVM unit test **in a new file under `app/src/test/`**. It runs
+     `PostAppearance.describe` and the analyser's descriptor on those images under Robolectric and writes JSON to
+     `web/tests/fixtures/android-fingerprints.json`. This is the only allowed addition to the Android module; it is a
+     test, not app code.
+  3. Assert that web values are within a small tolerance, because decoders and scalers differ slightly. Use, for
+     example, |Δ| ≤ 0.03 per value and cosine ≥ 0.98.
+  4. Report the actual differences you measured.
+* Port `ai/RecognitionEvaluation.kt` for Admin → Recognition test (section 9 says what changes there).
+
+====================================================================================================================
+## 9. Screens: full parity, with the platform adaptations
+
+Use the **same routes** as `ui/navigation/Routes.kt`, as URL paths:
+* for example `/map`, `/explore`, `/post/:id`, `/post-new?category=&type=`, `/post-edit/:id`, `/poster/:id`, `/chat/:id?postId=`,
+  `/sitter/:uid`, `/bookings?tab=sitter`, `/admin-users`;
+* plus `/login`, `/register`, `/forgot` and `/verify`.
+
+The browser Back button and the in-app back arrow behave like Android's back stack. Deep links work, so opening
+`/post/<id>` directly shows that post after sign-in, the way notification links do on Android.
+
+**Shell (`ui/navigation/AppNavHost.kt`):**
+* the bottom bar with Map, Explore, Messages and Profile (outlined icon, filled when selected) and the **centre +
+  Post button** with the brand gradient, sitting inside the bar;
+* the notification bell;
+* the auth gate (signed out → login, unverified → verify, suspended → read-only behaviour as Android);
+* the offline banner, the snackbar host and the update prompt (section 9, "Platform adaptations").
+
+**Post chooser (`ui/posts/PostLists.kt`, `PostChooserSheet`):**
+* the **seven options**: Lost, Found, Needs help, Street animal, Adoption, Report an emergency, and Pet sitting;
+* **Pet sitting** opens the second step (Offer pet sitting → sitter profile editor; Request pet sitting → sitter
+  directory) with Back;
+* Rescue and emergency route as on Android;
+* Spotted, Other and "Cat sighting (AI)" are **not** in the chooser, but existing posts of those categories still
+  display.
+
+**Build every screen below, each from its Kotlin file (match layout, fields, validation, actions, states):**
+* **Map** (`ui/map/MapScreen.kt`, `CommunityMap.kt`, `MapMarkers.kt`, `MapStyles.kt`, `MiniMap.kt`,
+  `LocationPickerScreen.kt`):
+  * MapLibre GL JS with the same styles: OpenFreeMap `liberty` / `dark`, the runtime **Modern** recolour from
+    `MapStyles.kt` (port the paint changes) and Classic.
+  * Satellite through MapTiler when the key exists.
+  * GeoJSON clustering with tap-to-zoom.
+  * Markers drawn from the generated SVG icons into canvas images (`map.addImage`), in the same pin/bubble shape and
+    category colours as `MarkerFactory`, with the selected-marker scale, the pulsing circle for urgent posts and the
+    search-area circle.
+  * The user-location dot (Geolocation API), filter chips, the layers/filter sheet, search with a result card, the
+    preview card, and the **Map/List** pill with the list view sorted by distance.
+  * The camera is remembered across screens (`MapMemory`, kept in sessionStorage).
+  * The location picker with pin and radius, and the mini map snapshot on detail screens.
+  * Update the GeoJSON source only when features change.
+* **Explore** (`ui/explore/ExploreScreen.kt`, `Filtering.kt`, `SearchScreen.kt`): tiles, feed, filters (shared with
+  the map, as on Android), search, the "Include older posts" rule (90 days, `PostStaleness`) and the microchip
+  filter.
+* **Post editor** (`ui/posts/PostEditorScreen.kt`, `PostEditorViewModel.kt`):
+  * The step wizard with the same steps and validation: photos (camera or library through
+    `<input type="file" accept="image/*">`, with `capture` offered on mobile), details, pin and radius, reward and
+    contact, review.
+  * Duplicate warning (`likelyDuplicates`), the same-animal check (8.6), the microchip field and the adoption fields.
+  * **Draft autosave** like `PostDraftStore` (per account, in IndexedDB, photos kept as blobs; "Continue draft /
+    Discard"; cleared after publishing; not used when editing an existing post).
+  * Edit mode for existing posts.
+* **Post detail** (`PostDetailScreen.kt`, `PostDetailHeader.kt`):
+  * the photo pager, fact chips, mini map, reward, contact options and the owner's actions (edit, delete, status
+    changes, adoption status);
+  * "I saw this animal" / "Add update" with photo and location, the updates list (with delete for your own), possible
+    matches, favourite, report, share and the poster.
+* **Poster** (`PosterScreen.kt`, `util/PosterMaker.kt`): render the same poster on a canvas (same layout, icons, RTL
+  rules and QR code); download it as PNG and share it through the Web Share API with files when available.
+* **My posts, Favourites, Area alerts** (`PostLists.kt`); **stale-post reminders** (`PostRepository.remindStalePosts`
+  when the owner opens the app).
+* **Messages** (`ui/messages/MessagesScreens.kt`, `data/ChatRepository.kt`):
+  * the chat list, chat (text, photo, shared-post card), unread counts, block/unblock and the blocked state;
+  * the `msg_` alert, the same as Android;
+  * starting a chat from a post or profile (`chat-with/:uid`).
+* **Adoption** (`ui/adoption/AdoptionScreens.kt`): listings, request (message and home), owner approve/decline with a
+  note, adoption requests, status pills.
+* **Pet sitting** (`ui/sitting/SittingScreens.kt`):
+  * the directory with "Verified only", sitter detail with reviews, the sitter profile editor and availability;
+  * booking: request, accept/decline, cancel and complete;
+  * reviews, with the rating recalculated exactly as Kotlin does it.
+* **Profile** (`ui/profile/ProfileScreens.kt`): my profile, edit, another user's profile, achievements/badges, stats
+  and points.
+* **Settings** (`ui/settings/SettingsAndNotifications.kt`):
+  * everything in 8.5, plus the demo account switcher;
+  * "Download my data" (port `UserDataExport.kt`; the browser downloads the same JSON), delete account, about/version
+    and "What's new".
+* **Community cats** (`ui/cats/*`), **sightings** (`ui/sighting/*`; AI suggestions use the ported analyser),
+  **rescue** (`ui/rescue/RescueScreens.kt`), **feeding stations** (`ui/stations/StationScreens.kt`, including
+  check-ins and maintenance) and the **help directory** (`ui/help/HelpDirectoryScreen.kt`, also reachable signed out,
+  as on Android).
+* **Admin** (`ui/admin/AdminScreens.kt`, `AdminCommunityScreens.kt`, `AnalyticsPanel.kt`, `RecognitionTestScreen.kt`):
+  * the dashboard with stats and analytics charts (`count()` aggregations, drawn with SVG or canvas, no chart
+    library);
+  * reports, rescues, merges, volunteers, maintenance, submissions, the moderation log, posts (hide/restore/delete),
+  users (roles, suspend/restore), sitters (verify) and the help directory editor;
+  * **Recognition test:** keep the AI-model section (labelled photo folder via `<input type="file" multiple
+    webkitdirectory>`, embeddings through `aiServer.embed`, the same report). The on-device ML Kit section becomes the
+    centre-weight descriptor, labelled "web analyser".
+  * **AI server** status screen (online/offline/never, "Check again").
+  * Only admins see admin routes; the rules enforce it anyway.
+
+**Platform adaptations (the only intended differences):**
+
+| Android | Web |
+|---|---|
+| GitHub-release APK updater (`update/`) | Service-worker update: when a new version is deployed, show a "New version available, Reload" snackbar. Keep "What's new" (show notes once per version; read them from the GitHub latest release body if reachable, or from a bundled `whats-new.json`). |
+| FCM push (Blaze only) | None. Inbox plus in-app toasts while open (8.4). |
+| WorkManager background poll | None (browsers can't). |
+| Videos (Blaze only, Storage) | The same `VITE_BLAZE` switch; hidden when off. |
+| `catmap://post/{id}` deep links | `https://<host>/post/{id}`. The share text uses the web link when `VITE_PUBLIC_URL` is set. The poster QR code encodes the web link when set, otherwise the `catmap://` link like Android. |
+| Android share sheet | Web Share API (`navigator.share`, with files when supported), falling back to copy-link with a snackbar. |
+| FileProvider export | Download a `.json` file. |
+| ML Kit labelling and segmentation | Not available; centre-weight analysis (8.7). |
+| Camera / gallery picker | `<input type="file">` with `capture` on mobile. |
+| Location | `navigator.geolocation`. Explain the permission the same way Android does; on iOS it needs HTTPS. |
+| App language setting | In-app language switch (8.5). |
+| Baseline profile, APK checksum | Not applicable. |
+
+**iPhone install hint:** in Safari on iOS, when the app isn't running standalone, show a one-time dismissible card:
+"Install CatMap: tap Share, then Add to Home Screen". Add this string to the web-only table (section 10).
+
+====================================================================================================================
+## 10. Text: the same strings in both languages
+
+The Android strings come from `tools/strings/strings_[a-i].py`, through `tools/strings/build_strings.py`. Reuse them;
+don't copy them by hand.
+
+1. Extend `build_strings.py` so that, after writing the Android XML, it **also** writes `web/src/i18n/en.json` and
+   `web/src/i18n/ar.json` (key → text, plus the `unread_notifications` plural forms).
+   * **The Android XML output must stay byte-for-byte identical.** Run the script and confirm `git diff` shows no
+     change in `app/src/main/res/values*/strings.xml`.
+2. **Web-only strings** (install hint, PWA update, emulator chip, web-specific errors and so on):
+   * Put them in a new table `tools/strings/strings_web.py`, with the same `S = [(key, en, ar), ...]` format.
+   * The Arabic column equals the English text and carries `# TODO-AR`, as the project already does.
+   * They go **only** into the web JSON, never into the Android XML. Android's missing/unused check must not see
+     them.
+   * Add a web check: scan `web/src` for `t('key')` / `t("key")` and fail on keys missing from the JSON.
+3. **`t()` formatter:** it supports Android's placeholder syntax (`%1$s`, `%2$d`, `%s`, `%d`) and plurals through
+   `Intl.PluralRules` (Arabic has zero/one/two/few/many/other).
+   * Use `Intl.NumberFormat` and `Intl.DateTimeFormat` to match Android's date, distance and number formatting
+     (`distanceText`, `dateTime` and similar helpers in the Kotlin code). Times are shown in Dubai time like Android.
+4. **RTL:**
+   * `dir="rtl"` on `<html>` for Arabic.
+   * Use CSS logical properties everywhere (`margin-inline-start`, `inset-inline-end`, `text-align: start`).
+   * Mirror direction-dependent icons (back arrow, chevrons) exactly where Compose auto-mirrors them.
+   * Keep the map itself unmirrored.
+
+====================================================================================================================
+## 11. Icons and app icons
+
+1. Write `tools/icons/vector_to_svg.py`. It converts every Android VectorDrawable in `app/src/main/res/drawable/`
+   (`ic_cm_*.xml`, plus `ic_launcher_foreground.xml`, `ic_launcher_background.xml`, `logo.xml` and `ic_stat_cat.xml`)
+   into SVG files in `web/src/icons/generated/`:
+   * handle `pathData`, `fillColor`, `strokeColor`, `strokeWidth`, line caps and joins, `fillType`, groups with
+     transforms, and the viewport;
+   * icons that Android tints from the theme must use `currentColor`;
+   * multi-colour icons (animals, categories, badges, markers) keep their colours.
+2. Generate a TypeScript registry that mirrors `ui/icons/CatMapIcons.kt`, so each animal, category, layer, badge and
+   fact chip maps to the same icon as on Android.
+3. **PWA icons:** build `icon-192.png`, `icon-512.png`, a maskable 512 icon (safe zone respected),
+   `apple-touch-icon.png` (180×180, no transparency) and a favicon from the launcher icon layers. Use a script, such as
+   Playwright rendering the SVG, Pillow, or sharp as a dev dependency. Commit the generated PNGs.
+4. **Web app manifest:** name "CatMap Dubai", short_name "CatMap", `display: standalone`, `orientation: portrait`,
+   `theme_color #A9531A`, `background_color #FFFBF7`, start_url `/map`, with both languages considered.
+
+====================================================================================================================
+## 12. Tests and verification (all required)
+
+Run everything against the **local emulators**:
+
+```
+npx.cmd -y firebase-tools@latest emulators:start --only auth,firestore,storage --project demo-catmap --import ./.emulator-data
+```
+
+* Don't use `--export-on-exit`; the saved demo data must stay unchanged.
+* For end-to-end runs, prefer `emulators:exec` with a throwaway copy, or seed a clean emulator with
+  `tools/seed/seed.mjs`.
+
+1. **Static checks:** `npm run lint`, `npm run typecheck` and `npm run build` all pass with zero errors. Report the
+   production bundle size, gzipped. Code-split the map and admin areas, so the first load stays small.
+2. **Unit tests (vitest), at least:**
+   * models: `fromDoc()` defaults, and that integer fields are written as whole numbers;
+   * post logic: `keywords()`, `likelyDuplicates()`, `Dubai.nearest`, `PostStaleness`;
+   * notifications and timing: `QuietHours` (including windows that cross midnight), notification dedupe ids;
+   * links: link parsing (reject invalid and injected ids, like Android's `PostLinks` tests);
+   * text: the `t()` formatter and plurals;
+   * photos and the AI server: the image pipeline's size/quality loop (with a canvas mock or jsdom-canvas
+     alternative), and `AiServer.run` matching on `answeredRequestId` with timeout handling (with mocked Firestore);
+   * the analyser fingerprint parity test from 8.7.
+3. **Rules compatibility:** the existing rules suite still passes unchanged (`cd tools/rulestest` then
+   `node test.mjs ../../firestore.rules`, and the full suite through `emulators:exec` as in HANDOFF.md).
+4. **End-to-end tests (Playwright, WebKit at the iPhone 15 viewport, plus Chromium)** against the emulators:
+   * Create your own test accounts in the Auth emulator with random passwords. Never use the seeded demo passwords
+     file.
+   * Cover at least:
+     * register, verify through the emulator's oobCodes endpoint (`http://127.0.0.1:9099/emulator/v1/projects/demo-catmap/oobCodes`),
+       and log in by username;
+     * a Lost post with a photo, through all wizard steps; check that it appears on the map and in Explore;
+     * the detail screen, adding an update and the owner marking it reunited;
+     * a street post next to an existing one, checking that the same-animal card appears. Run it with a fake AI
+       worker: a test helper that answers `aiJobs` like the PC does. Then check that "Add to that post" adds a
+       sighting and doesn't create a new post;
+     * chatting between two web users;
+     * an adoption request and approval;
+     * a booking flow;
+     * favourites, settings (theme, language/RTL, large text), offline banner (`context.setOffline(true)`) and logout;
+     * admin: hide and restore a post, suspend a user.
+5. **Cross-client parity check:** write `web/e2e/shape-parity.spec.ts`:
+   * For posts, updates, chats and messages, adoption requests, bookings and reviews, users and notifications,
+     compare a web-written document (read through the emulator REST API, with the header
+     `Authorization: Bearer owner`) with the field names and types of the Kotlin data classes.
+   * Extract the Kotlin field list with a small parser over `data/model/*.kt`; don't hand-copy it.
+   * Fail on any missing or extra field, or a type mismatch (integer vs double vs string vs list vs map).
+6. **Android reads web data (if an Android emulator is available):** install the staging build against the
+   emulators:
+
+   ```
+   .\gradlew.bat :app:installStaging "-Pcatmap.versionName=2.0.9" "-Pcatmap.emulatorHost=10.0.2.2"
+   ```
+
+   Then confirm that a web-created post, update and chat open correctly in the Android app. If no Android emulator
+   is available, say so.
+   * After any Gradle use, run `.\gradlew.bat --stop`. The owner's PC is short on RAM.
+7. **Screenshots for visual parity:** `npm run screens` captures every route at 393×852 (WebKit) in light, dark and
+   Arabic (RTL), into `web/docs/screens/`.
+   * Put the most important ones (map, explore, post card, detail header, filter sheet, chooser, editor steps,
+     poster) side by side with the Android references (`app/src/test/screenshots/*.png`, `docs/verification/*.png`)
+     in `web/docs/parity.md`.
+   * List every visible difference you couldn't remove.
+8. **PWA checks:**
+   * the manifest is valid; the service worker installs; the app shell loads offline;
+   * a production build served by `vite preview` passes a Lighthouse run (record the PWA, performance and
+     accessibility scores if Lighthouse is available).
+
+**CI:** add a `web` job to `.github/workflows/ci.yml` that needs no secrets. It runs:
+* `npm ci` in `web/`;
+* lint, typecheck, unit tests and build;
+* the strings generator check.
+
+Keep the existing jobs unchanged. Don't touch `release.yml`.
+
+====================================================================================================================
+## 13. Work order (do all of it in this run)
+
+1. **Scaffold:** the project scaffold, tokens and theme, fonts, the component library skeleton, the strings pipeline
+   (section 10), the icon converter (section 11) and Firebase/emulator wiring.
+2. **Auth:** register, verify, login by username, forgot password, the auth gate, profile creation and demo accounts.
+3. **Data layer:** models with `fromDoc()`, the shared feed, images, notifications and settings.
+4. **Map:** the map screen, styles, markers, clustering, filters, list view and location picker.
+5. **Explore:** explore, search and filters.
+6. **Post editor:** the wizard, the image pipeline, drafts, duplicates, the analyser port, the AI server client and the
+   same-animal check.
+7. **Post detail:** updates, favourites, report, share, poster, my posts, area alerts and stale reminders.
+8. **Messages.**
+9. **Adoption and pet sitting.**
+10. **Profile and settings:** profile, badges, settings, data export, delete account and the demo switcher.
+11. **Cats and care:** community cats, sightings, rescue, stations and the help directory.
+12. **Admin:** all screens, analytics, the recognition test and AI server status.
+13. **PWA:** manifest, icons, service worker, update prompt, iOS install hint, offline behaviour and Hosting config.
+14. **Verification:** tests, parity check, screenshots, CI job and documentation.
+
+Commit nothing. Keep the Android build untouched; re-check at the end with `git status` and `git diff --stat` that
+outside `web/` you only changed:
+* `tools/strings/build_strings.py`, `tools/strings/strings_web.py`, `tools/icons/vector_to_svg.py`;
+* `firebase.json` (hosting section), `.github/workflows/ci.yml` (web job);
+* the one Kotlin test file from 8.7;
+* `HANDOFF.md`, `README.md`, `SETUP.md`.
+
+====================================================================================================================
+## 14. Documentation
+
+* **`web/README.md`:** what it is; how to run it against the emulators; the env variables; how to build; how the owner
+  deploys (`npx.cmd -y firebase-tools@latest deploy --only hosting`, owner only); and how iPhone users install it.
+* **`SETUP.md`:** a "Web app (iPhone)" section with the owner's one-time steps:
+  1. In the Firebase console, register a Web app and copy its config into `web/.env.local`.
+  2. Check Authentication → Settings → Authorized domains: `catmap-dubai.web.app` and `.firebaseapp.com` are there by
+     default; add any custom domain.
+  3. Build, then deploy hosting.
+  4. Optionally add `VITE_MAPTILER_KEY` and `VITE_PUBLIC_URL`.
+* **`HANDOFF.md`:** add a dated section **at the top**, below the "Last updated" line, and update that line. Describe:
+  * the web app's architecture and what was verified;
+  * the parity differences;
+  * what's left.
+* **`README.md`:** a short "Web app" entry in the feature map.
+
+====================================================================================================================
+## 15. When you finish: write `work done.txt` (required)
+
+Create a plain text file in the project root named exactly `work done.txt` (lowercase, with a space, with the .txt
+extension). Claude reviews your work from it. Include:
+
+1. **Status by milestone:** each milestone in section 13 (done / partial / skipped) and each screen from section 9,
+   with the files.
+2. **Dependencies:** every dependency, with its exact version and why it's needed.
+3. **Commands and results:** every command you ran to verify, with the actual results (tests passed or failed, bundle
+   size, Lighthouse scores, fingerprint parity numbers, e2e results for WebKit and Chromium, rules suite count).
+4. **Not done:** what you didn't do or couldn't verify, and why, such as the real iPhone, the Android emulator, or
+   anything blocked by the rules (section 3).
+5. **Remaining visual differences** from Android (from `web/docs/parity.md`).
+6. **Files changed outside `web/`**, with a one-line reason each.
+7. **Owner steps**, in order, written for a non-developer (copy-paste commands).
+8. **What Claude should review first.**
+
+Don't launch Claude, push, deploy or commit. The owner and Claude review first.
