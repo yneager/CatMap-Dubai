@@ -31,6 +31,7 @@ import kotlinx.coroutines.tasks.await
 
 object Col {
     const val CONFIG = "config"
+    const val AI_JOBS = "aiJobs"
     const val USERS = "users"
     const val PRIVATE = "private"
     const val NOTIFICATIONS = "notifications"

@@ -1151,13 +1151,13 @@
     <string name="same_animal_post_anyway">Post anyway</string>
     <string name="same_animal_publish_body">Our AI thinks this is the same animal as \"%1$s\", already on the map. Add your photo to that post instead of making a second one?</string>
     <string name="ai_server">AI server</string>
-    <string name="ai_server_intro">Street-animal posts are checked against nearby posts by the recognition model (pet-recognition-base) running on the owner\'s PC. With the phone plugged in by USB and tools/ai-server/start.ps1 running, leave this blank.</string>
-    <string name="ai_server_url">Server address (blank = USB, http://127.0.0.1:8765)</string>
-    <string name="ai_server_test">Test connection</string>
-    <string name="ai_server_ok">Connected: %1$s</string>
-    <string name="ai_server_down">Can\'t reach the AI server. Is start.ps1 running and the phone plugged in?</string>
     <string name="recognition_ai_top1">AI model: right cat ranked first</string>
     <string name="recognition_ai_unavailable">AI server not reachable, so only the on-device method was tested.</string>
+    <string name="ai_server_intro">Street-animal posts are checked against nearby posts by the recognition model (pet-recognition-base) in the CatMap AI Server app on the owner\'s PC. The phone and the PC exchange the photos through Firestore, so it works on any network with no cable. When the PC is off, the phone\'s own matching is used.</string>
+    <string name="ai_server_test">Check again</string>
+    <string name="ai_server_ok">Online: %1$s</string>
+    <string name="ai_server_down">Offline: start the CatMap AI Server on the PC</string>
+    <string name="ai_server_never">The CatMap AI Server has never connected. Run tools/demo/create-demo-accounts.mjs, then tools/ai-server/start.cmd on the PC.</string>
     <plurals name="unread_notifications">
         <item quantity="one">%d unread notification</item>
         <item quantity="other">%d unread notifications</item>

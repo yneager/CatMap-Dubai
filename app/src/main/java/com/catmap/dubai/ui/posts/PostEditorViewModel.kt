@@ -327,7 +327,8 @@ class PostEditorViewModel(
                 val crops = nearby.mapNotNull { (p, _) ->
                     container.images.bitmap(p.photoIds.first(), thumb = false, target = 640)?.let { p.id to container.analyzer.cropSubject(it) }
                 }
-                val server = if (crops.isEmpty()) null else container.aiServer.compare(query, crops)
+                val labels = crops.map { (id, _) -> nearby.first { it.first.id == id }.first.name.ifBlank { "Street ${animalType}" } }
+                val server = if (crops.isEmpty()) null else container.aiServer.compare(query, crops, labels)
                 val distance = nearby.associate { (p, d) -> p.id to d }
                 sameAnimal = if (server != null) {
                     server.filter { it.verdict == "same" || it.verdict == "maybe" }.mapNotNull { m ->

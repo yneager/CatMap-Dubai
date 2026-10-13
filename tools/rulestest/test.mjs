@@ -92,14 +92,29 @@ await check("profile edit allowed", assertSucceeds(updateDoc(doc(ctx("alice"), "
   await check("demo admin claim restores its admin role", assertSucceeds(updateDoc(doc(DA, "users", "demoadmin"), { role: "admin" })));
 }
 
-console.log("AI server config");
-await check("members read the AI server address", assertSucceeds(getDoc(doc(ctx("alice"), "config", "ai"))));
-await check("signed-out cannot read the AI server address", assertFails(getDoc(doc(anon, "config", "ai"))));
-await check("member cannot set the AI server address", assertFails(setDoc(doc(ctx("alice"), "config", "ai"), { url: "https://evil.example", updatedBy: "alice", updatedAt: now() })));
-await check("admin sets the AI server address", assertSucceeds(setDoc(doc(ctx("admin"), "config", "ai"), { url: "http://127.0.0.1:8765", updatedBy: "admin", updatedAt: now() })));
-await check("admin clears the AI server address", assertSucceeds(setDoc(doc(ctx("admin"), "config", "ai"), { url: "", updatedBy: "admin", updatedAt: now() })));
-await check("AI server address must be http(s)", assertFails(setDoc(doc(ctx("admin"), "config", "ai"), { url: "javascript:alert(1)", updatedBy: "admin", updatedAt: now() })));
-await check("AI server config rejects extra fields", assertFails(setDoc(doc(ctx("admin"), "config", "ai"), { url: "", updatedBy: "admin", updatedAt: now(), token: "x" })));
+console.log("AI server jobs");
+{
+  const W = env.authenticatedContext("worker", { email: "ai-worker@demo.catmap.test", email_verified: true, catmapAiWorker: true }).firestore();
+  const job = (uid, extra = {}) => ({ uid, kind: "compare", status: "pending", query: Bytes.fromUint8Array(new Uint8Array(2000)),
+    images: [Bytes.fromUint8Array(new Uint8Array(2000))], ids: ["p1"], labels: ["Simba"], requestId: "r1", createdAt: serverTimestamp(), ...extra });
+  await check("member creates own AI job", assertSucceeds(setDoc(doc(ctx("alice"), "aiJobs", "alice"), job("alice"))));
+  await check("member cannot create a job for someone else", assertFails(setDoc(doc(ctx("bob"), "aiJobs", "alice"), job("alice"))));
+  await check("unverified member cannot create a job", assertFails(setDoc(doc(ctx("carl", false), "aiJobs", "carl"), job("carl"))));
+  await check("job cannot arrive already answered", assertFails(setDoc(doc(ctx("bob"), "aiJobs", "bob"), job("bob", { status: "done" }))));
+  await check("job query image is size-limited", assertFails(setDoc(doc(ctx("bob"), "aiJobs", "bob"), job("bob", { query: Bytes.fromUint8Array(new Uint8Array(160000)) }))));
+  await check("job rejects extra fields", assertFails(setDoc(doc(ctx("bob"), "aiJobs", "bob"), job("bob", { results: [] }))));
+  await check("new job right away is throttled", assertFails(setDoc(doc(ctx("alice"), "aiJobs", "alice"), job("alice", { requestId: "r2" }))));
+  await check("others cannot read a job", assertFails(getDoc(doc(ctx("bob"), "aiJobs", "alice"))));
+  await check("worker reads jobs", assertSucceeds(getDoc(doc(W, "aiJobs", "alice"))));
+  await check("worker lists pending jobs", assertSucceeds(getDocs(query(collection(W, "aiJobs"), where("status", "==", "pending")))));
+  await check("worker writes the result", assertSucceeds(updateDoc(doc(W, "aiJobs", "alice"), { status: "done", results: [{ id: "p1", similarity: 0.9, verdict: "same" }], model: "m", provider: "cpu", ms: 5, doneAt: serverTimestamp(), answeredRequestId: "r1" })));
+  await check("worker cannot change the request", assertFails(updateDoc(doc(W, "aiJobs", "alice"), { status: "done", ids: ["x"] })));
+  await check("member cannot fake a result", assertFails(updateDoc(doc(ctx("alice"), "aiJobs", "alice"), { status: "done", results: [] })));
+  await check("worker cannot write posts", assertFails(setDoc(doc(W, "posts", "w1"), { ownerId: "worker" })));
+  await check("worker writes the heartbeat", assertSucceeds(setDoc(doc(W, "config", "aiWorker"), { online: true, lastSeen: serverTimestamp(), model: "m", provider: "cpu", same: 0.75, maybe: 0.6 })));
+  await check("member reads the heartbeat", assertSucceeds(getDoc(doc(ctx("bob"), "config", "aiWorker"))));
+  await check("member cannot fake the heartbeat", assertFails(setDoc(doc(ctx("admin"), "config", "aiWorker"), { online: true, lastSeen: serverTimestamp() })));
+}
 
 console.log("Sightings");
 const A = ctx("alice"), B = ctx("bob");

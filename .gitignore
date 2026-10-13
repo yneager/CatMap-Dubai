@@ -32,3 +32,4 @@ __pycache__/
 # AI server (local virtualenv and downloaded model)
 /tools/ai-server/.venv/
 /tools/ai-server/models/
+/tools/ai-server/worker.local.json

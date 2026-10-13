@@ -86,11 +86,11 @@ S = [
 ('same_animal_post_anyway','Post anyway','Post anyway'), # TODO-AR
 ('same_animal_publish_body','Our AI thinks this is the same animal as "%1$s", already on the map. Add your photo to that post instead of making a second one?','Our AI thinks this is the same animal as "%1$s", already on the map. Add your photo to that post instead of making a second one?'), # TODO-AR
 ('ai_server','AI server','AI server'), # TODO-AR
-('ai_server_intro',"Street-animal posts are checked against nearby posts by the recognition model (pet-recognition-base) running on the owner's PC. With the phone plugged in by USB and tools/ai-server/start.ps1 running, leave this blank.","Street-animal posts are checked against nearby posts by the recognition model (pet-recognition-base) running on the owner's PC. With the phone plugged in by USB and tools/ai-server/start.ps1 running, leave this blank."), # TODO-AR
-('ai_server_url','Server address (blank = USB, http://127.0.0.1:8765)','Server address (blank = USB, http://127.0.0.1:8765)'), # TODO-AR
-('ai_server_test','Test connection','Test connection'), # TODO-AR
-('ai_server_ok','Connected: %1$s','Connected: %1$s'), # TODO-AR
-('ai_server_down',"Can't reach the AI server. Is start.ps1 running and the phone plugged in?","Can't reach the AI server. Is start.ps1 running and the phone plugged in?"), # TODO-AR
 ('recognition_ai_top1','AI model: right cat ranked first','AI model: right cat ranked first'), # TODO-AR
 ('recognition_ai_unavailable','AI server not reachable, so only the on-device method was tested.','AI server not reachable, so only the on-device method was tested.'), # TODO-AR
+('ai_server_intro',"Street-animal posts are checked against nearby posts by the recognition model (pet-recognition-base) in the CatMap AI Server app on the owner's PC. The phone and the PC exchange the photos through Firestore, so it works on any network with no cable. When the PC is off, the phone's own matching is used.","Street-animal posts are checked against nearby posts by the recognition model (pet-recognition-base) in the CatMap AI Server app on the owner's PC. The phone and the PC exchange the photos through Firestore, so it works on any network with no cable. When the PC is off, the phone's own matching is used."), # TODO-AR
+('ai_server_test','Check again','Check again'), # TODO-AR
+('ai_server_ok','Online: %1$s','Online: %1$s'), # TODO-AR
+('ai_server_down','Offline: start the CatMap AI Server on the PC','Offline: start the CatMap AI Server on the PC'), # TODO-AR
+('ai_server_never','The CatMap AI Server has never connected. Run tools/demo/create-demo-accounts.mjs, then tools/ai-server/start.cmd on the PC.','The CatMap AI Server has never connected. Run tools/demo/create-demo-accounts.mjs, then tools/ai-server/start.cmd on the PC.'), # TODO-AR
 ]

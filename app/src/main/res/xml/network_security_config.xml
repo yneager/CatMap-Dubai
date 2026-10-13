@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Plain HTTP only to this phone's own loopback address: the CatMap AI server reached over USB with
-     `adb reverse tcp:8765 tcp:8765`. Traffic never leaves the cable. Debug builds add the emulator host. -->
-<network-security-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="false">localhost</domain>
-    </domain-config>
-</network-security-config>

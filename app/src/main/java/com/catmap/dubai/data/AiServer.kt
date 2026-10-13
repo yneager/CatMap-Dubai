@@ -1,147 +1,104 @@
 package com.catmap.dubai.data
 
 import android.graphics.Bitmap
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.Blob
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
-import java.io.DataOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.UUID
 
 /**
- * Client for the CatMap AI server (tools/ai-server), which runs pet-recognition-base on the owner's PC.
- * By default the phone reaches it over USB at http://127.0.0.1:8765 (`adb reverse tcp:8765 tcp:8765`);
- * an admin can point the app elsewhere in Admin > AI server (Firestore config/ai). Every call carries
- * the user's Firebase ID token, and any failure returns null so the app falls back to on-device matching.
+ * Client for the CatMap AI Server (tools/ai-server), a desktop app on the owner's PC running pet-recognition-base.
+ * Nothing connects to the PC: the phone writes a job to Firestore `aiJobs/{uid}` (small JPEG crops), the PC polls for
+ * pending jobs over outgoing HTTPS and writes the answer back, and the phone listens to that document. The PC's
+ * heartbeat (`config/aiWorker`) lets the app skip the check at once when the PC is off. Every failure returns null so
+ * the caller falls back to on-device matching.
  */
 class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth) {
     data class Match(val id: String, val similarity: Double, val verdict: String)
-    data class Health(val model: String, val provider: String, val same: Double, val maybe: Double) {
+    data class Health(val model: String, val provider: String, val same: Double, val maybe: Double, val lastSeen: Long) {
         override fun toString() = "$model · $provider"
     }
 
-    private var cachedUrl: String? = null
-    private var cachedAt = 0L
+    /** The PC's status when it has checked in within the last 90 seconds, otherwise null (offline). */
+    suspend fun health(): Health? = runCatching {
+        val d = db.collection(Col.CONFIG).document("aiWorker").get().await()
+        val seen = d.getTimestamp("lastSeen")?.toDate()?.time ?: return null
+        if (d.getBoolean("online") != true || System.currentTimeMillis() - seen > ONLINE_WINDOW_MS) return null
+        Health(d.getString("model").orEmpty(), d.getString("provider").orEmpty(), d.getDouble("same") ?: 0.75, d.getDouble("maybe") ?: 0.6, seen)
+    }.getOrNull()
 
-    /** The configured server URL, or the USB default when none is set. */
-    suspend fun url(): String {
-        if (System.currentTimeMillis() - cachedAt < 60_000) cachedUrl?.let { return it }
-        val configured = runCatching { db.collection(Col.CONFIG).document("ai").get().await().getString("url") }.getOrNull()
-        return (configured?.trim()?.takeIf { it.startsWith("http") } ?: DEFAULT_URL).trimEnd('/').also {
-            cachedUrl = it
-            cachedAt = System.currentTimeMillis()
-        }
-    }
+    /** When the PC last checked in (for the admin status screen), or null if it never has. */
+    suspend fun lastSeen(): Long? = runCatching {
+        db.collection(Col.CONFIG).document("aiWorker").get().await().getTimestamp("lastSeen")?.toDate()?.time
+    }.getOrNull()
 
-    /** Admin only (rules): saves the URL; blank restores the USB default. */
-    suspend fun setUrl(url: String, me: com.catmap.dubai.data.model.UserProfile) {
-        db.collection(Col.CONFIG).document("ai")
-            .set(mapOf("url" to url.trim().trimEnd('/'), "updatedBy" to me.uid, "updatedAt" to now())).await()
-        cachedAt = 0
-    }
-
-    /** The server's model and verdict thresholds, or null when it can't be reached. */
-    suspend fun health(url: String? = null): Health? {
-        val base = url?.trim()?.trimEnd('/')?.takeIf { it.isNotEmpty() } ?: url()
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                val c = (URL("$base/health").openConnection() as HttpURLConnection).apply { connectTimeout = 3_000; readTimeout = 5_000 }
-                try {
-                    if (c.responseCode != 200) return@runCatching null
-                    val j = JSONObject(c.inputStream.bufferedReader().readText())
-                    Health(j.optString("model"), j.optString("provider"), j.optDouble("same", 0.75), j.optDouble("maybe", 0.6))
-                } finally { c.disconnect() }
-            }.getOrNull()
+    /**
+     * Compares [query] (a crop of the new animal) with each candidate crop; [labels] are names shown in the PC's window.
+     * Null when the PC is offline, too slow or refuses.
+     */
+    suspend fun compare(query: Bitmap, candidates: List<Pair<String, Bitmap>>, labels: List<String> = emptyList()): List<Match>? {
+        if (health() == null) return null
+        val done = run(
+            mapOf(
+                "kind" to "compare",
+                "query" to Blob.fromBytes(jpeg(query)),
+                "images" to candidates.take(MAX_CANDIDATES).map { Blob.fromBytes(jpeg(it.second)) },
+                "ids" to candidates.take(MAX_CANDIDATES).map { it.first },
+                "labels" to labels.take(MAX_CANDIDATES).map { it.take(60) },
+            ),
+        ) ?: return null
+        @Suppress("UNCHECKED_CAST")
+        val results = done.get("results") as? List<Map<String, Any?>> ?: return null
+        return results.mapNotNull { r ->
+            val id = r["id"] as? String ?: return@mapNotNull null
+            Match(id, (r["similarity"] as? Number)?.toDouble() ?: 0.0, r["verdict"] as? String ?: "different")
         }
     }
 
     /** Embeddings (unit vectors) for up to 16 crops, for the Recognition test. Null on any failure. */
     suspend fun embed(crops: List<Bitmap>): List<List<Double>>? {
-        val token = runCatching { auth.currentUser?.getIdToken(false)?.await()?.token }.getOrNull() ?: return null
-        val base = url()
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                val boundary = "catmap-" + UUID.randomUUID()
-                val c = (URL("$base/embed").openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 3_000; readTimeout = 60_000; requestMethod = "POST"; doOutput = true
-                    setRequestProperty("Authorization", "Bearer $token")
-                    setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-                }
-                try {
-                    DataOutputStream(c.outputStream).use { out ->
-                        crops.forEachIndexed { i, b ->
-                            out.writeBytes("--$boundary\r\nContent-Disposition: form-data; name=\"images\"; filename=\"i$i.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n")
-                            out.write(jpeg(b))
-                            out.writeBytes("\r\n")
-                        }
-                        out.writeBytes("--$boundary--\r\n")
-                    }
-                    if (c.responseCode != 200) return@runCatching null
-                    val arr = JSONObject(c.inputStream.bufferedReader().readText()).getJSONArray("embeddings")
-                    List(arr.length()) { i -> arr.getJSONArray(i).let { v -> List(v.length()) { k -> v.getDouble(k) } } }
-                } finally { c.disconnect() }
-            }.getOrNull()
-        }
+        val done = run(mapOf("kind" to "embed", "images" to crops.take(16).map { Blob.fromBytes(jpeg(it)) }, "ids" to emptyList<String>())) ?: return null
+        @Suppress("UNCHECKED_CAST")
+        val vectors = done.get("embeddings") as? List<Map<String, Any?>> ?: return null
+        return vectors.map { m -> (m["v"] as? List<*>)?.mapNotNull { (it as? Number)?.toDouble() }.orEmpty() }
     }
 
-    /**
-     * Compares [query] (a crop of the new animal) with each candidate crop. Returns null when the server
-     * is unreachable or refuses, so the caller can fall back.
-     */
-    suspend fun compare(query: Bitmap, candidates: List<Pair<String, Bitmap>>): List<Match>? {
-        val token = runCatching { auth.currentUser?.getIdToken(false)?.await()?.token }.getOrNull() ?: return null
-        val base = url()
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                val boundary = "catmap-" + UUID.randomUUID()
-                val c = (URL("$base/compare").openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 3_000
-                    readTimeout = 30_000
-                    requestMethod = "POST"
-                    doOutput = true
-                    setRequestProperty("Authorization", "Bearer $token")
-                    setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-                }
-                try {
-                    DataOutputStream(c.outputStream).use { out ->
-                        fun part(name: String, filename: String?, type: String?, body: ByteArray) {
-                            out.writeBytes("--$boundary\r\nContent-Disposition: form-data; name=\"$name\"")
-                            if (filename != null) out.writeBytes("; filename=\"$filename\"")
-                            out.writeBytes("\r\n")
-                            if (type != null) out.writeBytes("Content-Type: $type\r\n")
-                            out.writeBytes("\r\n")
-                            out.write(body)
-                            out.writeBytes("\r\n")
-                        }
-                        part("ids", null, null, JSONArray(candidates.map { it.first }).toString().toByteArray())
-                        part("query", "query.jpg", "image/jpeg", jpeg(query))
-                        candidates.forEachIndexed { i, (_, bitmap) -> part("candidates", "c$i.jpg", "image/jpeg", jpeg(bitmap)) }
-                        out.writeBytes("--$boundary--\r\n")
+    /** Writes the job and waits for the PC's answer to this request. */
+    private suspend fun run(fields: Map<String, Any>): DocumentSnapshot? {
+        val uid = auth.currentUser?.uid ?: return null
+        val requestId = UUID.randomUUID().toString()
+        val ref = db.collection(Col.AI_JOBS).document(uid)
+        return runCatching {
+            // The rules allow one new job a second per person; wait out a job that was just sent.
+            val previous = runCatching { ref.get().await().getTimestamp("createdAt") }.getOrNull()
+            previous?.let { val wait = 1_200 - (Timestamp.now().toDate().time - it.toDate().time); if (wait > 0) kotlinx.coroutines.delay(wait) }
+            ref.set(fields + mapOf("uid" to uid, "status" to "pending", "requestId" to requestId, "createdAt" to FieldValue.serverTimestamp())).await()
+            withTimeoutOrNull(TIMEOUT_MS) {
+                callbackFlow {
+                    val reg = ref.addSnapshotListener { snap, error ->
+                        if (error != null) close(error) else if (snap != null) trySend(snap)
                     }
-                    if (c.responseCode != 200) {
-                        android.util.Log.w("CatMap", "AI server answered ${c.responseCode}")
-                        return@runCatching null
-                    }
-                    val results = JSONObject(c.inputStream.bufferedReader().readText()).getJSONArray("results")
-                    List(results.length()) { i ->
-                        val r = results.getJSONObject(i)
-                        Match(r.getString("id"), r.getDouble("similarity"), r.getString("verdict"))
-                    }
-                } finally { c.disconnect() }
-            }.onFailure { android.util.Log.i("CatMap", "AI server unavailable: ${it.message}") }.getOrNull()
-        }
+                    awaitClose { reg.remove() }
+                }.first { it.getString("answeredRequestId") == requestId && it.getString("status") in setOf("done", "error") }
+            }?.takeIf { it.getString("status") == "done" }
+        }.onFailure { android.util.Log.i("CatMap", "AI server job failed: ${it.message}") }.getOrNull()
     }
 
     private fun jpeg(bitmap: Bitmap): ByteArray =
-        ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }.toByteArray()
+        ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
 
     companion object {
-        const val DEFAULT_URL = "http://127.0.0.1:8765"
+        const val MAX_CANDIDATES = 8
+        const val ONLINE_WINDOW_MS = 90_000L
+        const val TIMEOUT_MS = 30_000L
     }
 }

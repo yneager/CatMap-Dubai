@@ -1,9 +1,49 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 13 Oct 2026 (v0.0.5 released; + menu and the street-animal AI check via the PC server committed locally; the owner still has to deploy the rules and create the demo accounts).**
+and what's left. **Last updated: 13 Oct 2026 (v0.0.6: online AI check through Firestore plus the PC desktop app; the owner still has to deploy the rules and create the demo and worker accounts).**
+
+## 13 October 2026 - v0.0.6: AI check online through Firestore, desktop app (Claude)
+
+The owner wanted the AI check to work online without a cable, with a window on the PC showing what's happening.
+
+**Transport: Firestore as the mailbox. This replaces the USB/HTTP design in the section below.**
+* The phone writes `aiJobs/{uid}`: crops as Blobs, ids, labels and a `requestId` (`data/AiServer.kt`).
+* The PC app polls pending jobs over outgoing HTTPS, embeds the crops, and writes `results` / `embeddings` with
+  `answeredRequestId`. The phone accepts only an answer to its own request.
+* A heartbeat in `config/aiWorker` (every 30 s, online if seen within 90 s) lets phones skip the check at once when
+  the PC is off.
+* No inbound connection, tunnel or open port. The earlier tunnel attempt had been blocked as "External Ingress
+  Tunnel". The loopback cleartext network config was removed again.
+* **Worker identity:** `ai-worker@demo.catmap.test` (uid `catmap-ai-worker`, claim `catmapAiWorker`), created by
+  `tools/demo/create-demo-accounts.mjs`. Its random password is saved only in `tools/ai-server/worker.local.json`
+  (git-ignored) and kept on re-runs.
+* **Rules:** `aiJobs` (owner-only; verified; 1 job/s; query ≤ 150 KB; ≤ 16 images; the worker may only set result
+  fields) and `config/aiWorker` (the worker writes it, members read it). `config/ai` (the URL setting) is gone.
+  17 new rules tests; suite **270/270**.
+
+**Desktop app** (`tools/ai-server/server.py`, Tkinter; double-click `start.cmd`, since PowerShell scripts are
+blocked on this PC):
+* It pops to the front on each photo. It shows the requester, the new photo, the candidate thumbnails with names,
+  the verdict and % (green/orange/grey), the timing and an activity log.
+* Closing it writes `online: false`. A failed save isn't retried every poll.
+
+**Verified on the emulator, with `adb reverse` removed:**
+* the heartbeat appeared;
+* a street post next to Simba got "Likely the same";
+* the PC window showed "SAME 94%" in 67 ms on the GPU.
+* The emulator rejected the REST `currentDocument.updateTime` precondition, which is why answers carry
+  `answeredRequestId` instead.
+
+**Owner steps:**
+1. `npx.cmd -y firebase-tools@latest deploy --only firestore`
+2. `node tools/demo/create-demo-accounts.mjs`
+3. Double-click `tools/ai-server/start.cmd`
+4. In the app, check Admin > AI server.
 
 ## 13 October 2026 - v0.0.5, + menu, street-animal AI check on the PC (Claude)
+
+> Superseded for transport: the USB / `adb reverse` / HTTP design below was replaced by the Firestore mailbox in v0.0.6.
 
 **Released v0.0.5** at `755c80e` (demo admin, Recognition test, List view, icons). CI and the release workflow passed.
 

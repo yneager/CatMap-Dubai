@@ -11,6 +11,10 @@
 // profile with the admin role, so the claim, not the password, is what makes "admin" an admin.
 // Importing again (for example with a new password) updates the same five accounts.
 //
+// It also creates the AI worker account the PC's CatMap AI Server signs in with (claim catmapAiWorker: it may only
+// read AI jobs and write their results). Its password is random, never shown, and saved only on this PC in
+// tools/ai-server/worker.local.json (git-ignored).
+//
 // Options: --project <id> (default: catmap-dubai). Needs `firebase login` (already done on this PC).
 
 import { createHash, pbkdf2Sync, randomBytes, scryptSync } from "node:crypto";
@@ -28,6 +32,12 @@ const ACCOUNTS = [
   { uid: "catmap-demo-anirudh", username: "demo_anirudh", name: "Anirudh", claims: { catmapDemo: true } },
   { uid: "catmap-demo-hassan", username: "demo_hassan", name: "Hassan", claims: { catmapDemo: true } },
 ];
+const WORKER = { uid: "catmap-ai-worker", username: "ai-worker", name: "CatMap AI Server", claims: { catmapAiWorker: true } };
+const workerFile = new URL("../ai-server/worker.local.json", import.meta.url);
+// Keep the worker's existing password on a re-run, so a running AI server keeps working.
+const workerPassword = (() => {
+  try { return JSON.parse(readFileSync(workerFile, "utf8")).password; } catch { return randomBytes(24).toString("base64url"); }
+})();
 
 const args = process.argv.slice(2);
 const project = args.includes("--project") ? args[args.indexOf("--project") + 1] : "catmap-dubai";
@@ -73,14 +83,14 @@ async function canSignIn(key) {
 }
 
 function importWith(format) {
-  const users = ACCOUNTS.map((a) => {
+  const users = [...ACCOUNTS, WORKER].map((a) => {
     const salt = randomBytes(16);
     return {
       localId: a.uid,
       email: `${a.username}@${DOMAIN}`,
       emailVerified: true,
       displayName: a.name,
-      passwordHash: format.hash(password, salt).toString("base64"),
+      passwordHash: format.hash(a === WORKER ? workerPassword : password, salt).toString("base64"),
       salt: salt.toString("base64"),
       customAttributes: JSON.stringify(a.claims),
     };
@@ -107,5 +117,7 @@ for (const format of FORMATS) {
   console.log("Firebase didn't accept that hash format; trying the next one...");
 }
 if (!ok) { console.error("None of the hash formats worked. Nothing else was changed; tell Claude."); process.exit(1); }
+writeFileSync(workerFile, JSON.stringify({ email: `${WORKER.username}@${DOMAIN}`, password: workerPassword }, null, 2), { mode: 0o600 });
+console.log("Saved the AI worker sign-in for the PC in tools/ai-server/worker.local.json (git-ignored).");
 console.log(`\nDone. Sign in to the app with username "admin" and the password you typed.`);
 console.log(`Then open Settings > Demo accounts to switch between the four demo users.`);

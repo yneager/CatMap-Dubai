@@ -408,14 +408,38 @@ service cloud.firestore {
       }
     }
 
-    // Where the app finds the CatMap AI server (tools/ai-server). Blank means the USB default.
-    match /config/ai {
+    // ---------- CatMap AI server (tools/ai-server, on the owner's PC) ----------
+    // The PC signs in as the AI worker account (custom claim catmapAiWorker, set only by auth:import).
+    function aiWorker() { return signedIn() && request.auth.token.get('catmapAiWorker', false) == true; }
+
+    // Heartbeat: the worker says it's online, so phones skip the check at once when the PC is off.
+    match /config/aiWorker {
       allow read: if signedIn();
-      allow write: if isAdmin()
-        && request.resource.data.keys().hasOnly(['url', 'updatedBy', 'updatedAt'])
-        && request.resource.data.url is string && request.resource.data.url.size() <= 300
-        && (request.resource.data.url == '' || request.resource.data.url.matches('https?://[^ ]+'))
-        && request.resource.data.updatedBy == uid();
+      allow write: if aiWorker()
+        && request.resource.data.keys().hasOnly(['online', 'lastSeen', 'model', 'provider', 'same', 'maybe'])
+        && request.resource.data.online is bool && request.resource.data.lastSeen is timestamp;
+    }
+
+    // One job per user (document id = uid): crops of a new street animal and of nearby posts, or photos to embed
+    // for the Recognition test. The owner writes it; the worker reads it and may only write the result fields.
+    match /aiJobs/{ownerId} {
+      allow read: if signedIn() && (uid() == ownerId || aiWorker());
+      allow create, update: if verified() && uid() == ownerId
+        && incoming().keys().hasOnly(['uid', 'kind', 'status', 'query', 'images', 'ids', 'labels', 'requestId', 'createdAt'])
+        && incoming().uid == ownerId && incoming().status == 'pending'
+        && incoming().kind in ['compare', 'embed']
+        && incoming().images is list && incoming().images.size() <= 16
+        && incoming().ids is list && incoming().ids.size() <= 16
+        && incoming().get('labels', []).size() <= 16
+        && (!('query' in incoming()) || (incoming().query is bytes && incoming().query.size() <= 150000))
+        && incoming().requestId is string && incoming().requestId.size() <= 64
+        && incoming().createdAt == request.time
+        // At most one new job a second per person.
+        && (resource == null || request.time > resource.data.createdAt + duration.value(1, 's'));
+      allow update: if aiWorker()
+        && changed().hasOnly(['status', 'results', 'embeddings', 'model', 'provider', 'ms', 'error', 'doneAt', 'answeredRequestId'])
+        && incoming().status in ['done', 'error'];
+      allow delete: if signedIn() && (uid() == ownerId || aiWorker());
     }
 
     match /helpDirectory/{contactId} {

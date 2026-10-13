@@ -23,7 +23,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -191,40 +190,33 @@ private fun listLabelledPhotos(context: Context, tree: Uri): List<Triple<String,
     return out
 }
 
-/** Admin > AI server: where the app finds the PC running tools/ai-server, and a connection test. */
+/** Admin > AI server: whether the CatMap AI Server on the owner's PC is online, and what it runs. */
 @Composable
 fun AiServerScreen(nav: NavHostController) {
     val container = LocalContainer.current
     val scope = rememberCoroutineScope()
-    val runner = com.catmap.dubai.ui.components.rememberRunner()
-    val me by container.session.profile.collectAsStateWithLifecycle()
-    var url by remember { mutableStateOf("") }
-    var result by remember { mutableStateOf<String?>(null) }
-    var testing by remember { mutableStateOf(false) }
-    val down = stringResource(R.string.ai_server_down)
-    val okText = stringResource(R.string.ai_server_ok, "%s")
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        url = container.aiServer.url().takeIf { it != com.catmap.dubai.data.AiServer.DEFAULT_URL }.orEmpty()
+    var status by remember { mutableStateOf<String?>(null) }
+    var checking by remember { mutableStateOf(false) }
+    val online = stringResource(R.string.ai_server_ok, "%s")
+    val offline = stringResource(R.string.ai_server_down)
+    val never = stringResource(R.string.ai_server_never)
+    fun check() {
+        scope.launch {
+            checking = true
+            val h = container.aiServer.health()
+            status = if (h != null) online.replace("%s", h.toString()) else {
+                val seen = container.aiServer.lastSeen()
+                if (seen == null) never else offline + " (" + android.text.format.DateUtils.getRelativeTimeSpanString(seen) + ")"
+            }
+            checking = false
+        }
     }
+    androidx.compose.runtime.LaunchedEffect(Unit) { check() }
     Scaffold(topBar = { AppTopBar(stringResource(R.string.ai_server), onBack = { nav.popBackStack() }) }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.ai_server_intro), style = MaterialTheme.typography.bodyMedium)
-            androidx.compose.material3.OutlinedTextField(
-                url, { url = it.trim() }, label = { Text(stringResource(R.string.ai_server_url)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-            )
-            Button(onClick = {
-                val profile = me ?: return@Button
-                runner.run(R.string.saved) { container.aiServer.setUrl(url, profile) }
-            }, enabled = !runner.busy, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.save)) }
-            OutlinedButton(onClick = {
-                scope.launch {
-                    testing = true
-                    val h = container.aiServer.health(url.ifBlank { com.catmap.dubai.data.AiServer.DEFAULT_URL })
-                    result = h?.let { okText.replace("%s", it.toString()) } ?: down
-                    testing = false
-                }
-            }, enabled = !testing, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ai_server_test)) }
-            result?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            status?.let { Text(it, style = MaterialTheme.typography.titleSmall) }
+            OutlinedButton(onClick = { check() }, enabled = !checking, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ai_server_test)) }
         }
     }
 }
