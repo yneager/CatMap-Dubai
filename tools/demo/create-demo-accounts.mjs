@@ -16,7 +16,8 @@
 // worker.local.json in the AI server's folder: cat-server next to this project (Desktop\cat-server), or the folder
 // in the CATMAP_SERVER_DIR environment variable.
 //
-// Options: --project <id> (default: catmap-dubai). Needs `firebase login` (already done on this PC).
+// Options: --project <id> (default: catmap-dubai); --worker-only (only the AI worker account, no password to type).
+// Needs `firebase login` (already done on this PC).
 
 import { createHash, pbkdf2Sync, randomBytes, scryptSync } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync, rmSync, mkdtempSync, mkdirSync } from "node:fs";
@@ -45,19 +46,40 @@ const workerPassword = (() => {
 const args = process.argv.slice(2);
 const project = args.includes("--project") ? args[args.indexOf("--project") + 1] : "catmap-dubai";
 
-function askHidden(question) {
-  if (process.env.CATMAP_DEMO_PASSWORD) return Promise.resolve(process.env.CATMAP_DEMO_PASSWORD);
-  return new Promise((resolve) => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    rl._writeToOutput = (s) => { if (s.startsWith(question)) rl.output.write(s); };
-    rl.question(question, (answer) => { rl.output.write("\n"); rl.close(); resolve(answer); });
-  });
+// Asks every question on one readline, closed once at the end: opening a second readline on stdin after closing the
+// first crashes Node on Windows ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)").
+async function askHidden(questions) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+  let current = "";
+  rl._writeToOutput = (s) => { if (s.startsWith(current)) rl.output.write(s); };
+  const lines = [];
+  let waiting = null;
+  let closed = false;
+  rl.on("line", (l) => { if (waiting) { const w = waiting; waiting = null; w(l); } else lines.push(l); });
+  rl.on("close", () => { closed = true; if (waiting) waiting(""); });
+  const answers = [];
+  for (const q of questions) {
+    current = q;
+    rl.setPrompt(q);
+    rl.prompt();
+    answers.push(lines.length ? lines.shift() : closed ? "" : await new Promise((done) => { waiting = done; }));
+    rl.output.write("\n");
+  }
+  rl.close();
+  await new Promise((done) => setImmediate(done));
+  return answers;
 }
 
-const password = await askHidden("Password for the admin and demo accounts: ");
-if (password.length < 8) { console.error("Use at least 8 characters."); process.exit(1); }
-const again = process.env.CATMAP_DEMO_PASSWORD ? password : await askHidden("Type it again: ");
-if (again !== password) { console.error("The two passwords don't match."); process.exit(1); }
+// --worker-only: just (re)create the AI worker account for the PC's server, with no password to type.
+const workerOnly = args.includes("--worker-only");
+let password = "";
+if (!workerOnly) {
+  const fromEnv = process.env.CATMAP_DEMO_PASSWORD;
+  const [first, again] = fromEnv ? [fromEnv, fromEnv] : await askHidden(["Password for the admin and demo accounts: ", "Type it again: "]);
+  if (first.length < 8) { console.error("Use at least 8 characters."); process.exit(1); }
+  if (again !== first) { console.error("The two passwords don't match."); process.exit(1); }
+  password = first;
+}
 
 // Hash formats Firebase can import, tried in order until a test sign-in succeeds.
 const FORMATS = [
@@ -75,9 +97,10 @@ function apiKey() {
 }
 
 async function canSignIn(key) {
+  const [who, pw] = workerOnly ? [WORKER, workerPassword] : [ACCOUNTS[0], password];
   const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${key}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: `${ACCOUNTS[0].username}@${DOMAIN}`, password, returnSecureToken: false }),
+    body: JSON.stringify({ email: `${who.username}@${DOMAIN}`, password: pw, returnSecureToken: false }),
   });
   if (r.ok) return true;
   const msg = (await r.json().catch(() => ({})))?.error?.message || String(r.status);
@@ -86,7 +109,7 @@ async function canSignIn(key) {
 }
 
 function importWith(format) {
-  const users = [...ACCOUNTS, WORKER].map((a) => {
+  const users = (workerOnly ? [WORKER] : [...ACCOUNTS, WORKER]).map((a) => {
     const salt = randomBytes(16);
     return {
       localId: a.uid,
@@ -123,5 +146,9 @@ if (!ok) { console.error("None of the hash formats worked. Nothing else was chan
 mkdirSync(serverDir, { recursive: true });
 writeFileSync(workerFile, JSON.stringify({ email: `${WORKER.username}@${DOMAIN}`, password: workerPassword }, null, 2), { mode: 0o600 });
 console.log(`Saved the AI worker sign-in for the PC in ${workerFile}.`);
-console.log(`\nDone. Sign in to the app with username "admin" and the password you typed.`);
-console.log(`Then open Settings > Demo accounts to switch between the four demo users.`);
+if (workerOnly) {
+  console.log("\nDone. Start the AI server with start.cmd in that folder.");
+} else {
+  console.log(`\nDone. Sign in to the app with username "admin" and the password you typed.`);
+  console.log(`Then open Settings > Demo accounts to switch between the four demo users.`);
+}
