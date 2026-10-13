@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 
+@androidx.compose.runtime.Immutable
 data class Fix(val lat: Double, val lng: Double, val accuracy: Double)
 
 class LocationHelper(private val context: Context) {

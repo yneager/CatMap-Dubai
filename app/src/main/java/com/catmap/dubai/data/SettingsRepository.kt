@@ -36,8 +36,10 @@ data class FeedFilters(
     /** 0 = any time. */
     val maxAgeDays: Int = 0,
     val rewardOnly: Boolean = false,
+    val includeOlder: Boolean = false,
+    val microchip: String? = null,
 ) {
-    val extraCount: Int get() = animalTypes.size + (if (maxDistanceKm > 0) 1 else 0) + (if (maxAgeDays > 0) 1 else 0) + (if (rewardOnly) 1 else 0)
+    val extraCount: Int get() = animalTypes.size + (if (maxDistanceKm > 0) 1 else 0) + (if (maxAgeDays > 0) 1 else 0) + (if (rewardOnly) 1 else 0) + (if (includeOlder) 1 else 0)
     val isEmpty: Boolean get() = layers.isEmpty() && extraCount == 0
 }
 
@@ -55,6 +57,12 @@ data class AppSettings(
     val filters: FeedFilters = FeedFilters(),
     val skippedVersion: String = "",
     val lastUpdateCheck: Long = 0,
+    val quietHoursEnabled: Boolean = false,
+    val quietStart: Int = 22*60,
+    val quietEnd: Int = 7*60,
+    val lastSeenVersion:String = "",
+    val releaseNotesVersion:String = "",
+    val releaseNotes:String = "",
 ) {
     fun allows(category: NotifCategory) = notificationsEnabled && categories[category] != false
 }
@@ -77,8 +85,16 @@ class SettingsRepository(private val context: Context) {
         val DISTANCE = intPreferencesKey("filter_distance")
         val AGE = intPreferencesKey("filter_age")
         val REWARD = booleanPreferencesKey("filter_reward")
+        val INCLUDE_OLDER = booleanPreferencesKey("filter_include_older")
+        val MICROCHIP = stringPreferencesKey("filter_microchip")
         val SKIPPED_VERSION = stringPreferencesKey("skipped_version")
         val LAST_UPDATE_CHECK = longPreferencesKey("last_update_check")
+        val QUIET_ENABLED = booleanPreferencesKey("quiet_enabled")
+        val QUIET_START = intPreferencesKey("quiet_start")
+        val QUIET_END = intPreferencesKey("quiet_end")
+        val LAST_SEEN_VERSION = stringPreferencesKey("last_seen_version")
+        val RELEASE_NOTES_VERSION = stringPreferencesKey("release_notes_version")
+        val RELEASE_NOTES = stringPreferencesKey("release_notes")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { it.toSettings() }
@@ -102,9 +118,17 @@ class SettingsRepository(private val context: Context) {
             maxDistanceKm = this[Keys.DISTANCE] ?: 0,
             maxAgeDays = this[Keys.AGE] ?: 0,
             rewardOnly = this[Keys.REWARD] ?: false,
+            includeOlder = this[Keys.INCLUDE_OLDER] ?: false,
+            microchip = this[Keys.MICROCHIP]?.takeIf {it in listOf("yes","no","unknown")},
         ),
         skippedVersion = this[Keys.SKIPPED_VERSION] ?: "",
         lastUpdateCheck = this[Keys.LAST_UPDATE_CHECK] ?: 0L,
+        quietHoursEnabled = this[Keys.QUIET_ENABLED] ?: false,
+        quietStart = (this[Keys.QUIET_START] ?: 22*60).coerceIn(0,1439),
+        quietEnd = (this[Keys.QUIET_END] ?: 7*60).coerceIn(0,1439),
+        lastSeenVersion = this[Keys.LAST_SEEN_VERSION].orEmpty(),
+        releaseNotesVersion = this[Keys.RELEASE_NOTES_VERSION].orEmpty(),
+        releaseNotes = this[Keys.RELEASE_NOTES].orEmpty(),
     )
 
     suspend fun setTheme(mode: ThemeMode) = context.dataStore.edit { it[Keys.THEME] = mode.name }
@@ -119,12 +143,20 @@ class SettingsRepository(private val context: Context) {
     suspend fun setHeatmap(on: Boolean) = context.dataStore.edit { it[Keys.HEATMAP] = on }
     suspend fun setSkippedVersion(version: String) = context.dataStore.edit { it[Keys.SKIPPED_VERSION] = version }
     suspend fun setLastUpdateCheck(at: Long) = context.dataStore.edit { it[Keys.LAST_UPDATE_CHECK] = at }
+    suspend fun setLastSeenVersion(version:String) = context.dataStore.edit {it[Keys.LAST_SEEN_VERSION]=version}
+    suspend fun saveReleaseNotes(version:String,notes:String) = context.dataStore.edit {it[Keys.RELEASE_NOTES_VERSION]=version; it[Keys.RELEASE_NOTES]=notes.take(50_000)}
+    suspend fun setQuietHours(enabled:Boolean,start:Int,end:Int) = context.dataStore.edit {
+        require(start in 0..1439 && end in 0..1439)
+        it[Keys.QUIET_ENABLED]=enabled; it[Keys.QUIET_START]=start; it[Keys.QUIET_END]=end
+    }
     suspend fun setFilters(f: FeedFilters) = context.dataStore.edit {
         it[Keys.LAYERS] = f.layers.map { l -> l.name }.toSet()
         it[Keys.ANIMALS] = f.animalTypes
         it[Keys.DISTANCE] = f.maxDistanceKm
         it[Keys.AGE] = f.maxAgeDays
         it[Keys.REWARD] = f.rewardOnly
+        it[Keys.INCLUDE_OLDER] = f.includeOlder
+        if(f.microchip==null) it.remove(Keys.MICROCHIP) else it[Keys.MICROCHIP]=f.microchip
     }
 
     // Null means this account has never established a baseline; empty means an empty baseline.

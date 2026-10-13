@@ -17,6 +17,15 @@ import com.catmap.dubai.data.Dubai
 import com.catmap.dubai.data.LocationPrivacy
 import com.catmap.dubai.data.PostDraft
 import com.catmap.dubai.data.PostRepository
+import com.catmap.dubai.data.SavedPostDraft
+import com.catmap.dubai.data.AppErrors
+import androidx.compose.runtime.snapshotFlow
+import android.graphics.BitmapFactory
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.cancelAndJoin
+import java.util.UUID
 import com.catmap.dubai.data.model.AdoptionStatus
 import com.catmap.dubai.data.model.AgeGroup
 import com.catmap.dubai.data.model.AnimalType
@@ -29,6 +38,7 @@ import com.catmap.dubai.data.model.labeledFrom
 import com.catmap.dubai.data.now
 import com.catmap.dubai.util.ImageUtils
 import com.catmap.dubai.util.ProcessedPhoto
+import com.catmap.dubai.ai.PostAppearance
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -37,12 +47,14 @@ import kotlinx.coroutines.withContext
 sealed interface FormPhoto {
     data class Remote(val id: String) : FormPhoto
     class Local(val photo: ProcessedPhoto) : FormPhoto {
+        val draftId: String = UUID.randomUUID().toString()
         val preview: Bitmap get() = photo.analysis
     }
 }
 
 enum class PostStep { TYPE, PHOTOS, DETAILS, PLACE, CONTACT, REVIEW }
 
+@OptIn(FlowPreview::class)
 class PostEditorViewModel(
     private val container: AppContainer,
     val postId: String?,
@@ -83,12 +95,78 @@ class PostEditorViewModel(
     var health by mutableStateOf("")
     var vaccinated by mutableStateOf(false)
     var neutered by mutableStateOf(false)
+    var microchip by mutableStateOf("unknown")
     var publishing by mutableStateOf(false)
         private set
     var duplicates by mutableStateOf<List<Post>>(emptyList())
         private set
 
     private val removedRemote = mutableListOf<String>()
+    var savedDraft by mutableStateOf<SavedPostDraft?>(null)
+        private set
+    private var draftReady by mutableStateOf(false)
+    private var draftJob: Job? = null
+    private var draftPublished = false
+    private var preparedFingerprint by mutableStateOf<List<Double>>(emptyList())
+
+    private fun snapshotDraft() = SavedPostDraft(mapOf(
+        "step" to step.toString(), "category" to category, "animalType" to animalType,
+        "name" to name, "description" to description, "color" to color, "breed" to breed, "features" to features,
+        "sex" to sex, "ageGroup" to ageGroup, "lat" to lat.toString(), "lng" to lng.toString(),
+        "radius" to radius.toString(), "approximate" to approximate.toString(), "lastSeenAt" to lastSeenAt.toString(),
+        "reward" to reward, "contactMethod" to contactMethod, "phone" to phone, "email" to email,
+        "health" to health, "vaccinated" to vaccinated.toString(), "neutered" to neutered.toString(),
+        "videoPath" to videoPath, "microchip" to microchip, "fingerprint" to preparedFingerprint.joinToString(","),
+    ), photos.map { when(it) { is FormPhoto.Local -> "local:${it.draftId}"; is FormPhoto.Remote -> "remote:${it.id}" } })
+
+    fun saveDraftNow() {
+        val uid=container.session.uid ?: return
+        if(postId!=null || !draftReady || savedDraft!=null || draftPublished) return
+        if(step==0 && name.isBlank() && description.isBlank() && features.isBlank() && photos.isEmpty() && lat==null) return
+        val snapshot=snapshotDraft()
+        val images=photos.filterIsInstance<FormPhoto.Local>().associate {it.draftId to it.photo.full}
+        container.scope.launch {
+            if(container.session.uid==uid) runCatching {container.drafts.save(uid,snapshot,images)}.onFailure {AppErrors.report(it)}
+        }
+    }
+
+    fun discardDraft() {
+        val uid = container.session.uid ?: return
+        viewModelScope.launch { container.drafts.clear(uid); savedDraft = null }
+    }
+
+    fun continueDraft() {
+        val uid = container.session.uid ?: return
+        val draft = savedDraft ?: return
+        viewModelScope.launch {
+            val f = draft.fields
+            category = f["category"]?.takeIf { key -> PostCategory.entries.any { it.key == key } } ?: category
+            animalType = f["animalType"]?.takeIf { key -> AnimalType.entries.any { it.key == key } } ?: animalType
+            name=f["name"].orEmpty(); description=f["description"].orEmpty(); color=f["color"].orEmpty()
+            breed=f["breed"].orEmpty(); features=f["features"].orEmpty(); sex=f["sex"] ?: sex; ageGroup=f["ageGroup"] ?: ageGroup
+            lat=f["lat"]?.toDoubleOrNull()?.takeIf { it.isFinite() }; lng=f["lng"]?.toDoubleOrNull()?.takeIf { it.isFinite() }
+            radius=f["radius"]?.toDoubleOrNull()?.coerceIn(0.0,5000.0) ?: 0.0
+            approximate=f["approximate"].toBoolean(); lastSeenAt=f["lastSeenAt"]?.toLongOrNull() ?: now()
+            reward=f["reward"].orEmpty(); contactMethod=f["contactMethod"] ?: contactMethod
+            phone=f["phone"].orEmpty(); email=f["email"].orEmpty(); health=f["health"].orEmpty()
+            vaccinated=f["vaccinated"].toBoolean(); neutered=f["neutered"].toBoolean(); videoPath=f["videoPath"].orEmpty()
+            microchip=f["microchip"]?.takeIf {it in listOf("yes","no","unknown")} ?: "unknown"
+            preparedFingerprint=f["fingerprint"]?.split(',')?.mapNotNull {it.toDoubleOrNull()}?.takeIf(PostAppearance::valid).orEmpty()
+            photos.clear()
+            for (key in draft.photos) {
+                if (key.startsWith("remote:")) photos.add(FormPhoto.Remote(key.substringAfter(':')))
+                else container.drafts.photo(uid,key.substringAfter(':'))?.let { bytes ->
+                    withContext(Dispatchers.Default) {
+                        BitmapFactory.decodeByteArray(bytes,0,bytes.size)?.let { bitmap ->
+                            FormPhoto.Local(ProcessedPhoto(bytes,ImageUtils.compress(ImageUtils.scaleToMax(bitmap,360),72),ImageUtils.scaleToMax(bitmap,512)))
+                        }
+                    }?.let(photos::add)
+                }
+            }
+            step = f["step"]?.toIntOrNull()?.coerceIn(0,PostStep.entries.lastIndex) ?: 0
+            savedDraft = null
+        }
+    }
 
     val categoryEnum: PostCategory get() = labeledFrom(category, PostCategory.OTHER)
 
@@ -119,11 +197,26 @@ class PostEditorViewModel(
                 health = p.health
                 vaccinated = p.vaccinated
                 neutered = p.neutered
+                microchip = p.microchip
+                preparedFingerprint = p.fingerprint
                 step = PostStep.DETAILS.ordinal
             }
             loaded = true
         } else {
             email = container.authRepo.email()
+            val uid = container.session.uid
+            if (uid != null) {
+                viewModelScope.launch { savedDraft = container.drafts.load(uid); draftReady = true }
+                draftJob = viewModelScope.launch {
+                    snapshotFlow { Triple(draftReady, savedDraft, snapshotDraft()) }.debounce(500).collect { (ready,pending,draft) ->
+                        if (ready && pending == null && container.session.uid == uid && (step > 0 || name.isNotBlank() || description.isNotBlank() || photos.isNotEmpty())) {
+                            try {
+                                container.drafts.save(uid,draft,photos.filterIsInstance<FormPhoto.Local>().associate { it.draftId to it.photo.full })
+                            } catch(e: Exception) { if(e is kotlinx.coroutines.CancellationException) throw e; AppErrors.report(e) }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -176,7 +269,7 @@ class PostEditorViewModel(
         lat = lat ?: 0.0, lng = lng ?: 0.0, neighborhood = if (lat != null && lng != null) Dubai.nearest(lat!!, lng!!).key else "",
         lastSeenAt = lastSeenAt, reward = reward.toLongOrNull() ?: 0, adoptionStatus = AdoptionStatus.AVAILABLE.key,
         keywords = PostRepository.keywords(name, color, breed, features, description, if (lat != null) Dubai.nearest(lat!!, lng!!).key else ""),
-        createdAt = existing?.createdAt ?: now(),
+        createdAt = existing?.createdAt ?: now(), microchip = microchip, fingerprint = preparedFingerprint,
     )
 
     fun checkDuplicates(me: UserProfile?) {
@@ -193,6 +286,10 @@ class PostEditorViewModel(
         val ln = lng ?: throw AppException(R.string.err_location_required)
         publishing = true
         try {
+            val appearance = withContext(Dispatchers.Default) {
+                PostAppearance.average(photos.filterIsInstance<FormPhoto.Local>().map { PostAppearance.describe(it.photo.analysis) } + listOf(existing?.fingerprint.orEmpty())).ifEmpty {preparedFingerprint}
+            }
+            preparedFingerprint = appearance
             val ids = photos.map { photo ->
                 when (photo) {
                     is FormPhoto.Remote -> photo.id
@@ -218,6 +315,8 @@ class PostEditorViewModel(
                 contactPhone = if (contactMethod == ContactMethod.PHONE.key) phone else "",
                 contactEmail = if (contactMethod == ContactMethod.EMAIL.key) email else "",
                 health = health, vaccinated = vaccinated, neutered = neutered,
+                fingerprint = appearance,
+                microchip = microchip,
             )
             val current = existing
             val id = if (current == null) {
@@ -228,6 +327,11 @@ class PostEditorViewModel(
             }
             removedRemote.forEach { runCatching { container.images.delete(it) } }
             removedRemote.clear()
+            if (postId == null) {
+                draftPublished = true
+                draftJob?.cancelAndJoin()
+                container.drafts.clear(me.uid)
+            }
             return id
         } finally {
             publishing = false

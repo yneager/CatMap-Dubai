@@ -195,11 +195,11 @@ fun CatProfileScreen(nav: NavHostController, catId: String) {
                 CatTab.OVERVIEW -> item { Overview(current) }
                 CatTab.TIMELINE -> {
                     if (sightings.isEmpty()) item { EmptyState(Icons.Outlined.PhotoLibrary, stringResource(R.string.no_sightings_yet)) }
-                    items(sightings, key = { it.id }) { s -> TimelineItem(s, onClick = { nav.navigate(Routes.sighting(s.id)) }) }
+                    items(sightings, key = { it.id }, contentType = { "CatProfileScreen" }) { s -> TimelineItem(s, onClick = { nav.navigate(Routes.sighting(s.id)) }) }
                 }
                 CatTab.PHOTOS -> {
                     if (current.photoIds.isEmpty()) item { EmptyState(Icons.Outlined.PhotoLibrary, stringResource(R.string.no_photos)) }
-                    items(current.photoIds.reversed().chunked(3)) { row ->
+                    items(current.photoIds.reversed().chunked(3), key = { it.first() }, contentType = { "photo-row" }) { row ->
                         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             row.forEach { id ->
                                 RemoteImage(
@@ -257,7 +257,7 @@ private fun PhotoHeader(cat: Cat, onOpen: (String) -> Unit) {
         return
     }
     LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(photos) { id ->
+        items(photos, key = { it }, contentType = { "photo" }) { id ->
             RemoteImage(
                 id,
                 Modifier.height(220.dp).aspectRatio(if (photos.size == 1) 1.6f else 0.85f).clip(RoundedCornerShape(16.dp)).clickable { onOpen(id) },

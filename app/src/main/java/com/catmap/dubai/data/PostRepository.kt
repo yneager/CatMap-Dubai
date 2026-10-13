@@ -43,6 +43,8 @@ data class PostDraft(
     val health: String,
     val vaccinated: Boolean,
     val neutered: Boolean,
+    val fingerprint: List<Double> = emptyList(),
+    val microchip: String = "unknown",
 )
 
 class PostRepository(
@@ -84,7 +86,7 @@ class PostRepository(
     suspend fun create(draft: PostDraft, me: UserProfile): String {
         val ref = posts.document()
         val created = now()
-        val post = draft.toPost(me, created).apply { createdAt = created }
+        val post = draft.toPost(me, created).apply { createdAt = created; lastActivityAt = created }
         val category = labeledFrom(draft.category, PostCategory.OTHER)
         db.runBatch { b ->
             b.set(ref, post)
@@ -123,7 +125,9 @@ class PostRepository(
             "neighborhood" to fresh.neighborhood, "lastSeenAt" to fresh.lastSeenAt, "reward" to fresh.reward,
             "contactMethod" to fresh.contactMethod, "contactPhone" to fresh.contactPhone, "contactEmail" to fresh.contactEmail,
             "health" to fresh.health, "vaccinated" to fresh.vaccinated, "neutered" to fresh.neutered,
-            "keywords" to fresh.keywords, "updatedAt" to fresh.updatedAt,
+            "keywords" to fresh.keywords, "updatedAt" to fresh.updatedAt, "lastActivityAt" to fresh.updatedAt,
+            "fingerprint" to fresh.fingerprint,
+            "microchip" to fresh.microchip,
         )
         ref(existing.id).update(changes).await()
     }
@@ -143,6 +147,8 @@ class PostRepository(
             contactMethod = contactMethod,
             contactPhone = contactPhone.trim().take(30), contactEmail = contactEmail.trim().take(80),
             health = health.trim().take(400), vaccinated = vaccinated, neutered = neutered,
+            fingerprint = fingerprint,
+            microchip = microchip,
             keywords = keywords(name, color, breed, features, description, hood),
             updatedAt = time,
         )
@@ -150,11 +156,23 @@ class PostRepository(
 
     suspend fun setStatus(post: Post, status: PostStatus, me: UserProfile) {
         db.runBatch { b ->
-            b.update(ref(post.id), mapOf("status" to status.key, "resolvedAt" to if (status == PostStatus.OPEN) 0L else now(), "updatedAt" to now()))
+            b.update(ref(post.id), mapOf("status" to status.key, "resolvedAt" to if (status == PostStatus.OPEN) 0L else now(), "updatedAt" to now(), "lastActivityAt" to now()))
             if (status == PostStatus.REUNITED && post.status != PostStatus.REUNITED.key && post.ownerId == me.uid) {
                 users.addStats(b, me.uid, mapOf(Stats.REUNITED to 1), points = 25)
             }
         }.await()
+    }
+
+    suspend fun stillLooking(post: Post) {
+        ref(post.id).update(mapOf("lastActivityAt" to now(), "updatedAt" to now())).await()
+    }
+
+    suspend fun remindStalePosts(uid: String) {
+        val at = now()
+        posts.whereEqualTo("ownerId", uid).get().await().toObjects(Post::class.java)
+            .filter { !it.hidden && PostStaleness.needsReminder(it, at) }.forEach { post ->
+                notifications.send(listOf(uid), NotifType.STALE_POST, mapOf("name" to post.name), "post/${post.id}", PostStaleness.reminderId(post,at))
+            }
     }
 
     suspend fun setAdoptionStatus(post: Post, status: AdoptionStatus) {

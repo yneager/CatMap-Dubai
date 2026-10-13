@@ -104,7 +104,7 @@ fun NotificationsScreen(nav: NavHostController) {
         val list = items
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
             if (list != null && list.isEmpty()) item { EmptyState(Icons.Outlined.NotificationsNone, stringResource(R.string.no_notifications)) }
-            items(list.orEmpty(), key = { it.id }) { n ->
+            items(list.orEmpty(), key = { it.id }, contentType = { "SettingsAndNotifications" }) { n ->
                 val (title, body) = NotificationText.format(context, n)
                 Row(
                     Modifier
@@ -122,6 +122,24 @@ fun NotificationsScreen(nav: NavHostController) {
                     Column(Modifier.weight(1f)) {
                         Text(title, fontWeight = if (n.read) FontWeight.Normal else FontWeight.SemiBold)
                         if (body.isNotBlank()) Text(body, style = MaterialTheme.typography.bodyMedium)
+                        if(n.type==com.catmap.dubai.data.NotifType.STALE_POST) {
+                            val postId=com.catmap.dubai.util.PostLinks.parse("catmap://"+n.route)
+                            if(postId!=null) Row {
+                                TextButton(enabled=!runner.busy,onClick={runner.run {
+                                    val post=container.posts.post(postId) ?: return@run
+                                    check(post.ownerId==uid)
+                                    container.posts.stillLooking(post)
+                                    container.notifications.markRead(uid,n.id)
+                                }}) {Text(stringResource(R.string.still_looking))}
+                                TextButton(enabled=!runner.busy,onClick={runner.run {
+                                    val post=container.posts.post(postId) ?: return@run
+                                    val me=container.session.profile.value ?: return@run
+                                    check(post.ownerId==uid)
+                                    container.posts.setStatus(post,com.catmap.dubai.data.model.PostStatus.REUNITED,me)
+                                    container.notifications.markRead(uid,n.id)
+                                }}) {Text(stringResource(R.string.mark_reunited))}
+                            }
+                        }
                         Text(
                             relativeTime(n.createdAt) + " · " + stringResource(if (n.read) R.string.read else R.string.unread),
                             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -156,6 +174,7 @@ fun SettingsScreen(nav: NavHostController) {
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     val language = remember { mutableStateOf(container.settings.language()) }
     val resetSent = stringResource(R.string.reset_sent, container.authRepo.email())
+    val exportTitle = stringResource(R.string.download_my_data)
 
     Scaffold(topBar = { AppTopBar(stringResource(R.string.settings), onBack = { nav.popBackStack() }) }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
@@ -182,6 +201,18 @@ fun SettingsScreen(nav: NavHostController) {
             }
 
             SectionHeader(stringResource(R.string.notifications))
+            SwitchRow(stringResource(R.string.quiet_hours),settings.quietHoursEnabled) { on -> scope.launch { container.settings.setQuietHours(on,settings.quietStart,settings.quietEnd) } }
+            if(settings.quietHoursEnabled) {
+                Row {
+                    TextButton(onClick={android.app.TimePickerDialog(context,{_,hour,minute -> scope.launch {container.settings.setQuietHours(true,hour*60+minute,settings.quietEnd)}},settings.quietStart/60,settings.quietStart%60,true).show()}) {
+                        Text(stringResource(R.string.quiet_start)+": "+"%02d:%02d".format(settings.quietStart/60,settings.quietStart%60))
+                    }
+                    TextButton(onClick={android.app.TimePickerDialog(context,{_,hour,minute -> scope.launch {container.settings.setQuietHours(true,settings.quietStart,hour*60+minute)}},settings.quietEnd/60,settings.quietEnd%60,true).show()}) {
+                        Text(stringResource(R.string.quiet_end)+": "+"%02d:%02d".format(settings.quietEnd/60,settings.quietEnd%60))
+                    }
+                }
+                Text(stringResource(R.string.quiet_hours_note),style=MaterialTheme.typography.bodySmall)
+            }
             SwitchRow(stringResource(R.string.notifications_enabled), settings.notificationsEnabled) { on ->
                 scope.launch { container.settings.setNotificationsEnabled(on) }
                 if (on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !SystemNotifications.canPost(context)) {
@@ -214,6 +245,14 @@ fun SettingsScreen(nav: NavHostController) {
             Text(stringResource(R.string.metadata_always_removed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             SectionHeader(stringResource(R.string.account))
+            TextButton(enabled=!runner.busy,onClick={
+                val uid=container.session.uid ?: return@TextButton
+                runner.run {
+                    val intent=container.dataExport.export(uid)
+                    check(container.session.uid==uid)
+                    context.startActivity(Intent.createChooser(intent,exportTitle))
+                }
+            }) { Text(stringResource(R.string.download_my_data)) }
             Text(container.authRepo.email(), style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = {
                 runner.run(resetSent) { container.authRepo.sendPasswordReset(container.authRepo.email()) }

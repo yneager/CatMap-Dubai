@@ -157,19 +157,21 @@ fun RemoteImage(
     contentDescription: String? = null,
 ) {
     val images = LocalContainer.current.images
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier.background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+    val density=androidx.compose.ui.platform.LocalDensity.current
+    val target=with(density) { maxOf(maxWidth.toPx(),maxHeight.toPx()).toInt().coerceIn(1,if(thumb) 360 else 1280) }
     // A full-size photo starts from its cached thumbnail, so it never flashes empty while loading.
-    fun cachedNow() = (images.cached(imageId, thumb) ?: if (!thumb) images.cached(imageId, true) else null)?.asImageBitmap()
-    val bitmap by produceState(cachedNow(), imageId, thumb) {
+    fun cachedNow() = (images.cached(imageId, thumb,target) ?: if (!thumb) images.cached(imageId, true,360) else null)?.asImageBitmap()
+    val bitmap by produceState(cachedNow(), imageId, thumb,target) {
         // produceState retains its value when a key changes (e.g. a new cover photo).
         value = cachedNow()
-        if (imageId.isNotBlank() && images.cached(imageId, thumb) == null) images.bitmap(imageId, thumb)?.asImageBitmap()?.let { value = it }
+        if (imageId.isNotBlank() && images.cached(imageId, thumb,target) == null) images.bitmap(imageId, thumb,target)?.asImageBitmap()?.let { value = it }
     }
-    Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
         val b = bitmap
         if (b != null) {
             Image(b, contentDescription, Modifier.fillMaxSize(), contentScale = contentScale)
         } else {
-            Icon(Icons.Default.Pets, contentDescription, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+            com.catmap.dubai.ui.icons.CatMapIcon(com.catmap.dubai.ui.icons.CatMapIcons.PAW,contentDescription=contentDescription,tint=MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=.4f))
         }
     }
 }
@@ -225,9 +227,9 @@ fun CoatSwatch(coat: CoatColor, size: Dp = 18.dp) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppTopBar(title: String, onBack: (() -> Unit)? = null, actions: @Composable () -> Unit = {}) {
+fun AppTopBar(title: String, onBack: (() -> Unit)? = null, overlay:Boolean=false, titleContent:(@Composable ()->Unit)?=null, actions: @Composable () -> Unit = {}) {
     TopAppBar(
-        title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        title = { if(titleContent!=null) titleContent() else Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         navigationIcon = {
             if (onBack != null) {
                 IconButton(onClick = onBack) {
@@ -236,6 +238,11 @@ fun AppTopBar(title: String, onBack: (() -> Unit)? = null, actions: @Composable 
             }
         },
         actions = { actions() },
+        colors=androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+            containerColor=if(overlay) Color.Transparent else MaterialTheme.colorScheme.surface,
+            navigationIconContentColor=if(overlay) Color.White else MaterialTheme.colorScheme.onSurface,
+            actionIconContentColor=if(overlay) Color.White else MaterialTheme.colorScheme.onSurface,
+        ),
     )
 }
 

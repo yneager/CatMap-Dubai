@@ -2,7 +2,7 @@
 import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebase/rules-unit-testing";
 import {
   doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, writeBatch, collection, query, where, orderBy, limit,
-  serverTimestamp, increment, arrayUnion, arrayRemove, Bytes, runTransaction,
+  serverTimestamp, increment, arrayUnion, arrayRemove, Bytes, runTransaction, collectionGroup,
 } from "firebase/firestore";
 import { readFileSync } from "node:fs";
 
@@ -490,6 +490,71 @@ await check("follow an area for lost-pet alerts", assertSucceeds(setDoc(doc(C, "
 await check("cannot follow areas for someone else", assertFails(setDoc(doc(B, "areaFollows", "carol"), { neighborhoods: [] })));
 await check("posters can find area followers", assertSucceeds(getDocs(query(collection(B, "areaFollows"), where("neighborhoods", "array-contains", "jlt")))));
 await check("app cannot set a username's login email", assertFails(setDoc(doc(ctx("yan"), "usernames", "yan"), { uid: "yan", loginEmail: "someone@else.test" })));
+
+console.log("October improvements: schema, reminders, directory and verified sitters");
+await check("owner records fresh activity", assertSucceeds(updateDoc(doc(C,"posts","p1"),{lastActivityAt:now()})));
+await check("another member cannot bump owner activity", assertFails(updateDoc(doc(B,"posts","p1"),{lastActivityAt:now()})));
+await check("negative activity rejected", assertFails(updateDoc(doc(C,"posts","p1"),{lastActivityAt:-1})));
+const fingerprint=Array(27).fill(0.01);
+await check("bounded numeric fingerprint accepted", assertSucceeds(updateDoc(doc(C,"posts","p1"),{fingerprint})));
+await check("oversized fingerprint rejected", assertFails(updateDoc(doc(C,"posts","p1"),{fingerprint:Array(65).fill(0)})));
+await check("fingerprint values outside range rejected", assertFails(updateDoc(doc(C,"posts","p1"),{fingerprint:[2,...fingerprint.slice(1)]})));
+await check("non-numeric fingerprint rejected", assertFails(updateDoc(doc(C,"posts","p1"),{fingerprint:[...fingerprint.slice(0,26),"invalid"]})));
+await check("non-finite fingerprint rejected", assertFails(updateDoc(doc(C,"posts","p1"),{fingerprint:[NaN,...fingerprint.slice(1)]})));
+await check("foreign fingerprint edit rejected", assertFails(updateDoc(doc(B,"posts","p1"),{fingerprint})));
+for(const microchip of ["yes","no","unknown"]) await check(`microchip ${microchip} accepted`,assertSucceeds(updateDoc(doc(C,"posts","p1"),{microchip})));
+await check("public chip number rejected",assertFails(updateDoc(doc(C,"posts","p1"),{microchipNumber:"123456789"})));
+await check("chip enum cannot contain a number",assertFails(updateDoc(doc(C,"posts","p1"),{microchip:"123456789"})));
+await check("foreign microchip edit rejected",assertFails(updateDoc(doc(B,"posts","p1"),{microchip:"yes"})));
+const stale={type:"stale_post",params:{name:"Rex"},route:"post/p1",fromUid:"carol",read:false,createdAt:now()};
+await check("one reminder per deterministic window",assertSucceeds(setDoc(doc(C,"users","carol","notifications","stale_p1_1"),stale)));
+await check("same reminder cannot refresh its timestamp",assertFails(setDoc(doc(C,"users","carol","notifications","stale_p1_1"),{...stale,createdAt:stale.createdAt+1})));
+await check("reminder can be marked read",assertSucceeds(updateDoc(doc(C,"users","carol","notifications","stale_p1_1"),{read:true})));
+await check("recipient cannot forge reminder content",assertFails(updateDoc(doc(C,"users","carol","notifications","stale_p1_1"),{params:{name:"changed"}})));
+await check("new window reminder accepted",assertSucceeds(setDoc(doc(C,"users","carol","notifications","stale_p1_2"),stale)));
+await check("sitter cannot self-verify at creation",assertFails(setDoc(doc(E,"sitters","erin"),sitterDoc({name:"erin",verified:true}))));
+await check("unverified sitter can be created",assertSucceeds(setDoc(doc(E,"sitters","erin"),sitterDoc({name:"erin",verified:false}))));
+await check("sitter cannot self-verify by edit",assertFails(updateDoc(doc(C,"sitters","carol"),{verified:true})));
+await check("moderator cannot grant verification",assertFails(updateDoc(doc(M,"sitters","carol"),{verified:true})));
+await check("admin grants verification",assertSucceeds(updateDoc(doc(AD,"sitters","carol"),{verified:true})));
+await check("sitter edits preserve verification",assertSucceeds(updateDoc(doc(C,"sitters","carol"),{headline:"Updated profile"})));
+await check("sitter cannot remove verification",assertFails(updateDoc(doc(C,"sitters","carol"),{verified:false})));
+await check("admin revokes verification",assertSucceeds(updateDoc(doc(AD,"sitters","carol"),{verified:false})));
+await check("verification must be boolean even for admins",assertFails(updateDoc(doc(AD,"sitters","carol"),{verified:"yes"})));
+const contact={name:"Demo veterinary contact",kind:"vet",phone:"",address:"Demo area",website:"",note:"Fictional test entry",demo:true,updatedAt:now()};
+await check("member cannot create directory entry",assertFails(setDoc(doc(C,"helpDirectory","demo"),contact)));
+await check("moderator cannot create directory entry",assertFails(setDoc(doc(M,"helpDirectory","demo"),contact)));
+await check("admin creates directory entry",assertSucceeds(setDoc(doc(AD,"helpDirectory","demo"),contact)));
+await check("directory readable without login",assertSucceeds(getDocs(collection(anon,"helpDirectory"))));
+await check("empty directory name rejected",assertFails(updateDoc(doc(AD,"helpDirectory","demo"),{name:""})));
+await check("insecure directory website rejected",assertFails(updateDoc(doc(AD,"helpDirectory","demo"),{website:"http://example.test"})));
+await check("unexpected directory fields rejected",assertFails(updateDoc(doc(AD,"helpDirectory","demo"),{secret:"unexpected"})));
+await check("member cannot edit directory",assertFails(updateDoc(doc(C,"helpDirectory","demo"),{note:"edited"})));
+await check("admin edits directory",assertSucceeds(updateDoc(doc(AD,"helpDirectory","demo"),{note:"Updated fictional note"})));
+await check("member cannot delete directory",assertFails(deleteDoc(doc(C,"helpDirectory","demo"))));
+await check("admin deletes directory",assertSucceeds(deleteDoc(doc(AD,"helpDirectory","demo"))));
+await check("admin weekly count queries",assertSucceeds(getDocs(query(collection(AD,"posts"),where("createdAt",">=",0),where("createdAt","<",now()+1)))));
+await check("admin reunion cohort query",assertSucceeds(getDocs(query(collection(AD,"posts"),where("category","in",["lost","found"]),where("status","==","reunited"),where("createdAt",">=",0)))));
+await check("moderators cannot publish chip numbers",assertFails(updateDoc(doc(M,"posts","p1"),{microchipNumber:"123456789"})));
+await check("booking owner can erase their own name and notes",assertSucceeds(updateDoc(doc(B,"bookings","b1"),{ownerName:"",notes:""})));
+await check("sitter can erase their own booking name and notes",assertSucceeds(updateDoc(doc(C,"bookings","b1"),{sitterName:"",sitterNote:""})));
+await check("outsider cannot redact someone else's booking",assertFails(updateDoc(doc(D,"bookings","b1"),{ownerName:"",notes:""})));
+await check("booking redaction cannot change the participant uid",assertFails(updateDoc(doc(B,"bookings","b1"),{ownerName:"",notes:"",ownerId:"dave"})));
+await check("review author can erase name and review text",assertSucceeds(updateDoc(doc(B,"reviews","b1"),{authorName:"",text:""})));
+await check("review privacy cleanup cannot change rating",assertFails(updateDoc(doc(B,"reviews","b1"),{authorName:"",text:"",rating:1})));
+await check("another user cannot redact a review",assertFails(updateDoc(doc(D,"reviews","b1"),{authorName:"",text:""})));
+await check("listing owner deletes received adoption request",assertSucceeds(deleteDoc(doc(C,"adoptionRequests","a1_bob"))));
+await env.withSecurityRulesDisabled(async(c)=>{
+  await setDoc(doc(c.firestore(),"posts","p1","updates","own-export"),{postId:"p1",byUid:"bob",text:"Own contribution",createdAt:now()});
+  await updateDoc(doc(c.firestore(),"posts","p1"),{updatesCount:1});
+});
+await check("own updates can be exported across posts",assertSucceeds(getDocs(query(collectionGroup(B,"updates"),where("byUid","==","bob")))));
+await check("foreign updates cannot be queried as own data",assertFails(getDocs(query(collectionGroup(E,"updates"),where("byUid","==","bob")))));
+await check("own update removal decrements the surviving post",assertSucceeds(runTransaction(B,async(tx)=>{
+  const comment=doc(B,"posts","p1","updates","own-export"),parent=doc(B,"posts","p1");
+  const source=await tx.get(comment),post=await tx.get(parent);
+  tx.delete(source.ref);tx.update(parent,{updatesCount:Math.max(0,post.data().updatesCount-1)});
+})));
 
 console.log(`\n${passed} passed, ${failed} failed`);
 await env.cleanup();

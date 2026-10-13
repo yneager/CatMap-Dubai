@@ -1,0 +1,602 @@
+[
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\data\\ChatRepository.kt",
+    "line": 63,
+    "before": "imageId.isNotEmpty() -> \"📷\"",
+    "replacement": "Plain localized photo/post/location/reward text; no emoji sent in notifications or sharing."
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\data\\ChatRepository.kt",
+    "line": 64,
+    "before": "else -> \"🐾 \" + post?.name.orEmpty()",
+    "replacement": "Plain localized photo/post/location/reward text; no emoji sent in notifications or sharing."
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 29,
+    "before": "FIRST_WHISKERS(R.string.badge_first_whiskers, R.string.badge_first_whiskers_desc, \"🐾\", 1, { it.stat(Stats.SIGHTINGS) }),",
+    "replacement": "ic_cm_badge_paw"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 30,
+    "before": "SOUQ_RESIDENT(R.string.badge_souq_resident, R.string.badge_souq_resident_desc, \"🏺\", 5, { it.stat(Stats.SOUQ_SIGHTINGS) }),",
+    "replacement": "ic_cm_badge_souq"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 31,
+    "before": "ABRA_RIDER(R.string.badge_abra_rider, R.string.badge_abra_rider_desc, \"⛵\", 3, { it.neighborhoods.size.toLong() }),",
+    "replacement": "ic_cm_badge_abra"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 32,
+    "before": "MARINA_WATCHER(R.string.badge_marina_watcher, R.string.badge_marina_watcher_desc, \"🛥️\", 3, { it.stat(Stats.MARINA_SIGHTINGS) }),",
+    "replacement": "ic_cm_badge_boat"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 33,
+    "before": "MAJLIS_HOST(R.string.badge_majlis_host, R.string.badge_majlis_host_desc, \"☕\", 5, { it.stat(Stats.CATS_REGISTERED) }),",
+    "replacement": "ic_cm_badge_cup"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 34,
+    "before": "EHSAN_HERO(R.string.badge_ehsan_hero, R.string.badge_ehsan_hero_desc, \"🤲\", 10, { it.stat(Stats.CHECKINS) }),",
+    "replacement": "ic_cm_badge_hands"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 35,
+    "before": "IFTAR_FEEDER(R.string.badge_iftar_feeder, R.string.badge_iftar_feeder_desc, \"🌙\", 1, { it.stat(Stats.IFTAR_CHECKINS) }),",
+    "replacement": "ic_cm_badge_moon"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 36,
+    "before": "NIGHT_PATROL(R.string.badge_night_patrol, R.string.badge_night_patrol_desc, \"🌃\", 5, { it.stat(Stats.NIGHT_SIGHTINGS) }),",
+    "replacement": "ic_cm_badge_night"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 37,
+    "before": "GHAF_GUARDIAN(R.string.badge_ghaf_guardian, R.string.badge_ghaf_guardian_desc, \"🌳\", 3, { it.stat(Stats.RESCUE_REPORTS) }),",
+    "replacement": "ic_cm_badge_tree"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 38,
+    "before": "FALAJ_KEEPER(R.string.badge_falaj_keeper, R.string.badge_falaj_keeper_desc, \"💧\", 3, { it.stat(Stats.MAINTENANCE_REPORTS) }),",
+    "replacement": "ic_cm_badge_water"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 39,
+    "before": "TNR_CHAMPION(R.string.badge_tnr_champion, R.string.badge_tnr_champion_desc, \"✂️\", 5, { it.stat(Stats.TNR_REPORTS) }),",
+    "replacement": "ic_cm_badge_scissors"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 40,
+    "before": "PEARL_DIVER(R.string.badge_pearl_diver, R.string.badge_pearl_diver_desc, \"🦪\", 10, { it.stat(Stats.APPROVED_SIGHTINGS) }),",
+    "replacement": "ic_cm_badge_pearl"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 41,
+    "before": "PALM_PHOTOGRAPHER(R.string.badge_palm_photographer, R.string.badge_palm_photographer_desc, \"📸\", 20, { it.stat(Stats.PHOTOS) }),",
+    "replacement": "ic_cm_badge_camera"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 42,
+    "before": "MERGE_DETECTIVE(R.string.badge_merge_detective, R.string.badge_merge_detective_desc, \"🔍\", 3, { it.stat(Stats.MERGE_SUGGESTIONS) }),",
+    "replacement": "ic_cm_badge_lost"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 43,
+    "before": "HEART_OF_DUBAI(R.string.badge_heart_of_dubai, R.string.badge_heart_of_dubai_desc, \"❤️\", 5, { it.followedCats.size.toLong() }),",
+    "replacement": "ic_cm_badge_adoption"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 44,
+    "before": "FALCON_EYE(R.string.badge_falcon_eye, R.string.badge_falcon_eye_desc, \"🦅\", 25, { it.stat(Stats.SIGHTINGS) }),",
+    "replacement": "ic_cm_badge_falcon"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 45,
+    "before": "BURJ_EXPLORER(R.string.badge_burj_explorer, R.string.badge_burj_explorer_desc, \"🏙️\", 10, { it.neighborhoods.size.toLong() }),",
+    "replacement": "ic_cm_badge_street"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\gamification\\Badges.kt",
+    "line": 46,
+    "before": "CARAVAN_LEADER(R.string.badge_caravan_leader, R.string.badge_caravan_leader_desc, \"🐪\", 100, { it.stat(Stats.SIGHTINGS) });",
+    "replacement": "ic_cm_badge_camel"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\update\\UpdateUi.kt",
+    "line": 71,
+    "before": "Text(\"🚀\", style = MaterialTheme.typography.headlineSmall)",
+    "replacement": "ic_cm_update"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\util\\Share.kt",
+    "line": 40,
+    "before": "append('\\n').append(\"📍 \").append(Dubai.nameOf(post.neighborhood))",
+    "replacement": "Plain localized photo/post/location/reward text; no emoji sent in notifications or sharing."
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\util\\Share.kt",
+    "line": 42,
+    "before": "if (post.reward > 0) append('\\n').append(\"💰 \").append(context.getString(R.string.reward_aed, post.reward.toString()))",
+    "replacement": "Plain localized photo/post/location/reward text; no emoji sent in notifications or sharing."
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\data\\model\\Community.kt",
+    "line": 11,
+    "before": "CAT(R.string.animal_cat, \"🐱\"),",
+    "replacement": "ic_cm_cat"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\data\\model\\Community.kt",
+    "line": 12,
+    "before": "DOG(R.string.animal_dog, \"🐶\"),",
+    "replacement": "ic_cm_dog"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\data\\model\\Community.kt",
+    "line": 13,
+    "before": "BIRD(R.string.animal_bird, \"🐦\"),",
+    "replacement": "ic_cm_bird"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\data\\model\\Community.kt",
+    "line": 14,
+    "before": "RABBIT(R.string.animal_rabbit, \"🐰\"),",
+    "replacement": "ic_cm_rabbit"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\data\\model\\Community.kt",
+    "line": 15,
+    "before": "OTHER(R.string.animal_other, \"🐾\");",
+    "replacement": "ic_cm_paw"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\explore\\ExploreScreen.kt",
+    "line": 82,
+    "before": "Shortcut(\"💜\", R.string.adoption, Routes.ADOPTION, 0xFF8E24AA),",
+    "replacement": "ic_cm_adoption"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\explore\\ExploreScreen.kt",
+    "line": 83,
+    "before": "Shortcut(\"🏠\", R.string.pet_sitters, Routes.SITTERS, 0xFF5E35B1),",
+    "replacement": "ic_cm_sitter"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\explore\\ExploreScreen.kt",
+    "line": 84,
+    "before": "Shortcut(\"🐈\", R.string.community_cats, Routes.CATS, 0xFFA9531A),",
+    "replacement": "ic_cm_cat"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\explore\\ExploreScreen.kt",
+    "line": 85,
+    "before": "Shortcut(\"🚑\", R.string.tab_rescue, Routes.RESCUE, 0xFFC62828),",
+    "replacement": "ic_cm_rescue"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\explore\\ExploreScreen.kt",
+    "line": 86,
+    "before": "Shortcut(\"🥣\", R.string.tab_stations, Routes.STATIONS, 0xFF00897B),",
+    "replacement": "ic_cm_station"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\explore\\ExploreScreen.kt",
+    "line": 87,
+    "before": "Shortcut(\"🔔\", R.string.area_alerts, Routes.AREA_ALERTS, 0xFFF9A825),",
+    "replacement": "ic_cm_bell"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\explore\\Filtering.kt",
+    "line": 51,
+    "before": "MapLayer.LOST -> \"🔴\"",
+    "replacement": "ic_cm_lost"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\explore\\Filtering.kt",
+    "line": 52,
+    "before": "MapLayer.FOUND -> \"🟢\"",
+    "replacement": "ic_cm_found"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\explore\\Filtering.kt",
+    "line": 53,
+    "before": "MapLayer.SPOTTED -> \"👀\"",
+    "replacement": "ic_cm_spotted"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\explore\\Filtering.kt",
+    "line": 54,
+    "before": "MapLayer.NEEDS_HELP -> \"🆘\"",
+    "replacement": "ic_cm_help"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\explore\\Filtering.kt",
+    "line": 55,
+    "before": "MapLayer.STREET_CATS -> \"🐈\"",
+    "replacement": "ic_cm_cat"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\explore\\Filtering.kt",
+    "line": 56,
+    "before": "MapLayer.ADOPTION -> \"💜\"",
+    "replacement": "ic_cm_adoption"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\explore\\Filtering.kt",
+    "line": 57,
+    "before": "MapLayer.SITTING -> \"🏠\"",
+    "replacement": "ic_cm_sitter"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\explore\\SearchScreen.kt",
+    "line": 143,
+    "before": "Text(\"📍\", style = MaterialTheme.typography.titleLarge, modifier = Modifier.width(48.dp))",
+    "replacement": "ic_cm_pin"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\map\\MapMarkers.kt",
+    "line": 57,
+    "before": "MarkerIcons.STATION -> bubble(Color.rgb(0, 137, 123), \"🥣\")",
+    "replacement": "ic_cm_station"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\map\\MapMarkers.kt",
+    "line": 58,
+    "before": "MarkerIcons.SITTER -> bubble(Color.rgb(94, 53, 177), \"🏠\")",
+    "replacement": "ic_cm_sitter"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\map\\MapMarkers.kt",
+    "line": 59,
+    "before": "MarkerIcons.RESCUE -> bubble(Color.rgb(198, 40, 40), \"🚑\")",
+    "replacement": "ic_cm_rescue"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\map\\MapMarkers.kt",
+    "line": 60,
+    "before": "else -> bubble(Color.GRAY, \"🐾\")",
+    "replacement": "ic_cm_paw"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\map\\MapScreen.kt",
+    "line": 370,
+    "before": "MapChip(selected = filters.layers.isEmpty() && filters.animalTypes.isEmpty(), text = \"🐾  \" + stringResource(R.string.all_animals)) { onChange(filters.copy(layers = emptySet(), animalTypes = emptySet())) }",
+    "replacement": "ic_cm_paw"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\map\\MapScreen.kt",
+    "line": 452,
+    "before": "Text(\"📍\", Modifier.width(28.dp))",
+    "replacement": "ic_cm_pin"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\map\\MapScreen.kt",
+    "line": 559,
+    "before": "Text(\"🏠\", style = MaterialTheme.typography.headlineMedium)",
+    "replacement": "ic_cm_sitter"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\messages\\MessagesScreens.kt",
+    "line": 378,
+    "before": "else Text(\"🐾\", style = MaterialTheme.typography.titleLarge)",
+    "replacement": "ic_cm_paw"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostDetailScreen.kt",
+    "line": 250,
+    "before": "labeledFrom(post.sex, CatSex.UNKNOWN).takeIf { it != CatSex.UNKNOWN }?.let { InfoChip(if (it == CatSex.MALE) \"♂\" else \"♀\", stringResource(it.label)) }",
+    "replacement": "ic_cm_sex"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostDetailScreen.kt",
+    "line": 251,
+    "before": "labeledFrom(post.ageGroup, AgeGroup.UNKNOWN).takeIf { it != AgeGroup.UNKNOWN }?.let { InfoChip(\"🎂\", stringResource(it.label)) }",
+    "replacement": "ic_cm_age"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostDetailScreen.kt",
+    "line": 252,
+    "before": "if (post.color.isNotBlank()) InfoChip(\"🎨\", post.color)",
+    "replacement": "ic_cm_colour"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostDetailScreen.kt",
+    "line": 253,
+    "before": "if (post.breed.isNotBlank()) InfoChip(\"🧬\", post.breed)",
+    "replacement": "ic_cm_breed"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostDetailScreen.kt",
+    "line": 508,
+    "before": ") { Text(if (kind == UpdateKind.SIGHTING) \"👀\" else if (kind == UpdateKind.FOUND_IT) \"🎉\" else \"📝\") }",
+    "replacement": "ic_cm_spotted / ic_cm_found / ic_cm_note according to update kind"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostEditorScreen.kt",
+    "line": 292,
+    "before": "PostCategory.LOST -> \"🔍\"",
+    "replacement": "ic_cm_lost"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostEditorScreen.kt",
+    "line": 293,
+    "before": "PostCategory.FOUND -> \"🤲\"",
+    "replacement": "ic_cm_found"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostEditorScreen.kt",
+    "line": 294,
+    "before": "PostCategory.SPOTTED -> \"👀\"",
+    "replacement": "ic_cm_spotted"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostEditorScreen.kt",
+    "line": 295,
+    "before": "PostCategory.NEEDS_HELP -> \"🆘\"",
+    "replacement": "ic_cm_help"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostEditorScreen.kt",
+    "line": 296,
+    "before": "PostCategory.STREET -> \"🏙️\"",
+    "replacement": "ic_cm_street"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostEditorScreen.kt",
+    "line": 297,
+    "before": "PostCategory.ADOPTION -> \"💜\"",
+    "replacement": "ic_cm_adoption"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostEditorScreen.kt",
+    "line": 298,
+    "before": "PostCategory.OTHER -> \"📝\"",
+    "replacement": "ic_cm_note"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostLists.kt",
+    "line": 92,
+    "before": "ChooserItem(\"📸\", R.string.chooser_sighting, R.string.chooser_sighting_hint, 0xFFA9531A, Routes.newSighting()),",
+    "replacement": "ic_cm_camera"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostLists.kt",
+    "line": 93,
+    "before": "ChooserItem(\"🚑\", R.string.report_emergency, R.string.chooser_rescue_hint, 0xFFC62828, Routes.newRescue()),",
+    "replacement": "ic_cm_rescue"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\posts\\PostLists.kt",
+    "line": 94,
+    "before": "ChooserItem(\"🏠\", R.string.chooser_sitter, R.string.chooser_sitter_hint, 0xFF5E35B1, Routes.SITTER_EDIT),",
+    "replacement": "ic_cm_sitter"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\profile\\ProfileScreens.kt",
+    "line": 226,
+    "before": "QuickLink(\"📝\", R.string.my_posts, Routes.MY_POSTS),",
+    "replacement": "ic_cm_note"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\profile\\ProfileScreens.kt",
+    "line": 227,
+    "before": "QuickLink(\"❤️\", R.string.favorites, Routes.FAVORITES),",
+    "replacement": "ic_cm_adoption"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\profile\\ProfileScreens.kt",
+    "line": 228,
+    "before": "QuickLink(\"💜\", R.string.adoption_requests, Routes.ADOPTION_REQUESTS),",
+    "replacement": "ic_cm_adoption"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\profile\\ProfileScreens.kt",
+    "line": 229,
+    "before": "QuickLink(\"📅\", R.string.bookings, Routes.bookings()),",
+    "replacement": "ic_cm_calendar"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\profile\\ProfileScreens.kt",
+    "line": 230,
+    "before": "QuickLink(\"🏠\", R.string.sitter_profile, Routes.SITTER_EDIT),",
+    "replacement": "ic_cm_sitter"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\profile\\ProfileScreens.kt",
+    "line": 231,
+    "before": "QuickLink(\"🔔\", R.string.area_alerts, Routes.AREA_ALERTS),",
+    "replacement": "ic_cm_bell"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\profile\\ProfileScreens.kt",
+    "line": 507,
+    "before": ") { Text(if (earned) badge.emoji else \"🔒\", style = MaterialTheme.typography.headlineSmall) }",
+    "replacement": "ic_cm_lock"
+  },
+  {
+    "file": "app\\src\\main\\java\\com\\catmap\\dubai\\ui\\sitting\\SittingScreens.kt",
+    "line": 117,
+    "before": "Text(sitter.name.take(1).uppercase().ifBlank { \"🏠\" }, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onTertiaryContainer)",
+    "replacement": "ic_cm_sitter"
+  },
+  {
+    "file": "app\\src\\main\\res\\values\\strings.xml",
+    "line": 349,
+    "before": "<string name=\"share_cat_text\">Meet %1$s 🐾 – a community cat in %4$s, Dubai. Coat: %2$s (%3$s). Sightings: %5$d (first %6$s, last %7$s). %8$s. Shared from CatMap Dubai.</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values\\strings.xml",
+    "line": 425,
+    "before": "<string name=\"metadata_removed_note\">🔒 Photos are re-encoded on your phone before upload, which removes GPS and all other hidden metadata.</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values\\strings.xml",
+    "line": 463,
+    "before": "<string name=\"privacy_public_map\">🔒 On the public map this sighting appears about %1$d m from the real spot.</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values\\strings.xml",
+    "line": 691,
+    "before": "<string name=\"hello_x\">Hi %1$s 👋</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values\\strings.xml",
+    "line": 847,
+    "before": "<string name=\"post_published\">Posted! Thank you for helping 🐾</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values\\strings.xml",
+    "line": 866,
+    "before": "<string name=\"reunited_thanks\">Wonderful – thank you for letting everyone know! 🎉</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values\\strings.xml",
+    "line": 919,
+    "before": "<string name=\"adoption_hero_title\">Give a pet a home 💜</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values\\strings.xml",
+    "line": 983,
+    "before": "<string name=\"say_hello\">Say hello 👋</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values\\strings.xml",
+    "line": 1020,
+    "before": "<string name=\"n_review_body\">\\@%1$s rated you %2$s★</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values-ar\\strings.xml",
+    "line": 349,
+    "before": "<string name=\"share_cat_text\">تعرّف على %1$s 🐾 – قطة مجتمعية في %4$s، دبي. الفراء: %2$s (%3$s). المشاهدات: %5$d (أول مرة %6$s، آخر مرة %7$s). %8$s. من تطبيق خريطة قطط دبي.</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values-ar\\strings.xml",
+    "line": 425,
+    "before": "<string name=\"metadata_removed_note\">🔒 يُعاد ترميز الصور على هاتفك قبل الرفع، مما يزيل بيانات الموقع وكل البيانات المخفية.</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values-ar\\strings.xml",
+    "line": 463,
+    "before": "<string name=\"privacy_public_map\">🔒 تظهر هذه المشاهدة على الخريطة العامة على بعد نحو %1$d م من المكان الحقيقي.</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values-ar\\strings.xml",
+    "line": 691,
+    "before": "<string name=\"hello_x\">مرحباً %1$s 👋</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values-ar\\strings.xml",
+    "line": 847,
+    "before": "<string name=\"post_published\">تم النشر! شكراً لمساعدتك 🐾</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values-ar\\strings.xml",
+    "line": 866,
+    "before": "<string name=\"reunited_thanks\">رائع – شكراً لإبلاغ الجميع! 🎉</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values-ar\\strings.xml",
+    "line": 919,
+    "before": "<string name=\"adoption_hero_title\">امنح حيواناً منزلاً 💜</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values-ar\\strings.xml",
+    "line": 983,
+    "before": "<string name=\"say_hello\">ألقِ التحية 👋</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "app\\src\\main\\res\\values-ar\\strings.xml",
+    "line": 1020,
+    "before": "<string name=\"n_review_body\">قيّمك @%1$s بـ %2$s★</string>",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "tools\\strings\\strings_d.py",
+    "line": 19,
+    "before": "(\"share_cat_text\",\"Meet %1$s 🐾 – a community cat in %4$s, Dubai. Coat: %2$s (%3$s). Sightings: %5$d (first %6$s, last %7$s). %8$s. Shared from CatMap Dubai.\",\"تعرّف على %1$s 🐾 – قطة مجتمعية في %4$s، دبي. الفراء: %2$s (%3$s). المشاهدات: %5$d (أول مرة %6$s، آخر مرة %7$s). %8$s. من تطبيق خريطة قطط دبي.\"),",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "tools\\strings\\strings_e.py",
+    "line": 8,
+    "before": "(\"metadata_removed_note\",\"🔒 Photos are re-encoded on your phone before upload, which removes GPS and all other hidden metadata.\",\"🔒 يُعاد ترميز الصور على هاتفك قبل الرفع، مما يزيل بيانات الموقع وكل البيانات المخفية.\"),",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "tools\\strings\\strings_e.py",
+    "line": 30,
+    "before": "(\"privacy_public_map\",\"🔒 On the public map this sighting appears about %1$d m from the real spot.\",\"🔒 تظهر هذه المشاهدة على الخريطة العامة على بعد نحو %1$d م من المكان الحقيقي.\"),",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "tools\\strings\\strings_g.py",
+    "line": 14,
+    "before": "(\"hello_x\",\"Hi %1$s 👋\",\"مرحباً %1$s 👋\"),(\"explore_title\",\"Explore nearby\",\"استكشف ما حولك\"),",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "tools\\strings\\strings_g.py",
+    "line": 92,
+    "before": "(\"post_published\",\"Posted! Thank you for helping 🐾\",\"تم النشر! شكراً لمساعدتك 🐾\"),",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "tools\\strings\\strings_h.py",
+    "line": 11,
+    "before": "(\"reunited_thanks\",\"Wonderful – thank you for letting everyone know! 🎉\",\"رائع – شكراً لإبلاغ الجميع! 🎉\"),",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "tools\\strings\\strings_h.py",
+    "line": 51,
+    "before": "(\"adoption_hero_title\",\"Give a pet a home 💜\",\"امنح حيواناً منزلاً 💜\"),",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "tools\\strings\\strings_h.py",
+    "line": 86,
+    "before": "(\"you_prefix\",\"You:\",\"أنت:\"),(\"blocked\",\"Blocked\",\"محظور\"),(\"say_hello\",\"Say hello 👋\",\"ألقِ التحية 👋\"),",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  },
+  {
+    "file": "tools\\strings\\strings_h.py",
+    "line": 111,
+    "before": "(\"n_review_title\",\"New review\",\"تقييم جديد\"),(\"n_review_body\",\"@%1$s rated you %2$s★\",\"قيّمك @%1$s بـ %2$s★\"),",
+    "replacement": "Emoji removed; original wording retained (English lint/tagline changes separately listed)."
+  }
+]

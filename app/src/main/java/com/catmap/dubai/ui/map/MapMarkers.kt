@@ -1,11 +1,15 @@
 package com.catmap.dubai.ui.map
 
+import com.catmap.dubai.ui.icons.CatMapIcon
+import com.catmap.dubai.ui.icons.CatMapIcons
+import com.catmap.dubai.ui.icons.IconLabel
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import androidx.core.graphics.withTranslation
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
@@ -18,6 +22,7 @@ import com.catmap.dubai.data.model.labeledFrom
 /** What a map point stands for; decides where a tap leads. */
 enum class PointKind { POST, CAT, STATION, SITTER, RESCUE }
 
+@androidx.compose.runtime.Immutable
 data class MapFeature(
     val id: String,
     val kind: PointKind,
@@ -39,10 +44,11 @@ object MarkerIcons {
 }
 
 /**
- * Draws all map markers. Post markers are round "bubbles" with the animal's emoji, ringed in the
+ * Draws all map markers. Post markers are round "bubbles" with the animal's vector icon, ringed in the
  * category colour; community cats keep their coat-coloured cat-head pins. Bitmaps are cached per key.
  */
 class MarkerFactory(context: Context) {
+    private val context = context
     private val d = context.resources.displayMetrics.density
     private val cache = HashMap<String, Bitmap>()
 
@@ -51,18 +57,18 @@ class MarkerFactory(context: Context) {
         when (parts.first()) {
             "p" -> bubble(
                 labeledFrom(parts.getOrNull(1), PostCategory.OTHER).color.toInt(),
-                labeledFrom(parts.getOrNull(2), AnimalType.OTHER).emoji,
+                labeledFrom(parts.getOrNull(2), AnimalType.OTHER).icon,
             )
             "c" -> catPin(labeledFrom(parts.getOrNull(1), CoatColor.UNKNOWN), parts.getOrNull(2) == "true")
-            MarkerIcons.STATION -> bubble(Color.rgb(0, 137, 123), "🥣")
-            MarkerIcons.SITTER -> bubble(Color.rgb(94, 53, 177), "🏠")
-            MarkerIcons.RESCUE -> bubble(Color.rgb(198, 40, 40), "🚑")
-            else -> bubble(Color.GRAY, "🐾")
+            MarkerIcons.STATION -> bubble(Color.rgb(0, 137, 123), CatMapIcons.STATION)
+            MarkerIcons.SITTER -> bubble(Color.rgb(94, 53, 177), CatMapIcons.SITTER)
+            MarkerIcons.RESCUE -> bubble(Color.rgb(198, 40, 40), CatMapIcons.RESCUE)
+            else -> bubble(Color.GRAY, CatMapIcons.PAW)
         }
     }
 
-    /** A white circle with an emoji, a coloured ring and a small pointer at the bottom. */
-    private fun bubble(ring: Int, emoji: String): Bitmap {
+    /** A white circle with an vector icon, a coloured ring and a small pointer at the bottom. */
+    private fun bubble(ring: Int, icon: Int): Bitmap {
         val size = 46 * d
         val tail = 8 * d
         val bmp = createBitmap(size.toInt(), (size + tail).toInt())
@@ -80,13 +86,11 @@ class MarkerFactory(context: Context) {
         c.drawPath(pointer, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ring })
         c.drawCircle(cx, cx, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ring })
         c.drawCircle(cx, cx, r - 3.5f * d, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
-        val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = 22 * d
-            textAlign = Paint.Align.CENTER
+        androidx.appcompat.content.res.AppCompatResources.getDrawable(context, icon)?.mutate()?.let { drawable ->
+            val inset = (11 * d).toInt()
+            drawable.setBounds(inset, inset, (size - inset).toInt(), (size - inset).toInt())
+            drawable.draw(c)
         }
-        val bounds = android.graphics.Rect()
-        text.getTextBounds(emoji, 0, emoji.length, bounds)
-        c.drawText(emoji, cx, cx - bounds.exactCenterY(), text)
         return bmp
     }
 
@@ -104,10 +108,9 @@ class MarkerFactory(context: Context) {
             lineTo(w / 2 + r * 0.55f, w / 2 + r * 0.8f)
             close()
         }
-        canvas.save()
-        canvas.translate(0f, 1.5f * d)
-        canvas.drawPath(pin, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(70, 0, 0, 0) })
-        canvas.restore()
+        canvas.withTranslation(0f, 1.5f * d) {
+            drawPath(pin, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(70, 0, 0, 0) })
+        }
         canvas.drawPath(pin, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
         canvas.drawPath(
             pin,

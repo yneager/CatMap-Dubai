@@ -166,6 +166,7 @@ fun CommunityMap(
     onCameraMoveStarted: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val holder = remember { MapHolder(context) }
     var styleVersion by remember { mutableIntStateOf(0) }
@@ -231,7 +232,7 @@ fun CommunityMap(
                 setAllGesturesEnabled(interactive)
                 isLogoEnabled = false
                 setAttributionGravity(Gravity.BOTTOM or Gravity.START)
-                val d = context.resources.displayMetrics.density
+                val d = resources.displayMetrics.density
                 setAttributionMargins((8 * d).toInt(), 0, 0, (8 * d).toInt() + bottomInsetPx)
                 setCompassMargins(0, (150 * d).toInt(), (12 * d).toInt(), 0)
             }
@@ -245,7 +246,7 @@ fun CommunityMap(
             )
             map.addOnMapClickListener { latLng ->
                 val point = map.projection.toScreenLocation(latLng)
-                val slop = 24 * context.resources.displayMetrics.density
+                val slop = 24 * resources.displayMetrics.density
                 val hits = map.queryRenderedFeatures(
                     RectF(point.x - slop, point.y - slop * 1.6f, point.x + slop, point.y + slop * 0.4f), L_CLUSTERS, L_POINTS,
                 )
@@ -253,7 +254,7 @@ fun CommunityMap(
                 val single = hits.firstOrNull { !it.hasProperty("point_count") }
                 when {
                     cluster != null -> {
-                        val source = map.style?.getSourceAs<GeoJsonSource>(SRC_POINTS)
+                        val source = holder.style?.getSourceAs<GeoJsonSource>(SRC_POINTS)
                         val zoom = runCatching { source?.getClusterExpansionZoom(cluster) }.getOrNull()?.toDouble()
                             ?: (map.cameraPosition.zoom + 2)
                         val p = cluster.geometry() as? Point
@@ -333,6 +334,7 @@ fun CommunityMap(
         val layer = holder.style?.getLayerAs<SymbolLayer>(L_POINTS) ?: return@LaunchedEffect
         holder.bounce?.cancel()
         fun apply(scale: Float) {
+            val layer=holder.style?.getLayerAs<SymbolLayer>(L_POINTS) ?: return
             layer.setProperties(
                 PropertyFactory.iconSize(switchCase(eq(get("id"), literal(selectedId ?: "")), literal(scale), literal(1f))),
                 PropertyFactory.symbolSortKey(switchCase(eq(get("id"), literal(selectedId ?: "")), literal(1f), literal(0f))),
@@ -409,7 +411,7 @@ fun CommunityMap(
                 addUpdateListener { a ->
                     val t = a.animatedValue as Float
                     runCatching {
-                        layer.setProperties(
+                        holder.style?.getLayerAs<CircleLayer>(L_PULSE)?.setProperties(
                             PropertyFactory.circleRadius(14f + 22f * t),
                             PropertyFactory.circleOpacity(0.45f * (1f - t)),
                         )

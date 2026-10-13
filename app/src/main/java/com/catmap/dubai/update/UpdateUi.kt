@@ -1,5 +1,8 @@
 package com.catmap.dubai.update
 
+import com.catmap.dubai.ui.icons.CatMapIcon
+import com.catmap.dubai.ui.icons.CatMapIcons
+import com.catmap.dubai.ui.icons.IconLabel
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -52,7 +55,25 @@ import kotlinx.coroutines.launch
 fun UpdatePrompt() {
     val container = LocalContainer.current
     var release by remember { mutableStateOf<Release?>(null) }
-    LaunchedEffect(Unit) { release = container.updater.checkIfDue() }
+    var notes by remember { mutableStateOf<String?>(null) }
+    val unavailableNotes=stringResource(R.string.release_notes_unavailable)
+    val context=androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) {
+        val settings=container.settings.current()
+        val packageInfo=context.packageManager.getPackageInfo(context.packageName,0)
+        if(WhatsNewPolicy.shouldShow(settings.lastSeenVersion,BuildConfig.VERSION_NAME,packageInfo.firstInstallTime,packageInfo.lastUpdateTime)) {
+            notes=if(settings.releaseNotesVersion==BuildConfig.VERSION_NAME) settings.releaseNotes.takeIf {it.isNotBlank()} else container.updater.installedReleaseNotes()
+            if(notes==null) notes=unavailableNotes
+        } else if(settings.lastSeenVersion.isBlank()) container.settings.setLastSeenVersion(BuildConfig.VERSION_NAME)
+        if(notes==null) release = container.updater.checkIfDue()
+    }
+    val scope=rememberCoroutineScope()
+    notes?.let { body ->
+        androidx.compose.material3.AlertDialog(onDismissRequest={scope.launch {container.settings.setLastSeenVersion(BuildConfig.VERSION_NAME)}; notes=null},
+            title={Text(stringResource(R.string.whats_new_version,BuildConfig.VERSION_NAME))},
+            text={Text(body,Modifier.heightIn(max=400.dp).verticalScroll(rememberScrollState()))},
+            confirmButton={TextButton(onClick={scope.launch {container.settings.setLastSeenVersion(BuildConfig.VERSION_NAME)}; notes=null}) {Text(stringResource(R.string.close))}})
+    }
     release?.let { r -> UpdateSheet(r, onDismiss = { release = null }) }
 }
 
@@ -68,7 +89,7 @@ fun UpdateSheet(release: Release, onDismiss: () -> Unit) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(BrandGradient), contentAlignment = Alignment.Center) {
-                    Text("🚀", style = MaterialTheme.typography.headlineSmall)
+                    CatMapIcon(CatMapIcons.UPDATE)
                 }
                 Column(Modifier.padding(start = 14.dp)) {
                     Text(stringResource(R.string.update_available), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)

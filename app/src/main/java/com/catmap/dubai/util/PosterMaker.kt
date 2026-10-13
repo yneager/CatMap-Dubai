@@ -18,6 +18,9 @@ import android.text.TextDirectionHeuristics
 import android.text.TextPaint
 import android.text.TextUtils
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withClip
+import androidx.core.graphics.withTranslation
+import androidx.core.graphics.set
 import com.catmap.dubai.R
 import com.catmap.dubai.data.Dubai
 import com.catmap.dubai.data.model.AnimalType
@@ -30,6 +33,9 @@ import com.catmap.dubai.ui.components.dateTime
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.max
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.MultiFormatWriter
+import com.google.zxing.EncodeHintType
 
 /**
  * Draws a printable, shareable poster (1080×1350, the Instagram/WhatsApp portrait size) for a post:
@@ -62,17 +68,19 @@ object PosterMaker {
         // Photo.
         val photoRect = RectF(M, 260f, W - M, 860f)
         val clip = Path().apply { addRoundRect(photoRect, 36f, 36f, Path.Direction.CW) }
-        c.save()
-        c.clipPath(clip)
+        c.withClip(clip) {
         val image = photo?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
         if (image != null) {
             c.drawBitmap(image, centerCrop(image, photoRect), photoRect, Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
         } else {
             c.drawRect(photoRect, Paint().apply { color = lighter(accent) })
-            val emoji = labeledFrom(post.animalType, AnimalType.OTHER).emoji
-            text(c, emoji, photoRect.left, photoRect.centerY() - 110f, photoRect.width(), 200f, Color.BLACK, center = true)
+            val icon = labeledFrom(post.animalType, AnimalType.OTHER).icon
+            androidx.appcompat.content.res.AppCompatResources.getDrawable(context, icon)?.mutate()?.let { drawable ->
+                drawable.setBounds(420, 440, 660, 680)
+                drawable.draw(c)
+            }
         }
-        c.restore()
+        }
         if (post.reward > 0) {
             val label = context.getString(R.string.reward_aed, NumberFormat.getIntegerInstance().format(post.reward)).uppercase(Locale.getDefault())
             val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 44f; typeface = Typeface.DEFAULT_BOLD }
@@ -87,6 +95,7 @@ object PosterMaker {
         val name = post.name.ifBlank { context.getString(category.headline, animal) }
         y += text(c, name, M, y, W - 2 * M, 64f, Color.rgb(34, 26, 21), bold = true, maxLines = 1, rtl = rtl)
         val facts = listOfNotNull(
+            context.getString(R.string.microchip)+": "+context.getString(when(post.microchip){"yes"->R.string.yes;"no"->R.string.no;else->R.string.unknown}),
             post.color.takeIf { it.isNotBlank() },
             post.breed.takeIf { it.isNotBlank() },
             labeledFrom(post.sex, CatSex.UNKNOWN).takeIf { it != CatSex.UNKNOWN }?.let { context.getString(it.label) },
@@ -100,14 +109,21 @@ object PosterMaker {
         if (details.isNotBlank()) y += text(c, details, M, y + 10f, W - 2 * M, 34f, Color.rgb(60, 50, 44), maxLines = 3, rtl = rtl) + 10f
 
         // Contact footer.
-        c.drawRect(0f, H - 150f, W.toFloat(), H.toFloat(), Paint().apply { color = Color.rgb(34, 26, 21) })
+        c.drawRect(0f, H - 180f, W.toFloat(), H.toFloat(), Paint().apply { color = Color.rgb(34, 26, 21) })
         val contact = when {
             post.contactMethod == ContactMethod.PHONE.key && post.contactPhone.isNotBlank() -> context.getString(R.string.poster_call, post.contactPhone)
             post.contactMethod == ContactMethod.EMAIL.key && post.contactEmail.isNotBlank() -> context.getString(R.string.poster_email, post.contactEmail)
             else -> context.getString(R.string.poster_in_app, post.ownerName)
         }
-        text(c, contact, M, H - 128f, W - 2 * M, 40f, Color.WHITE, bold = true, center = true, maxLines = 1)
-        text(c, context.getString(R.string.poster_footer), M, H - 68f, W - 2 * M, 30f, Color.argb(200, 255, 255, 255), center = true, maxLines = 1)
+        val footerWidth = if(post.id.isNotBlank()) W - 2 * M - 180 else W - 2 * M
+        text(c, contact, M, H - 156f, footerWidth, 32f, Color.WHITE, bold = true, center = true, maxLines = 2)
+        text(c, context.getString(R.string.poster_footer), M, H - 54f, footerWidth, 30f, Color.argb(200, 255, 255, 255), center = true, maxLines = 1)
+        if(post.id.isNotBlank()) {
+            val matrix = MultiFormatWriter().encode(PostLinks.create(post.id), BarcodeFormat.QR_CODE, 128, 128, mapOf(EncodeHintType.MARGIN to 2))
+            val qr = createBitmap(128,128)
+            for(yq in 0 until 128) for(xq in 0 until 128) qr[xq,yq]=if(matrix[xq,yq]) Color.BLACK else Color.WHITE
+            c.drawBitmap(qr,null,RectF(W-M-128,H-140f,W-M,H-12f),Paint(Paint.ANTI_ALIAS_FLAG))
+        }
         return bmp
     }
 
@@ -128,10 +144,7 @@ object PosterMaker {
             .setMaxLines(maxLines)
             .setEllipsize(TextUtils.TruncateAt.END)
             .build()
-        c.save()
-        c.translate(x, y)
-        layout.draw(c)
-        c.restore()
+        c.withTranslation(x, y) { layout.draw(this) }
         return layout.height.toFloat()
     }
 

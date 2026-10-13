@@ -8,6 +8,10 @@ import com.catmap.dubai.data.AuthRepository
 import com.catmap.dubai.data.ChatRepository
 import com.catmap.dubai.data.FavoritesRepository
 import com.catmap.dubai.data.PostRepository
+import com.catmap.dubai.data.PostDraftStore
+import com.catmap.dubai.data.HelpDirectoryRepository
+import com.catmap.dubai.data.UserDataExportRepository
+import com.catmap.dubai.data.AdminAnalyticsRepository
 import com.catmap.dubai.data.SittingRepository
 import com.catmap.dubai.data.VideoRepository
 import com.catmap.dubai.util.Connectivity
@@ -37,6 +41,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.shareIn
 
 /** Simple manual dependency container, created once by [CatMapApp]. */
 class AppContainer(context: Context) {
@@ -47,6 +52,7 @@ class AppContainer(context: Context) {
     val firebaseReady: Boolean = BuildConfig.FIREBASE_CONFIGURED && FirebaseApp.getApps(appContext).isNotEmpty()
 
     val settings = SettingsRepository(appContext)
+    val drafts = PostDraftStore(appContext)
     val location by lazy { LocationHelper(appContext) }
     val analyzer by lazy { CatAnalyzer() }
 
@@ -59,13 +65,18 @@ class AppContainer(context: Context) {
 
     val notifications by lazy { NotificationRepository(db, auth) }
     val users by lazy { UserRepository(db, notifications) }
-    val authRepo by lazy { AuthRepository(auth, db, users, notifications, images, settings) }
+    val authRepo by lazy { AuthRepository(auth, db, users, notifications, images, settings, drafts, dataExport) }
     val images by lazy { ImageRepository(appContext, db) }
     val moderation by lazy { ModerationRepository(db, notifications) }
     val cats by lazy { CatRepository(db, users, notifications, moderation) }
     val rescues by lazy { RescueRepository(db, users, notifications, moderation) }
     val stations by lazy { StationRepository(db, users, notifications, moderation) }
     val posts by lazy { PostRepository(db, users, notifications, moderation) }
+    val helpDirectory by lazy { HelpDirectoryRepository(db) }
+    val dataExport by lazy { UserDataExportRepository(appContext,db) }
+    val analytics by lazy { AdminAnalyticsRepository(db) }
+    /** One listener while any feed consumer is visible; retained briefly across navigation. */
+    val communityFeed by lazy { posts.feed().shareIn(scope, SharingStarted.WhileSubscribed(5_000), replay = 1) }
     val adoption by lazy { AdoptionRepository(db, notifications) }
     val sitting by lazy { SittingRepository(db, notifications, moderation) }
     val chats by lazy { ChatRepository(db, users, notifications) }

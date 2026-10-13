@@ -109,14 +109,14 @@ fun AdminDashboardScreen(nav: NavHostController) {
     val tiles = buildList {
         add(DashTile(R.string.manage_posts, Icons.AutoMirrored.Outlined.Article, null, Routes.ADMIN_POSTS))
         if (isAdmin) add(DashTile(R.string.manage_users, Icons.Outlined.ManageAccounts, null, Routes.ADMIN_USERS))
-        add(DashTile(R.string.manage_sitters, Icons.Outlined.Home, null, Routes.ADMIN_SITTERS))
+        add(DashTile(R.string.manage_sitters, com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.SITTER), null, Routes.ADMIN_SITTERS))
         add(DashTile(R.string.content_reports, Icons.Outlined.Flag, reports?.size, Routes.ADMIN_REPORTS))
-        add(DashTile(R.string.rescue_reports, Icons.Outlined.HealthAndSafety, rescues?.size, Routes.ADMIN_RESCUES))
+        add(DashTile(R.string.rescue_reports, com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.RESCUE), rescues?.size, Routes.ADMIN_RESCUES))
         add(DashTile(R.string.merge_requests, Icons.AutoMirrored.Outlined.CallMerge, merges?.size, Routes.ADMIN_MERGES))
         add(DashTile(R.string.submissions, Icons.Outlined.TaskAlt, pending?.size, Routes.ADMIN_SUBMISSIONS))
-        if (isAdmin) add(DashTile(R.string.volunteers, Icons.Outlined.VolunteerActivism, apps?.size, Routes.ADMIN_VOLUNTEERS))
+        if (isAdmin) add(DashTile(R.string.volunteers, com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.HANDS), apps?.size, Routes.ADMIN_VOLUNTEERS))
         add(DashTile(R.string.maintenance_reports, Icons.Outlined.Build, maintenance?.size, Routes.ADMIN_MAINTENANCE))
-        if (isAdmin) add(DashTile(R.string.feeding_stations, Icons.Outlined.Restaurant, stations?.size, Routes.STATIONS))
+        if (isAdmin) add(DashTile(R.string.feeding_stations, com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.STATION), stations?.size, Routes.STATIONS))
         add(DashTile(R.string.moderation_log, Icons.Outlined.History, null, Routes.ADMIN_LOG))
     }
 
@@ -129,7 +129,9 @@ fun AdminDashboardScreen(nav: NavHostController) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (isAdmin) item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { StatsPanel() }
-            items(tiles) { t ->
+            if (isAdmin) item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { AnalyticsPanel() }
+            if (isAdmin) item { androidx.compose.material3.TextButton(onClick={nav.navigate(Routes.HELP_DIRECTORY)}) {Text(stringResource(R.string.help_directory))} }
+            items(tiles,key={it.route},contentType={"dashboard"}) { t ->
                 Card(onClick = { nav.navigate(t.route) }, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceContainerHigh)) {
                     Column(Modifier.padding(16.dp).fillMaxWidth()) {
                         Icon(t.icon, null, tint = MaterialTheme.colorScheme.primary)
@@ -159,7 +161,7 @@ fun ReportsQueueScreen(nav: NavHostController) {
     Scaffold(topBar = { AppTopBar(stringResource(R.string.content_reports), onBack = { nav.popBackStack() }) }) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (reports?.isEmpty() == true) item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.queue_empty)) }
-            items(reports.orEmpty(), key = { it.id }) { r ->
+            items(reports.orEmpty(), key = { it.id }, contentType = { "AdminScreens" }) { r ->
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -235,7 +237,7 @@ fun MergeQueueScreen(nav: NavHostController) {
     Scaffold(topBar = { AppTopBar(stringResource(R.string.merge_requests), onBack = { nav.popBackStack() }) }) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (requests?.isEmpty() == true) item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.queue_empty)) }
-            items(requests.orEmpty(), key = { it.id }) { r ->
+            items(requests.orEmpty(), key = { it.id }, contentType = { "AdminScreens" }) { r ->
                 val primary = cats.firstOrNull { it.id == r.primaryCatId }
                 val duplicate = cats.firstOrNull { it.id == r.duplicateCatId }
                 Card(Modifier.fillMaxWidth()) {
@@ -309,7 +311,7 @@ fun VolunteersScreen(nav: NavHostController) {
                 when (tab) {
                     VolTab.APPLICATIONS -> {
                         if (apps?.isEmpty() == true) item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.queue_empty)) }
-                        items(apps.orEmpty(), key = { it.id }) { a ->
+                        items(apps.orEmpty(), key = { it.id }, contentType = { "AdminScreens" }) { a ->
                             Card(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Text("@" + a.username, fontWeight = FontWeight.SemiBold)
@@ -326,8 +328,8 @@ fun VolunteersScreen(nav: NavHostController) {
                         }
                     }
                     VolTab.VOLUNTEERS -> {
-                        if (volunteers.isEmpty()) item { EmptyState(Icons.Outlined.VolunteerActivism, stringResource(R.string.no_volunteers)) }
-                        items(volunteers, key = { it.uid }) { u -> UserRoleRow(u, me, nav) }
+                        if (volunteers.isEmpty()) item { EmptyState(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.HANDS), stringResource(R.string.no_volunteers)) }
+                        items(volunteers, key = { it.uid }, contentType = { "AdminScreens" }) { u -> UserRoleRow(u, me, nav) }
                     }
                     VolTab.STAFF -> {
                         item {
@@ -345,7 +347,7 @@ fun VolunteersScreen(nav: NavHostController) {
                             found?.let { UserRoleRow(it, me, nav) }
                             SectionHeader(stringResource(R.string.staff))
                         }
-                        items(admins + mods, key = { it.uid }) { u -> UserRoleRow(u, me, nav) }
+                        items(admins + mods, key = { it.uid }, contentType = { "AdminScreens" }) { u -> UserRoleRow(u, me, nav) }
                     }
                 }
             }
@@ -395,7 +397,7 @@ fun MaintenanceQueueScreen(nav: NavHostController) {
     Scaffold(topBar = { AppTopBar(stringResource(R.string.maintenance_reports), onBack = { nav.popBackStack() }) }) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (reports?.isEmpty() == true) item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.queue_empty)) }
-            items(reports.orEmpty(), key = { it.id }) { r ->
+            items(reports.orEmpty(), key = { it.id }, contentType = { "AdminScreens" }) { r ->
                 val st = labeledFrom(r.status, MaintenanceStatus.OPEN)
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -447,7 +449,7 @@ fun SubmissionsScreen(nav: NavHostController) {
             LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
                 if (tab == 0) {
                     if (pending?.isEmpty() == true) item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.queue_empty)) }
-                    items(pending.orEmpty(), key = { it.id }) { s ->
+                    items(pending.orEmpty(), key = { it.id }, contentType = { "AdminScreens" }) { s ->
                         Column {
                             Text(s.catName + if (s.newCat) " · " + stringResource(R.string.first_sighting) else "", Modifier.padding(start = 44.dp, top = 8.dp), fontWeight = FontWeight.SemiBold)
                             TimelineItem(s) { nav.navigate(Routes.sighting(s.id)) }
@@ -458,7 +460,7 @@ fun SubmissionsScreen(nav: NavHostController) {
                         }
                     }
                 } else {
-                    items(newCats, key = { it.id }) { cat ->
+                    items(newCats, key = { it.id }, contentType = { "AdminScreens" }) { cat ->
                         Column(Modifier.padding(horizontal = 16.dp, vertical = 5.dp)) {
                             com.catmap.dubai.ui.cats.CatCard(cat) { nav.navigate(Routes.cat(cat.id)) }
                             Text(stringResource(R.string.registered_by_x_time, cat.createdByName, dateTime(cat.createdAt)), style = MaterialTheme.typography.labelSmall)
@@ -523,7 +525,7 @@ fun ModLogScreen(nav: NavHostController) {
     Scaffold(topBar = { AppTopBar(stringResource(R.string.moderation_log), onBack = { nav.popBackStack() }) }) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (actions?.isEmpty() == true) item { EmptyState(Icons.Outlined.History, stringResource(R.string.no_actions)) }
-            items(actions.orEmpty(), key = { it.id }) { a ->
+            items(actions.orEmpty(), key = { it.id }, contentType = { "AdminScreens" }) { a ->
                 Column(Modifier.fillMaxWidth()) {
                     Text(actionLabel(a.action), fontWeight = FontWeight.SemiBold)
                     Text(listOf(targetTypeLabel(a.targetType), a.targetLabel).filter { it.isNotBlank() }.joinToString(" · "), style = MaterialTheme.typography.bodySmall)

@@ -145,7 +145,7 @@ fun StationsScreen(nav: NavHostController) {
             when {
                 shown == null -> item { LoadingBox(Modifier.fillMaxWidth().height(120.dp)) }
                 shown.isEmpty() -> item {
-                    EmptyState(Icons.Outlined.Restaurant, stringResource(R.string.no_stations)) {
+                    EmptyState(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.STATION), stringResource(R.string.no_stations)) {
                         if (isAdmin) {
                             Button(onClick = { me?.let { m -> runner.run(R.string.samples_added) { container.stations.seedSamples(m) } } }) {
                                 Text(stringResource(R.string.add_sample_stations))
@@ -153,7 +153,7 @@ fun StationsScreen(nav: NavHostController) {
                         }
                     }
                 }
-                else -> items(shown, key = { it.id }) { s -> StationCard(s) { nav.navigate(Routes.station(s.id)) } }
+                else -> items(shown, key = { it.id }, contentType = { "StationScreens" }) { s -> StationCard(s) { nav.navigate(Routes.station(s.id)) } }
             }
         }
     }
@@ -163,7 +163,7 @@ fun StationsScreen(nav: NavHostController) {
 private fun StationCard(s: FeedingStation, onClick: () -> Unit) {
     ClickableCard(onClick) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Restaurant, null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.secondary)
+            Icon(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.STATION), null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.secondary)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -220,7 +220,7 @@ fun StationDetailScreen(nav: NavHostController, stationId: String) {
         val s = station
         if (s == null) {
             if (stationState == null) LoadingBox(Modifier.padding(padding))
-            else EmptyState(Icons.Outlined.Restaurant, stringResource(R.string.station_not_found), Modifier.padding(padding))
+            else EmptyState(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.STATION), stringResource(R.string.station_not_found), Modifier.padding(padding))
             return@Scaffold
         }
         val activity: List<Activity> = (checkins.map { CheckinActivity(it) } + issues.map { IssueActivity(it) }).sortedByDescending { it.at }.take(40)
@@ -253,7 +253,7 @@ fun StationDetailScreen(nav: NavHostController, stationId: String) {
                     if (activity.isEmpty()) Text(stringResource(R.string.no_activity), style = MaterialTheme.typography.bodySmall)
                 }
             }
-            items(activity) { a ->
+            items(activity, key = { when(it) { is CheckinActivity -> "checkin${it.c.id}"; is IssueActivity -> "issue${it.m.id}" } }, contentType = { when(it) { is CheckinActivity -> "checkin"; is IssueActivity -> "issue" } }) { a ->
                 when (a) {
                     is CheckinActivity -> Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                         Text(stringResource(R.string.checkin_by, a.c.username, a.c.catsSeen), fontWeight = FontWeight.SemiBold)

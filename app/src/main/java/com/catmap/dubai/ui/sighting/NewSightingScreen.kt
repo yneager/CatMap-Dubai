@@ -236,7 +236,7 @@ private fun PhotosStep(vm: NewSightingViewModel) {
         }
     }
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(vm.photos, key = { it.key }) { p ->
+        items(vm.photos, key = { it.key }, contentType = { "NewSightingScreen" }) { p ->
             Box {
                 LocalBitmap(p.photo.analysis, Modifier.size(130.dp).clip(RoundedCornerShape(12.dp)), stringResource(R.string.photo))
                 FilledIconButton(

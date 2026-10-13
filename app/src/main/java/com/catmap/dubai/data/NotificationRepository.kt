@@ -12,6 +12,7 @@ import kotlinx.coroutines.tasks.await
 
 /** Notification types. Their text is formatted on the receiving phone, in its own language. */
 object NotifType {
+    const val STALE_POST = "stale_post"
     const val FOLLOWED_CAT = "followed_cat"
     const val RESCUE_UPDATE = "rescue_update"
     const val RESCUE_NEW_VOLUNTEER = "rescue_volunteer"

@@ -8,7 +8,7 @@ S = [
 ("message_owner","Message the owner","راسل صاحب المنشور"),("call_x","Call %1$s","اتصل بـ %1$s"),("email_x","Email %1$s","راسل %1$s"),
 ("manage_post","Manage your post","إدارة منشورك"),("mark_reunited","Mark as reunited","تحديد كعائد إلى أهله"),
 ("mark_reunited_body","Great news! This closes the case and thanks everyone who helped.","أخبار رائعة! سيُغلق هذا الحالة ويشكر كل من ساعد."),
-("reunited_thanks","Wonderful – thank you for letting everyone know! 🎉","رائع – شكراً لإبلاغ الجميع! 🎉"),
+("reunited_thanks","Wonderful – thank you for letting everyone know! ","رائع – شكراً لإبلاغ الجميع! "),
 ("reopen","Reopen","إعادة الفتح"),
 ("updates_and_sightings","Sightings & updates","المشاهدات والتحديثات"),
 ("i_saw_this_animal","I saw this animal","رأيت هذا الحيوان"),
@@ -40,7 +40,7 @@ S = [
 # ---- area alerts ----
 ("area_alerts","Lost-pet alerts","تنبيهات الحيوانات المفقودة"),
 ("area_alerts_intro","Get notified when a lost animal is reported near you. Choose a spot and how far around it to watch.","تلقَّ إشعاراً عند الإبلاغ عن حيوان مفقود قربك. اختر نقطة والمسافة المحيطة بها."),
-("alert_radius_km","Radius: %1$d km","نصف القطر: %1$d كم"),("alert_areas_n","Covers %1$d neighbourhoods","يشمل %1$d أحياء"),
+("alert_radius_km","Radius: %1$d km","نصف القطر: %1$d كم"),("alert_areas_n","Neighbourhoods covered: %1$d","يشمل %1$d أحياء"),
 ("start_alerts","Start alerts","تفعيل التنبيهات"),("update_alerts","Update alerts","تحديث التنبيهات"),("stop_alerts","Stop alerts","إيقاف التنبيهات"),
 ("alerts_saved","Alerts saved","تم حفظ التنبيهات"),("alerts_stopped","Alerts stopped","تم إيقاف التنبيهات"),
 ("alerts_enabled_note","Lost-pet alerts are on in Settings.","تنبيهات الحيوانات المفقودة مفعّلة في الإعدادات."),
@@ -48,7 +48,7 @@ S = [
 # ---- adoption ----
 ("adoption","Adoption","التبنّي"),("adoption_requests","Adoption requests","طلبات التبنّي"),("requests","Requests","الطلبات"),
 ("list_for_adoption","List for adoption","اعرض للتبنّي"),
-("adoption_hero_title","Give a pet a home 💜","امنح حيواناً منزلاً 💜"),
+("adoption_hero_title","Give a pet a home ","امنح حيواناً منزلاً "),
 ("adoption_hero_body","Every animal here is looking for a family in Dubai.","كل حيوان هنا يبحث عن عائلة في دبي."),
 ("show_adopted","Show adopted","عرض المتبنّاة"),("no_adoption_listings","No animals listed for adoption right now.","لا توجد حيوانات معروضة للتبنّي حالياً."),
 ("received","Received","المستلمة"),("sent","Sent","المرسلة"),("no_requests","No requests yet.","لا توجد طلبات بعد."),
@@ -80,10 +80,10 @@ S = [
 ("find_sitter","Find a sitter","ابحث عن مربٍّ"),("date_range","%1$s → %2$s","%1$s ← %2$s"),
 ("sitter_note_x","Sitter: %1$s","المربي: %1$s"),("mark_completed","Mark completed","تحديد كمكتمل"),("cancel_booking","Cancel booking","إلغاء الحجز"),
 ("leave_review","Leave a review","اكتب تقييماً"),("review_x","Review %1$s","قيّم %1$s"),("review_text","How did it go?","كيف كانت التجربة؟"),
-("review_thanks","Thanks for your review!","شكراً لتقييمك!"),("rating_n","%1$d stars","%1$d نجوم"),
+("review_thanks","Thanks for your review!","شكراً لتقييمك!"),("rating_n","Rating: %1$d / 5","%1$d نجوم"),
 # ---- messages ----
 ("no_chats","No conversations yet. Message someone from a post or a sitter profile.","لا توجد محادثات بعد. راسل أحداً من منشور أو ملف مربٍّ."),
-("you_prefix","You:","أنت:"),("blocked","Blocked","محظور"),("say_hello","Say hello 👋","ألقِ التحية 👋"),
+("you_prefix","You:","أنت:"),("blocked","Blocked","محظور"),("say_hello","Say hello ","ألقِ التحية "),
 ("type_message","Message","رسالة"),("sharing_post","Sharing a post","مشاركة منشور"),("view_post","View post","عرض المنشور"),
 ("delete_message","Delete message","حذف الرسالة"),("block_user","Block","حظر"),("unblock_user","Unblock","إلغاء الحظر"),
 ("report_user","Report","إبلاغ"),
@@ -108,7 +108,7 @@ S = [
 ("n_adoption_declined","Your request for %1$s was declined.","تم رفض طلبك لتبنّي %1$s."),
 ("n_booking_request_title","New booking request","طلب حجز جديد"),("n_booking_request_body","@%1$s would like you to look after their pet.","يرغب @%1$s أن ترعى حيوانه الأليف."),
 ("n_booking_update_title","Booking update","تحديث الحجز"),("n_booking_update_body","@%1$s: %2$s","@%1$s: %2$s"),
-("n_review_title","New review","تقييم جديد"),("n_review_body","@%1$s rated you %2$s★","قيّمك @%1$s بـ %2$s★"),
+("n_review_title","New review","تقييم جديد"),("n_review_body","@%1$s rated you %2$s","قيّمك @%1$s بـ %2$s"),
 ("target_post","Post","المنشور"),("target_sitter","Sitter profile","ملف المربي"),("target_account","Your account","حسابك"),
 ("decision_suspended","suspended","موقوف"),("decision_restored","restored","مُستعاد"),
 # ---- admin ----

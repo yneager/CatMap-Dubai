@@ -1,5 +1,8 @@
 package com.catmap.dubai.ui.profile
 
+import com.catmap.dubai.ui.icons.CatMapIcon
+import com.catmap.dubai.ui.icons.CatMapIcons
+import com.catmap.dubai.ui.icons.IconLabel
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -157,7 +160,7 @@ fun ProfileScreen(nav: NavHostController, uid: String? = null) {
         val p = profile
         if (p == null) {
             // A deleted account (e.g. opened from an old report or notification) shows a message, not a spinner.
-            if (!isSelf && otherState != null) EmptyState(Icons.Outlined.Pets, stringResource(R.string.profile_not_found), Modifier.padding(padding))
+            if (!isSelf && otherState != null) EmptyState(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.PAW), stringResource(R.string.profile_not_found), Modifier.padding(padding))
             else LoadingBox(Modifier.padding(padding))
             return@Scaffold
         }
@@ -179,8 +182,8 @@ fun ProfileScreen(nav: NavHostController, uid: String? = null) {
             }
             when (tab) {
                 ProfileTab.POSTS -> {
-                    if (posts.isEmpty()) item { EmptyState(Icons.Outlined.Pets, stringResource(R.string.no_posts_profile)) }
-                    items(posts, key = { "post" + it.id }) { post ->
+                    if (posts.isEmpty()) item { EmptyState(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.PAW), stringResource(R.string.no_posts_profile)) }
+                    items(posts, key = { "post" + it.id }, contentType = { "ProfileScreens" }) { post ->
                         com.catmap.dubai.ui.components.PostCard(
                             post, saved = false, onFavorite = {}, onClick = { nav.navigate(Routes.post(post.id)) },
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
@@ -189,7 +192,7 @@ fun ProfileScreen(nav: NavHostController, uid: String? = null) {
                 }
                 ProfileTab.SIGHTINGS -> {
                     if (visibleSightings.isEmpty()) item { EmptyState(Icons.Outlined.CameraAlt, stringResource(R.string.no_sightings_yet)) }
-                    items(visibleSightings, key = { it.id }) { s ->
+                    items(visibleSightings, key = { it.id }, contentType = { "ProfileScreens" }) { s ->
                         Column {
                             Text(s.catName, Modifier.padding(start = 44.dp, top = 8.dp), fontWeight = FontWeight.SemiBold)
                             TimelineItem(s) { nav.navigate(Routes.sighting(s.id)) }
@@ -197,14 +200,14 @@ fun ProfileScreen(nav: NavHostController, uid: String? = null) {
                     }
                 }
                 ProfileTab.CATS -> {
-                    if (myCats.isEmpty()) item { EmptyState(Icons.Outlined.Pets, stringResource(R.string.no_contributed_cats)) }
-                    items(myCats, key = { it.id }) { cat ->
+                    if (myCats.isEmpty()) item { EmptyState(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.PAW), stringResource(R.string.no_contributed_cats)) }
+                    items(myCats, key = { it.id }, contentType = { "ProfileScreens" }) { cat ->
                         Box(Modifier.padding(horizontal = 16.dp, vertical = 5.dp)) { CatCard(cat) { nav.navigate(Routes.cat(cat.id)) } }
                     }
                 }
                 ProfileTab.FOLLOWING -> {
-                    if (followed.isEmpty()) item { EmptyState(Icons.Outlined.Pets, stringResource(R.string.not_following_any)) }
-                    items(followed, key = { it.id }) { cat ->
+                    if (followed.isEmpty()) item { EmptyState(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.PAW), stringResource(R.string.not_following_any)) }
+                    items(followed, key = { it.id }, contentType = { "ProfileScreens" }) { cat ->
                         Box(Modifier.padding(horizontal = 16.dp, vertical = 5.dp)) { CatCard(cat, following = true) { nav.navigate(Routes.cat(cat.id)) } }
                     }
                 }
@@ -217,18 +220,18 @@ fun ProfileScreen(nav: NavHostController, uid: String? = null) {
     }
 }
 
-private data class QuickLink(val emoji: String, val label: Int, val route: String)
+private data class QuickLink(val icon: Int, val label: Int, val route: String)
 
 /** Shortcuts to everything the person owns or follows. */
 @Composable
 private fun QuickLinks(nav: NavHostController) {
     val links = listOf(
-        QuickLink("📝", R.string.my_posts, Routes.MY_POSTS),
-        QuickLink("❤️", R.string.favorites, Routes.FAVORITES),
-        QuickLink("💜", R.string.adoption_requests, Routes.ADOPTION_REQUESTS),
-        QuickLink("📅", R.string.bookings, Routes.bookings()),
-        QuickLink("🏠", R.string.sitter_profile, Routes.SITTER_EDIT),
-        QuickLink("🔔", R.string.area_alerts, Routes.AREA_ALERTS),
+        QuickLink(CatMapIcons.NOTE, R.string.my_posts, Routes.MY_POSTS),
+        QuickLink(CatMapIcons.ADOPTION, R.string.favorites, Routes.FAVORITES),
+        QuickLink(CatMapIcons.ADOPTION, R.string.adoption_requests, Routes.ADOPTION_REQUESTS),
+        QuickLink(CatMapIcons.CALENDAR, R.string.bookings, Routes.bookings()),
+        QuickLink(CatMapIcons.SITTER, R.string.sitter_profile, Routes.SITTER_EDIT),
+        QuickLink(CatMapIcons.BELL, R.string.area_alerts, Routes.AREA_ALERTS),
     )
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         links.chunked(3).forEach { row ->
@@ -237,11 +240,11 @@ private fun QuickLinks(nav: NavHostController) {
                     Card(
                         onClick = { nav.navigate(l.route) },
                         modifier = Modifier.weight(1f),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+                        shape = MaterialTheme.shapes.medium,
                         colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceContainerHigh),
                     ) {
                         Column(Modifier.padding(12.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(l.emoji, style = MaterialTheme.typography.titleLarge)
+                            CatMapIcon(l.icon)
                             Text(stringResource(l.label), style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center, maxLines = 2, minLines = 2)
                         }
                     }
@@ -288,7 +291,7 @@ private fun ProfileHeader(p: UserProfile, isSelf: Boolean, nav: NavHostControlle
             when (p.volunteerStatus) {
                 "none", "rejected" -> if (p.role == "user") {
                     TextButton(onClick = onVolunteer) {
-                        Icon(Icons.Outlined.VolunteerActivism, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
+                        Icon(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.HANDS), null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
                         Text(stringResource(if (p.volunteerStatus == "rejected") R.string.apply_again_volunteer else R.string.become_volunteer))
                     }
                 }
@@ -305,20 +308,20 @@ private fun StatsDashboard(p: UserProfile, sightings: List<Sighting>, onBadges: 
         SectionHeader(stringResource(R.string.statistics))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatTile(stat(Stats.SIGHTINGS), stringResource(R.string.stat_sightings), Modifier.weight(1f), Icons.Outlined.CameraAlt)
-            StatTile(sightings.map { it.catId }.distinct().size.toString(), stringResource(R.string.stat_cats_spotted), Modifier.weight(1f), Icons.Outlined.Pets)
+            StatTile(sightings.map { it.catId }.distinct().size.toString(), stringResource(R.string.stat_cats_spotted), Modifier.weight(1f), com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.PAW))
             StatTile(stat(Stats.APPROVED_SIGHTINGS), stringResource(R.string.stat_approved), Modifier.weight(1f), Icons.Outlined.TaskAlt)
         }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile(stat(Stats.CATS_REGISTERED), stringResource(R.string.stat_registered), Modifier.weight(1f), Icons.Outlined.Pets)
+            StatTile(stat(Stats.CATS_REGISTERED), stringResource(R.string.stat_registered), Modifier.weight(1f), com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.PAW))
             StatTile(stat(Stats.PHOTOS), stringResource(R.string.stat_photos), Modifier.weight(1f), Icons.Outlined.Photo)
-            StatTile(stat(Stats.RESCUE_REPORTS), stringResource(R.string.stat_rescues), Modifier.weight(1f), Icons.Outlined.HealthAndSafety)
+            StatTile(stat(Stats.RESCUE_REPORTS), stringResource(R.string.stat_rescues), Modifier.weight(1f), com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.RESCUE))
         }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile(stat(Stats.CHECKINS), stringResource(R.string.stat_checkins), Modifier.weight(1f), Icons.Outlined.Restaurant)
+            StatTile(stat(Stats.CHECKINS), stringResource(R.string.stat_checkins), Modifier.weight(1f), com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.STATION))
             StatTile(p.neighborhoods.size.toString(), stringResource(R.string.stat_areas), Modifier.weight(1f), Icons.Outlined.Place)
-            StatTile(p.badges.size.toString(), stringResource(R.string.stat_badges), Modifier.weight(1f).clickable(onClick = onBadges), Icons.Outlined.EmojiEvents)
+            StatTile(p.badges.size.toString(), stringResource(R.string.stat_badges), Modifier.weight(1f).clickable(onClick = onBadges), com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.BADGE_PAW))
         }
         MonthlyChart(sightings)
         if (p.badges.isNotEmpty()) {
@@ -329,7 +332,7 @@ private fun StatsDashboard(p: UserProfile, sightings: List<Sighting>, onBadges: 
                     Box(
                         Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiaryContainer).semantics { contentDescription = title },
                         contentAlignment = Alignment.Center,
-                    ) { Text(badge.emoji, style = MaterialTheme.typography.titleLarge) }
+                    ) { CatMapIcon(badge.icon,contentDescription=stringResource(badge.title)) }
                 }
             }
         }
@@ -496,7 +499,7 @@ fun AchievementsScreen(nav: NavHostController) {
                     }
                 }
             }
-            items(Badge.entries.sortedByDescending { it.key in p.badges }) { badge ->
+            items(Badge.entries.sortedByDescending { it.key in p.badges }, key = { it.key }, contentType = { "badge" }) { badge ->
                 val earned = badge.key in p.badges
                 val progress = badge.progress(p).coerceAtMost(badge.threshold)
                 Card(colors = CardDefaults.cardColors(if (earned) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerLow)) {
@@ -504,7 +507,7 @@ fun AchievementsScreen(nav: NavHostController) {
                         Box(
                             Modifier.size(52.dp).clip(CircleShape).background(if (earned) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center,
-                        ) { Text(if (earned) badge.emoji else "🔒", style = MaterialTheme.typography.headlineSmall) }
+                        ) { CatMapIcon(if (earned) badge.icon else CatMapIcons.LOCK,contentDescription=stringResource(badge.title)) }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(stringResource(badge.title), fontWeight = FontWeight.SemiBold)

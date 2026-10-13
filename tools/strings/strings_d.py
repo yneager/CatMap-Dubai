@@ -16,7 +16,7 @@ S = [
 # ---- cat profile ----
 ("tab_overview","Overview","نظرة عامة"),("tab_timeline","Timeline","السجل"),("tab_photos","Photos","الصور"),("tab_health","Health","الصحة"),
 ("share_cat","Share cat profile","مشاركة ملف القطة"),
-("share_cat_text","Meet %1$s 🐾 – a community cat in %4$s, Dubai. Coat: %2$s (%3$s). Sightings: %5$d (first %6$s, last %7$s). %8$s. Shared from CatMap Dubai.","تعرّف على %1$s 🐾 – قطة مجتمعية في %4$s، دبي. الفراء: %2$s (%3$s). المشاهدات: %5$d (أول مرة %6$s، آخر مرة %7$s). %8$s. من تطبيق خريطة قطط دبي."),
+("share_cat_text","Meet %1$s  – a community cat in %4$s, Dubai. Coat: %2$s (%3$s). Sightings: %5$d (first %6$s, last %7$s). %8$s. Shared from CatMap Dubai.","تعرّف على %1$s  – قطة مجتمعية في %4$s، دبي. الفراء: %2$s (%3$s). المشاهدات: %5$d (أول مرة %6$s، آخر مرة %7$s). %8$s. من تطبيق خريطة قطط دبي."),
 ("edit_profile_cat","Edit cat profile","تعديل ملف القطة"),("add_alias","Add another name","إضافة اسم آخر"),("alias","Name or nickname","اسم أو لقب"),
 ("suggest_merge","Suggest merging duplicates","اقتراح دمج ملفات مكررة"),("report_content","Report","إبلاغ"),
 ("hide_profile","Hide profile","إخفاء الملف"),("restore_profile","Restore profile","استعادة الملف"),("moderation_note","Note for the log","ملاحظة للسجل"),

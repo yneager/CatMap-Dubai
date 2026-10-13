@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "CatMapDubai"
 include(":app")
+include(":baselineprofile")

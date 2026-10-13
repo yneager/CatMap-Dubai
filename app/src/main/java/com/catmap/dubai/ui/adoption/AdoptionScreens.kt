@@ -1,5 +1,8 @@
 package com.catmap.dubai.ui.adoption
 
+import com.catmap.dubai.ui.icons.CatMapIcon
+import com.catmap.dubai.ui.icons.CatMapIcons
+import com.catmap.dubai.ui.icons.IconLabel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -79,7 +82,7 @@ fun AdoptionScreen(nav: NavHostController) {
     val container = LocalContainer.current
     val runner = rememberRunner()
     val uid = container.session.uid
-    val posts by remember { container.posts.feed() }.collectAsStateWithLifecycle(null)
+    val posts by remember { container.communityFeed }.collectAsStateWithLifecycle(null)
     val favorites by remember(uid) { if (uid == null) flowOf(emptySet()) else container.favorites.ids(uid) }.collectAsStateWithLifecycle(emptySet())
     var type by rememberSaveable { mutableStateOf<String?>(null) }
     var showAdopted by rememberSaveable { mutableStateOf(false) }
@@ -119,16 +122,16 @@ fun AdoptionScreen(nav: NavHostController) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item { FilterChip(type == null, { type = null }, label = { Text(stringResource(R.string.all)) }) }
-                    items(AnimalType.entries) { t -> FilterChip(type == t.key, { type = t.key }, label = { Text(t.emoji + " " + stringResource(t.label)) }) }
+                    items(AnimalType.entries,key={it.key},contentType={"animal-chip"}) { t -> FilterChip(type == t.key, { type = t.key }, label = { IconLabel(t.icon, stringResource(t.label)) }) }
                     item { FilterChip(showAdopted, { showAdopted = !showAdopted }, label = { Text(stringResource(R.string.show_adopted)) }) }
                 }
             }
             when {
-                listings == null -> items(4) { SkeletonCard() }
+                listings == null -> items(4, contentType = { "loading" }) { SkeletonCard() }
                 listings.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
-                    EmptyState(Icons.Outlined.Pets, stringResource(R.string.no_adoption_listings))
+                    EmptyState(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.PAW), stringResource(R.string.no_adoption_listings))
                 }
-                else -> items(listings, key = { it.id }) { p ->
+                else -> items(listings, key = { it.id }, contentType = { "AdoptionScreens" }) { p ->
                     PostGridCard(
                         p, p.id in favorites,
                         onFavorite = { uid?.let { u -> runner.run { container.favorites.set(u, p.id, p.id !in favorites) } } },
@@ -162,9 +165,9 @@ fun AdoptionRequestsScreen(nav: NavHostController) {
             }
             LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 when {
-                    list == null -> items(2) { SkeletonCard() }
+                    list == null -> items(2, contentType = { "loading" }) { SkeletonCard() }
                     list.isEmpty() -> item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.no_requests)) }
-                    else -> items(list, key = { it.id }) { r ->
+                    else -> items(list, key = { it.id }, contentType = { "AdoptionScreens" }) { r ->
                         RequestCard(
                             r, incoming = tab == RequestTab.RECEIVED,
                             onOpen = { nav.navigate(Routes.post(r.postId)) },
@@ -194,7 +197,7 @@ private fun RequestCard(
     onDecide: (Boolean) -> Unit, onWithdraw: () -> Unit, modifier: Modifier = Modifier,
 ) {
     val status = labeledFrom(r.status, RequestStatus.PENDING)
-    Card(onClick = onOpen, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceContainerLow)) {
+    Card(onClick = onOpen, modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (r.postPhotoId.isNotBlank()) {

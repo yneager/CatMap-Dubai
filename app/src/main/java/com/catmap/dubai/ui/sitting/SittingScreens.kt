@@ -1,5 +1,9 @@
 package com.catmap.dubai.ui.sitting
 
+import com.catmap.dubai.ui.icons.CatMapIcon
+import com.catmap.dubai.ui.icons.animalNames
+import com.catmap.dubai.ui.icons.CatMapIcons
+import com.catmap.dubai.ui.icons.IconLabel
 import com.catmap.dubai.ui.components.currentLocale
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -114,7 +118,7 @@ private fun SitterAvatar(sitter: SitterProfile, size: androidx.compose.ui.unit.D
         RemoteImage(sitter.photoId, Modifier.size(size).clip(CircleShape))
     } else {
         Box(Modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.tertiaryContainer), contentAlignment = Alignment.Center) {
-            Text(sitter.name.take(1).uppercase().ifBlank { "🏠" }, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onTertiaryContainer)
+            Text(sitter.name.take(1).uppercase().ifBlank { "S" }, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onTertiaryContainer)
         }
     }
 }
@@ -132,7 +136,8 @@ fun SittersScreen(nav: NavHostController) {
     val mine by remember(uid) { container.sitting.sitterFlow(uid.orEmpty()) }.collectAsStateWithLifecycle(null)
     val fix by container.location.last.collectAsStateWithLifecycle()
     var pet by rememberSaveable { mutableStateOf<String?>(null) }
-    val shown = sitters?.filter { (pet == null || pet in it.petTypes) && it.uid != uid }?.let { list ->
+    var verifiedOnly by rememberSaveable { mutableStateOf(false) }
+    val shown = sitters?.filter { (pet == null || pet in it.petTypes) && it.uid != uid && (!verifiedOnly || it.verified) }?.let { list ->
         val f = fix
         if (f != null) list.sortedBy { distanceKm(f.lat, f.lng, it.lat, it.lng) } else list.sortedByDescending { it.rating }
     }
@@ -146,23 +151,24 @@ fun SittersScreen(nav: NavHostController) {
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { nav.navigate(Routes.SITTER_EDIT) },
-                icon = { Icon(if (mine == null) Icons.Outlined.Home else Icons.Default.Edit, null) },
+                icon = { Icon(if (mine == null) com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.SITTER) else Icons.Default.Edit, null) },
                 text = { Text(stringResource(if (mine == null) R.string.become_sitter else R.string.edit_sitter_profile)) },
             )
         },
     ) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item { FilterChip(verifiedOnly,{verifiedOnly=!verifiedOnly},label={Text(stringResource(R.string.verified_only))}) }
             item { Text(stringResource(R.string.sitters_intro), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item { FilterChip(pet == null, { pet = null }, label = { Text(stringResource(R.string.all)) }) }
-                    items(AnimalType.entries) { t -> FilterChip(pet == t.key, { pet = t.key }, label = { Text(t.emoji + " " + stringResource(t.label)) }) }
+                    items(AnimalType.entries,key={it.key},contentType={"animal-chip"}) { t -> FilterChip(pet == t.key, { pet = t.key }, label = { IconLabel(t.icon, stringResource(t.label)) }) }
                 }
             }
             when {
-                shown == null -> items(4) { SkeletonRow() }
+                shown == null -> items(4, contentType = { "loading" }) { SkeletonRow() }
                 shown.isEmpty() -> item { EmptyState(Icons.Outlined.PersonSearch, stringResource(R.string.no_sitters)) }
-                else -> items(shown, key = { it.uid }) { s -> SitterCard(s, Modifier.animateItem()) { nav.navigate(Routes.sitter(s.uid)) } }
+                else -> items(shown, key = { it.uid }, contentType = { "SittingScreens" }) { s -> SitterCard(s, Modifier.animateItem()) { nav.navigate(Routes.sitter(s.uid)) } }
             }
         }
     }
@@ -171,12 +177,13 @@ fun SittersScreen(nav: NavHostController) {
 @Composable
 private fun SitterCard(s: SitterProfile, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val fix by LocalContainer.current.location.last.collectAsStateWithLifecycle()
-    Card(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceContainerLow)) {
+    Card(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceContainerLow)) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             SitterAvatar(s, 60.dp)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(s.name, style = MaterialTheme.typography.titleMedium)
+                if(s.verified) IconLabel(CatMapIcons.VERIFIED,stringResource(R.string.verified_sitter))
                 if (s.headline.isNotBlank()) Text(s.headline, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RatingStars(s.rating, size = 14.dp)
@@ -187,7 +194,7 @@ private fun SitterCard(s: SitterProfile, modifier: Modifier = Modifier, onClick:
                     listOfNotNull(Dubai.nameOf(s.neighborhood), fix?.let { distanceText(distanceKm(it.lat, it.lng, s.lat, s.lng)) }).joinToString(" · "),
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(s.petTypes.joinToString(" ") { labeledFrom(it, AnimalType.OTHER).emoji } + "   " + rateText(s), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(animalNames(s.petTypes) + "   " + rateText(s), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             }
         }
     }
@@ -211,6 +218,7 @@ fun SitterDetailScreen(nav: NavHostController, uid: String) {
                         SitterAvatar(sitter, 96.dp)
                         Text("@" + sitter.name, style = MaterialTheme.typography.headlineSmall)
                         if (sitter.headline.isNotBlank()) Text(sitter.headline, style = MaterialTheme.typography.bodyLarge)
+                        if(sitter.verified) IconLabel(CatMapIcons.VERIFIED,stringResource(R.string.verified_sitter))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             RatingStars(sitter.rating, size = 20.dp)
                             Spacer(Modifier.width(6.dp))
@@ -239,7 +247,7 @@ fun SitterDetailScreen(nav: NavHostController, uid: String) {
                 item {
                     SectionHeader(stringResource(R.string.pets_cared_for))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        sitter.petTypes.forEach { t -> val a = labeledFrom(t, AnimalType.OTHER); StatusPill(a.emoji + " " + stringResource(a.label), MaterialTheme.colorScheme.primary) }
+                        sitter.petTypes.forEach { t -> val a = labeledFrom(t, AnimalType.OTHER); StatusPill(stringResource(a.label), MaterialTheme.colorScheme.primary) }
                     }
                     if (sitter.services.isNotEmpty()) {
                         SectionHeader(stringResource(R.string.services))
@@ -258,10 +266,10 @@ fun SitterDetailScreen(nav: NavHostController, uid: String) {
                 }
                 item { SectionHeader(stringResource(R.string.reviews)) }
                 if (reviews.isEmpty()) item { Text(stringResource(R.string.no_reviews), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                items(reviews, key = { it.id }) { r ->
+                items(reviews, key = { it.id }, contentType = { "SittingScreens" }) { r ->
                     Column(Modifier.padding(vertical = 6.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("@" + r.authorName, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                            Text("@" + r.authorName.ifBlank {stringResource(R.string.deleted_member)}, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                             RatingStars(r.rating.toDouble(), size = 14.dp)
                         }
                         if (r.text.isNotBlank()) Text(r.text, style = MaterialTheme.typography.bodyMedium)
@@ -337,7 +345,7 @@ fun SitterEditScreen(nav: NavHostController) {
                 supportingText = { Text(stringResource(R.string.availability_hint)) }, modifier = Modifier.fillMaxWidth())
             Text(stringResource(R.string.pets_cared_for), style = MaterialTheme.typography.labelLarge)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AnimalType.entries.forEach { t -> FilterChip(t.key in pets, { pets = pets.toggle(t.key) }, label = { Text(t.emoji + " " + stringResource(t.label)) }) }
+                AnimalType.entries.forEach { t -> FilterChip(t.key in pets, { pets = pets.toggle(t.key) }, label = { IconLabel(t.icon, stringResource(t.label)) }) }
             }
             Text(stringResource(R.string.services), style = MaterialTheme.typography.labelLarge)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -425,7 +433,7 @@ fun BookingRequestScreen(nav: NavHostController, sitterId: String) {
             }
             Text(stringResource(R.string.which_pets), style = MaterialTheme.typography.labelLarge)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AnimalType.entries.filter { it.key in s.petTypes }.forEach { t -> FilterChip(t.key in pets, { pets = pets.toggle(t.key) }, label = { Text(t.emoji + " " + stringResource(t.label)) }) }
+                AnimalType.entries.filter { it.key in s.petTypes }.forEach { t -> FilterChip(t.key in pets, { pets = pets.toggle(t.key) }, label = { IconLabel(t.icon, stringResource(t.label)) }) }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.how_many_pets), Modifier.weight(1f))
@@ -483,13 +491,13 @@ fun BookingsScreen(nav: NavHostController, startAsSitter: Boolean = false) {
             }
             LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 when {
-                    list == null -> items(3) { SkeletonRow() }
+                    list == null -> items(3, contentType = { "loading" }) { SkeletonRow() }
                     list.isEmpty() -> item {
                         EmptyState(Icons.Outlined.EventBusy, stringResource(if (tab == BookingTab.MINE) R.string.no_bookings_owner else R.string.no_bookings_sitter)) {
                             if (tab == BookingTab.MINE) Button(onClick = { nav.navigate(Routes.SITTERS) }) { Text(stringResource(R.string.find_sitter)) }
                         }
                     }
-                    else -> items(list, key = { it.id }) { b ->
+                    else -> items(list, key = { it.id }, contentType = { "SittingScreens" }) { b ->
                         BookingCard(
                             b, asSitter = tab == BookingTab.SITTING, modifier = Modifier.animateItem(),
                             onStatus = { st -> runner.run(R.string.updated) { container.sitting.setStatus(b, st, me ?: return@run) } },
@@ -507,15 +515,15 @@ fun BookingsScreen(nav: NavHostController, startAsSitter: Boolean = false) {
 @Composable
 private fun BookingCard(b: Booking, asSitter: Boolean, modifier: Modifier, onStatus: (BookingStatus) -> Unit, onMessage: () -> Unit, onReview: () -> Unit) {
     val status = labeledFrom(b.status, BookingStatus.REQUESTED)
-    Card(modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceContainerLow)) {
+    Card(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("@" + if (asSitter) b.ownerName else b.sitterName, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text("@" + (if (asSitter) b.ownerName else b.sitterName).ifBlank {stringResource(R.string.deleted_member)}, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 StatusPill(stringResource(status.label), Color(status.color))
             }
             Text(stringResource(R.string.date_range, dateOnly(b.startAt), dateOnly(b.endAt)), style = MaterialTheme.typography.bodyMedium)
             Text(
-                b.petTypes.joinToString(" ") { labeledFrom(it, AnimalType.OTHER).emoji } + "  ×" + b.petCount,
+                animalNames(b.petTypes) + "  ×" + b.petCount,
                 style = MaterialTheme.typography.bodyMedium,
             )
             if (b.notes.isNotBlank()) Text(b.notes, style = MaterialTheme.typography.bodySmall)

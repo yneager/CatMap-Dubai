@@ -33,6 +33,7 @@ import com.catmap.dubai.ui.components.LocalContainer
 import com.catmap.dubai.ui.components.LocalIsDark
 import com.catmap.dubai.ui.components.LocalSnackbar
 import com.catmap.dubai.ui.navigation.AppNavHost
+import com.catmap.dubai.util.PostLinks
 import com.catmap.dubai.ui.theme.CatMapTheme
 import com.catmap.dubai.ui.theme.isDark
 
@@ -45,7 +46,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         // Only a fresh launch reads the tapped notification. On rotation or a language change the activity is
         // re-created with the same intent, and reading it again would open that screen a second time.
-        if (savedInstanceState == null) pendingRoute.value = intent?.getStringExtra(SystemNotifications.EXTRA_ROUTE)
+        pendingRoute.value = savedInstanceState?.getString("pending_route") ?: routeFrom(intent)
         val container = (application as CatMapApp).container
 
         setContent {
@@ -81,8 +82,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        intent.getStringExtra(SystemNotifications.EXTRA_ROUTE)?.let { pendingRoute.value = it }
+        setIntent(intent)
+        routeFrom(intent)?.let { pendingRoute.value = it }
     }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("pending_route", pendingRoute.value)
+        super.onSaveInstanceState(outState)
+    }
+
+    private fun routeFrom(intent: Intent?): String? =
+        PostLinks.parse(intent?.dataString)?.let { "post/$it" } ?: intent?.getStringExtra(SystemNotifications.EXTRA_ROUTE)
 }
 
 @androidx.compose.runtime.Composable

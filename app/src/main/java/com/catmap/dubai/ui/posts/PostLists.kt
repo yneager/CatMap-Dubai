@@ -1,5 +1,8 @@
 package com.catmap.dubai.ui.posts
 
+import com.catmap.dubai.ui.icons.CatMapIcon
+import com.catmap.dubai.ui.icons.CatMapIcons
+import com.catmap.dubai.ui.icons.IconLabel
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -79,7 +82,7 @@ import com.catmap.dubai.ui.navigation.Routes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private data class ChooserItem(val emoji: String, val title: Int, val subtitle: Int, val color: Long, val route: String)
+private data class ChooserItem(val icon: Int, val title: Int, val subtitle: Int, val color: Long, val route: String)
 
 /** The sheet behind the "+" button: every way to post, in one tap. Tiles pop in one after another. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -87,11 +90,11 @@ private data class ChooserItem(val emoji: String, val title: Int, val subtitle: 
 fun PostChooserSheet(nav: NavHostController, onDismiss: () -> Unit) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
-    val main = PostCategory.entries.map { c -> ChooserItem(categoryEmoji(c), c.label, categoryHint(c), c.color, Routes.newPost(c.key)) }
+    val main = PostCategory.entries.map { c -> ChooserItem(categoryIcon(c), c.label, categoryHint(c), c.color, Routes.newPost(c.key)) }
     val community = listOf(
-        ChooserItem("📸", R.string.chooser_sighting, R.string.chooser_sighting_hint, 0xFFA9531A, Routes.newSighting()),
-        ChooserItem("🚑", R.string.report_emergency, R.string.chooser_rescue_hint, 0xFFC62828, Routes.newRescue()),
-        ChooserItem("🏠", R.string.chooser_sitter, R.string.chooser_sitter_hint, 0xFF5E35B1, Routes.SITTER_EDIT),
+        ChooserItem(CatMapIcons.CAMERA, R.string.chooser_sighting, R.string.chooser_sighting_hint, 0xFFA9531A, Routes.newSighting()),
+        ChooserItem(CatMapIcons.RESCUE, R.string.report_emergency, R.string.chooser_rescue_hint, 0xFFC62828, Routes.newRescue()),
+        ChooserItem(CatMapIcons.SITTER, R.string.chooser_sitter, R.string.chooser_sitter_hint, 0xFF5E35B1, Routes.SITTER_EDIT),
     )
     fun open(route: String) {
         scope.launch {
@@ -111,7 +114,7 @@ fun PostChooserSheet(nav: NavHostController, onDismiss: () -> Unit) {
                         PopIn(row * 2 + col, Modifier.weight(1f)) {
                             ChoiceTile(
                                 selected = false, title = stringResource(item.title), subtitle = stringResource(item.subtitle),
-                                emoji = item.emoji, color = Color(item.color),
+                                icon = item.icon, color = Color(item.color),
                             ) { open(item.route) }
                         }
                     }
@@ -159,13 +162,13 @@ fun MyPostsScreen(nav: NavHostController) {
             }
             LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 when {
-                    shown == null -> items(2) { SkeletonCard() }
+                    shown == null -> items(2, contentType = { "loading" }) { SkeletonCard() }
                     shown.isEmpty() -> item {
                         EmptyState(Icons.Outlined.PostAdd, stringResource(R.string.no_my_posts)) {
                             Button(onClick = { nav.navigate(Routes.newPost()) }) { Text(stringResource(R.string.post_new)) }
                         }
                     }
-                    else -> items(shown, key = { it.id }) { p ->
+                    else -> items(shown, key = { it.id }, contentType = { "PostLists" }) { p ->
                         PostCard(
                             p, p.id in favorites,
                             onFavorite = { runner.run { container.favorites.set(uid, p.id, p.id !in favorites) } },
@@ -185,7 +188,7 @@ fun FavoritesScreen(nav: NavHostController) {
     val runner = rememberRunner()
     val uid = container.session.uid ?: return
     val saved by remember(uid) { container.favorites.favorites(uid) }.collectAsStateWithLifecycle(null)
-    val posts by remember { container.posts.feed() }.collectAsStateWithLifecycle(null)
+    val posts by remember { container.communityFeed }.collectAsStateWithLifecycle(null)
     val ids = saved?.map { it.postId }.orEmpty()
     // Saved posts are matched against the live feed; ones that were removed simply drop out.
     val shown = if (saved == null || posts == null) null else ids.mapNotNull { id -> posts!!.firstOrNull { it.id == id } }
@@ -200,7 +203,7 @@ fun FavoritesScreen(nav: NavHostController) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(shown, key = { it.id }) { p ->
+                items(shown, key = { it.id }, contentType = { "PostLists" }) { p ->
                     PostGridCard(
                         p, saved = true,
                         onFavorite = { runner.run { container.favorites.set(uid, p.id, false) } },

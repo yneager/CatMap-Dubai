@@ -42,6 +42,7 @@ import kotlinx.coroutines.sync.withLock
 object NotificationText {
     fun category(type: String): NotifCategory? = when (type) {
         NotifType.FOLLOWED_CAT -> NotifCategory.FOLLOWED
+        NotifType.STALE_POST -> NotifCategory.POST_UPDATES
         NotifType.RESCUE_UPDATE -> NotifCategory.RESCUE
         NotifType.RESCUE_NEW_VOLUNTEER, NotifType.RESCUE_NEW_MOD -> NotifCategory.VOLUNTEER
         NotifType.ACHIEVEMENT -> NotifCategory.ACHIEVEMENTS
@@ -59,6 +60,7 @@ object NotificationText {
         fun s(id: Int, vararg args: Any) = context.getString(id, *args)
         fun area() = Dubai.nameOf(p["area"])
         return when (n.type) {
+            NotifType.STALE_POST -> s(R.string.stale_post_title) to s(R.string.stale_post_body, p["name"].orEmpty())
             NotifType.FOLLOWED_CAT -> s(R.string.n_followed_title, p["cat"] ?: "") to
                 if (p["area"] == "medical") s(R.string.n_followed_medical_body, p["user"] ?: "", p["cat"] ?: "")
                 else s(R.string.n_followed_body, p["user"] ?: "", p["cat"] ?: "", area())
@@ -70,7 +72,7 @@ object NotificationText {
                 s(R.string.n_rescue_new_body, s(labeledFrom(p["type"], RescueType.OTHER).label), area())
             NotifType.ACHIEVEMENT -> {
                 val badge = Badge.fromKey(p["badge"] ?: "")
-                s(R.string.n_achievement_title) to s(R.string.n_achievement_body, badge?.let { "${it.emoji} ${s(it.title)}" } ?: "")
+                s(R.string.n_achievement_title) to s(R.string.n_achievement_body, badge?.let { s(it.title) } ?: "")
             }
             NotifType.MODERATION -> s(R.string.n_moderation_title) to moderationBody(context, p)
             NotifType.VOLUNTEER_DECISION -> s(R.string.n_volunteer_title) to
@@ -161,6 +163,8 @@ object SystemNotifications {
 
     fun post(context: Context, n: AppNotification, category: NotifCategory) {
         if (!canPost(context)) return
+        // Delivery may race lazy initialization on a fresh process.
+        createChannels(context)
         val (title, body) = NotificationText.format(context, n)
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -190,10 +194,12 @@ object SystemNotifications {
         val settings = container.settings.current()
         val delivered = container.settings.deliveredNotifications(uid)
         val fresh = NotificationDelivery.fresh(notifications, delivered)
+        val time = java.time.LocalTime.now()
+        val quiet = settings.quietHoursEnabled && QuietHours.contains(time.hour*60+time.minute,settings.quietStart,settings.quietEnd)
         if (container.authRepo.currentUid != uid) return@withLock
         fresh.forEach { n ->
             val category = NotificationText.category(n.type) ?: return@forEach
-            if (settings.allows(category)) post(container.appContext, n, category)
+            if (!quiet && settings.allows(category)) post(container.appContext, n, category)
         }
         container.settings.setDeliveredNotifications(uid, NotificationDelivery.checkpoint(notifications, delivered))
     }

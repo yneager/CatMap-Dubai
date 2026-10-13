@@ -1,5 +1,8 @@
 package com.catmap.dubai.ui.map
 
+import com.catmap.dubai.ui.icons.CatMapIcon
+import com.catmap.dubai.ui.icons.CatMapIcons
+import com.catmap.dubai.ui.icons.IconLabel
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -79,6 +82,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.catmap.dubai.R
 import com.catmap.dubai.data.AppSettings
+import com.catmap.dubai.data.distanceKm
+import androidx.compose.ui.layout.onSizeChanged
 import com.catmap.dubai.data.Dubai
 import com.catmap.dubai.data.FeedFilters
 import com.catmap.dubai.data.MapLayer
@@ -108,7 +113,7 @@ import com.catmap.dubai.ui.components.relativeTime
 import com.catmap.dubai.ui.components.rememberDistanceKm
 import com.catmap.dubai.ui.components.rememberRunner
 import com.catmap.dubai.ui.explore.FilterSheet
-import com.catmap.dubai.ui.explore.emoji
+import com.catmap.dubai.ui.explore.icon
 import com.catmap.dubai.ui.explore.label
 import com.catmap.dubai.ui.explore.matches
 import com.catmap.dubai.ui.explore.showsCommunityCats
@@ -139,7 +144,7 @@ fun MapScreen(nav: NavHostController) {
     val filters = settings.filters
     val uid = container.session.uid
 
-    val posts by remember { container.posts.feed() }.collectAsStateWithLifecycle(emptyList())
+    val posts by remember { container.communityFeed }.collectAsStateWithLifecycle(emptyList())
     val cats by remember { container.cats.allCats() }.collectAsStateWithLifecycle(emptyList())
     val stations by remember { container.stations.stations() }.collectAsStateWithLifecycle(emptyList())
     val sitters by remember(filters.showsSitters()) {
@@ -155,6 +160,8 @@ fun MapScreen(nav: NavHostController) {
     var query by rememberSaveable { mutableStateOf("") }
     var searching by rememberSaveable { mutableStateOf(false) }
     var showFilters by remember { mutableStateOf(false) }
+    var listMode by rememberSaveable { mutableStateOf(false) }
+    var headerHeight by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val controller = remember { MapController() }
     var locationOn by remember { mutableStateOf(container.location.hasPermission()) }
 
@@ -164,6 +171,7 @@ fun MapScreen(nav: NavHostController) {
     val focus by MapFocus.request.collectAsStateWithLifecycle()
     LaunchedEffect(focus, posts) {
         val f = focus ?: return@LaunchedEffect
+        listMode = false
         while (controller.map == null) delay(50)
         controller.flyTo(f.lat, f.lng, f.zoom)
         val id = f.postId
@@ -216,6 +224,33 @@ fun MapScreen(nav: NavHostController) {
     }
 
     Box(Modifier.fillMaxSize()) {
+        if (listMode) {
+            val referenceLat=fix?.lat ?: MapMemory.lat
+            val referenceLng=fix?.lng ?: MapMemory.lng
+            val ordered = remember(features,referenceLat,referenceLng) { features.sortedWith(compareBy<MapFeature> { point -> distanceKm(referenceLat,referenceLng,point.lat,point.lng) }.thenBy { it.kind.name }.thenBy { it.id }) }
+            val top=with(androidx.compose.ui.platform.LocalDensity.current) {headerHeight.toDp()}+8.dp
+            LazyColumn(Modifier.fillMaxSize().padding(top=top), contentPadding = PaddingValues(start=16.dp,end=16.dp,bottom=32.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if(ordered.isEmpty()) item { com.catmap.dubai.ui.components.EmptyState(com.catmap.dubai.ui.icons.catMapVector(CatMapIcons.PAW),stringResource(R.string.no_posts_filters)) }
+                items(ordered,key={ "${it.kind}:${it.id}" },contentType={it.kind}) { point ->
+                    val selectedPost=shownPosts.firstOrNull {it.id==point.id}
+                    val title = when(point.kind) {
+                        PointKind.POST -> selectedPost?.let {com.catmap.dubai.ui.components.postTitle(it)}.orEmpty()
+                        PointKind.CAT -> shownCats.firstOrNull { it.id==point.id }?.name.orEmpty()
+                        PointKind.SITTER -> shownSitters.firstOrNull { it.uid==point.id }?.name.orEmpty()
+                        PointKind.STATION -> stations.firstOrNull { it.id==point.id }?.name.orEmpty()
+                        PointKind.RESCUE -> stringResource(R.string.tab_rescue)
+                    }
+                    androidx.compose.material3.OutlinedButton(onClick={ nav.navigate(when(point.kind) {
+                        PointKind.POST -> Routes.post(point.id); PointKind.CAT -> Routes.cat(point.id)
+                        PointKind.SITTER -> Routes.sitter(point.id); PointKind.STATION -> Routes.station(point.id); PointKind.RESCUE -> Routes.rescue(point.id)
+                    }) },modifier=Modifier.fillMaxWidth()) {
+                        CatMapIcon(when(point.kind) { PointKind.POST -> CatMapIcons.animal(labeledFrom(selectedPost?.animalType,com.catmap.dubai.data.model.AnimalType.OTHER)); PointKind.CAT -> CatMapIcons.CAT; PointKind.SITTER -> CatMapIcons.SITTER; PointKind.STATION -> CatMapIcons.STATION; PointKind.RESCUE -> CatMapIcons.RESCUE })
+                        Text(title,Modifier.weight(1f).padding(start=8.dp))
+                        Text(com.catmap.dubai.ui.components.distanceText(distanceKm(referenceLat,referenceLng,point.lat,point.lng)))
+                    }
+                }
+            }
+        } else {
         CommunityMap(
             Modifier.fillMaxSize(),
             features = features,
@@ -238,9 +273,10 @@ fun MapScreen(nav: NavHostController) {
             },
             onMapClick = { selection = null; searching = false },
         )
+        }
 
         // ---- Search, chips ----
-        Column(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().onSizeChanged {headerHeight=it.height}.statusBarsPadding().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Surface(
                 Modifier.padding(horizontal = 12.dp),
                 shape = RoundedCornerShape(28.dp), shadowElevation = 6.dp, tonalElevation = 2.dp,
@@ -279,9 +315,14 @@ fun MapScreen(nav: NavHostController) {
                 })
             }
             LayerChips(filters, ::setFilters, onMore = { showFilters = true })
+            androidx.compose.material3.TextButton(onClick = { listMode = !listMode },modifier=Modifier.padding(horizontal=16.dp)) {
+                Text(stringResource(if(listMode) R.string.show_map_view else R.string.show_list_view))
+            }
+            if(listMode && fix==null) Text(stringResource(R.string.distance_from_map_center),Modifier.padding(horizontal=16.dp),style=MaterialTheme.typography.labelSmall)
         }
 
         // ---- Right-hand controls ----
+        if (!listMode) {
         Column(
             Modifier.align(Alignment.CenterEnd).padding(end = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -342,6 +383,7 @@ fun MapScreen(nav: NavHostController) {
                 }
             }
         }
+        }
     }
 
     if (showFilters) {
@@ -367,9 +409,9 @@ private fun LayerChips(filters: FeedFilters, onChange: (FeedFilters) -> Unit, on
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MapChip(selected = filters.layers.isEmpty() && filters.animalTypes.isEmpty(), text = "🐾  " + stringResource(R.string.all_animals)) { onChange(filters.copy(layers = emptySet(), animalTypes = emptySet())) }
+        MapChip(selected = filters.layers.isEmpty() && filters.animalTypes.isEmpty(), text = stringResource(R.string.all_animals), artwork = CatMapIcons.PAW) { onChange(filters.copy(layers = emptySet(), animalTypes = emptySet())) }
         MapLayer.entries.forEach { layer ->
-            MapChip(layer in filters.layers, layer.emoji + "  " + stringResource(layer.label)) { onChange(filters.copy(layers = filters.layers.toggle(layer))) }
+            MapChip(layer in filters.layers, stringResource(layer.label), artwork = CatMapIcons.layer(layer)) { onChange(filters.copy(layers = filters.layers.toggle(layer))) }
         }
         val extra = filters.extraCount
         MapChip(extra > 0, if (extra > 0) stringResource(R.string.filters_n, extra) else stringResource(R.string.filters), icon = true) { onMore() }
@@ -380,12 +422,12 @@ private fun LayerChips(filters: FeedFilters, onChange: (FeedFilters) -> Unit, on
 }
 
 @Composable
-private fun MapChip(selected: Boolean, text: String, icon: Boolean = false, onClick: () -> Unit) {
+private fun MapChip(selected: Boolean, text: String, icon: Boolean = false, artwork: Int? = null, onClick: () -> Unit) {
     FilterChip(
         selected = selected,
         onClick = onClick,
         label = { Text(text, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium) },
-        leadingIcon = if (icon) ({ Icon(Icons.Default.Tune, null, Modifier.size(FilterChipDefaults.IconSize)) }) else null,
+        leadingIcon = if (icon) ({ Icon(Icons.Default.Tune, null, Modifier.size(FilterChipDefaults.IconSize)) }) else artwork?.let { id -> { CatMapIcon(id) } },
         shape = RoundedCornerShape(50),
         colors = FilterChipDefaults.filterChipColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -403,7 +445,7 @@ private fun MapModeToggle(mode: MapMode, onChange: (MapMode) -> Unit) {
     val offset by animateDpAsState(if (mode == MapMode.CLASSIC) 0.dp else 44.dp, spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "mode")
     Surface(shape = RoundedCornerShape(26.dp), shadowElevation = 6.dp, color = MaterialTheme.colorScheme.surface) {
         Box(Modifier.padding(4.dp)) {
-            Box(Modifier.offset(y = offset).size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+            Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(0, offset.roundToPx()) }.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
             Column {
                 ModeIcon(Icons.Outlined.Map, stringResource(R.string.map_classic), mode == MapMode.CLASSIC) { onChange(MapMode.CLASSIC) }
                 ModeIcon(Icons.Outlined.AutoAwesome, stringResource(R.string.map_modern), mode == MapMode.MODERN) { onChange(MapMode.MODERN) }
@@ -444,16 +486,16 @@ private fun SearchResults(query: String, posts: List<Post>, onArea: (Double, Dou
     }
     Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(6.dp)) {
         LazyColumn(Modifier.heightIn(max = 320.dp), contentPadding = PaddingValues(vertical = 6.dp)) {
-            items(areas, key = { "a" + it.key }) { hood ->
+            items(areas, key = { "a" + it.key }, contentType = { "MapScreen" }) { hood ->
                 Row(
                     Modifier.fillMaxWidth().clickable { onArea(hood.lat, hood.lng) }.padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("📍", Modifier.width(28.dp))
+                    CatMapIcon(CatMapIcons.PIN, Modifier.width(28.dp))
                     Text(hood.displayName(), style = MaterialTheme.typography.bodyLarge)
                 }
             }
-            items(matching, key = { "p" + it.id }) { p ->
+            items(matching, key = { "p" + it.id }, contentType = { "MapScreen" }) { p ->
                 Row(
                     Modifier.fillMaxWidth().clickable { onPost(p) }.padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -556,7 +598,7 @@ private fun SitterPreview(sitter: SitterProfile, onOpen: () -> Unit, onClose: ()
                 RemoteImage(sitter.photoId, Modifier.size(72.dp).clip(CircleShape))
             } else {
                 Box(Modifier.size(72.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiaryContainer), contentAlignment = Alignment.Center) {
-                    Text("🏠", style = MaterialTheme.typography.headlineMedium)
+                    CatMapIcon(CatMapIcons.SITTER)
                 }
             }
             Spacer(Modifier.width(12.dp))

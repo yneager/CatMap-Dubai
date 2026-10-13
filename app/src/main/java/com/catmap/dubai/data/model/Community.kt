@@ -7,12 +7,12 @@ import com.google.firebase.firestore.DocumentId
 // Community features added in 2.0: animal posts (lost, found, adoption…), pet sitting, chat.
 // Same conventions as Models.kt: every property is a `var` with a default, enums are stored by key.
 
-enum class AnimalType(@StringRes override val label: Int, val emoji: String) : Labeled {
-    CAT(R.string.animal_cat, "🐱"),
-    DOG(R.string.animal_dog, "🐶"),
-    BIRD(R.string.animal_bird, "🐦"),
-    RABBIT(R.string.animal_rabbit, "🐰"),
-    OTHER(R.string.animal_other, "🐾");
+enum class AnimalType(@StringRes override val label: Int, @androidx.annotation.DrawableRes val icon: Int) : Labeled {
+    CAT(R.string.animal_cat, R.drawable.ic_cm_cat),
+    DOG(R.string.animal_dog, R.drawable.ic_cm_dog),
+    BIRD(R.string.animal_bird, R.drawable.ic_cm_bird),
+    RABBIT(R.string.animal_rabbit, R.drawable.ic_cm_rabbit),
+    OTHER(R.string.animal_other, R.drawable.ic_cm_paw);
 
     override val key: String get() = name.lowercase()
 }
@@ -157,6 +157,9 @@ data class Post(
     var createdAt: Long = 0,
     var updatedAt: Long = 0,
     var resolvedAt: Long = 0,
+    var lastActivityAt: Long = 0,
+    var fingerprint: List<Double> = emptyList(),
+    var microchip: String = "unknown",
 )
 
 /** A sighting or progress note added to a post by anyone (posts/{id}/updates). */
@@ -210,6 +213,7 @@ data class SitterProfile(
     var neighborhood: String = "",
     var active: Boolean = true,
     var ratingSum: Long = 0,
+    var verified: Boolean = false,
     var ratingCount: Long = 0,
     var lastReviewId: String = "",
     var createdAt: Long = 0,

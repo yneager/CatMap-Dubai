@@ -1,5 +1,6 @@
 package com.catmap.dubai.ui.rescue
 
+import androidx.core.net.toUri
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -152,7 +153,7 @@ fun RescueListScreen(nav: NavHostController, moderationView: Boolean = false) {
             if (!moderationView) {
                 ExtendedFloatingActionButton(
                     onClick = { nav.navigate(Routes.newRescue()) },
-                    icon = { Icon(Icons.Outlined.HealthAndSafety, null) },
+                    icon = { Icon(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.RESCUE), null) },
                     text = { Text(stringResource(R.string.report_emergency)) },
                     containerColor = MaterialTheme.colorScheme.errorContainer,
                     contentColor = MaterialTheme.colorScheme.onErrorContainer,
@@ -174,7 +175,7 @@ fun RescueListScreen(nav: NavHostController, moderationView: Boolean = false) {
                     item {
                         androidx.compose.material3.FilterChip(statusFilter == null, { statusFilter = null }, label = { Text(stringResource(R.string.all)) })
                     }
-                    items(RescueStatus.entries) { st ->
+                    items(RescueStatus.entries, key = { it.key }, contentType = { "status-chip" }) { st ->
                         androidx.compose.material3.FilterChip(statusFilter == st.key, { statusFilter = st.key }, label = { Text(stringResource(st.label)) })
                     }
                 }
@@ -195,11 +196,11 @@ fun RescueListScreen(nav: NavHostController, moderationView: Boolean = false) {
                     shown == null -> item { LoadingBox(Modifier.fillMaxWidth().height(160.dp)) }
                     shown.isEmpty() -> item {
                         EmptyState(
-                            Icons.Outlined.HealthAndSafety,
+                            com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.RESCUE),
                             stringResource(if (tab == RescueTab.BOARD) R.string.no_board_reports else R.string.no_rescue_reports),
                         )
                     }
-                    else -> items(shown, key = { it.id }) { r -> RescueCard(r) { nav.navigate(Routes.rescue(r.id)) } }
+                    else -> items(shown, key = { it.id }, contentType = { "RescueScreens" }) { r -> RescueCard(r) { nav.navigate(Routes.rescue(r.id)) } }
                 }
             }
         }
@@ -217,7 +218,7 @@ fun RescueCard(r: RescueReport, onClick: () -> Unit) {
                 RemoteImage(r.photoIds.first(), Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)))
             } else {
                 Box(Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.errorContainer), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.HealthAndSafety, null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                    Icon(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.RESCUE), null, tint = MaterialTheme.colorScheme.onErrorContainer)
                 }
             }
             Spacer(Modifier.width(12.dp))
@@ -310,7 +311,7 @@ fun NewRescueScreen(nav: NavHostController, catId: String?) {
                 }
             }
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(photos.toList()) { p ->
+                items(photos.toList(), key = { System.identityHashCode(it) }, contentType = { "local-photo" }) { p ->
                     Box {
                         LocalBitmap(p.analysis, Modifier.size(100.dp).clip(RoundedCornerShape(10.dp)))
                         FilledIconButton(onClick = { photos.remove(p) }, modifier = Modifier.align(Alignment.TopEnd).size(26.dp)) {
@@ -399,7 +400,7 @@ fun RescueDetailScreen(nav: NavHostController, reportId: String) {
     ) { padding ->
         val r = report
         if (reportState != null && r == null) {
-            EmptyState(Icons.Outlined.HealthAndSafety, stringResource(R.string.rescue_not_found), Modifier.padding(padding))
+            EmptyState(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.RESCUE), stringResource(R.string.rescue_not_found), Modifier.padding(padding))
             return@Scaffold
         }
         if (r == null || me == null) {
@@ -424,7 +425,7 @@ fun RescueDetailScreen(nav: NavHostController, reportId: String) {
             StatusStepper(status)
             if (r.photoIds.isNotEmpty()) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(r.photoIds) { id ->
+                    items(r.photoIds, key = { it }, contentType = { "photo" }) { id ->
                         RemoteImage(id, Modifier.size(150.dp).clip(RoundedCornerShape(12.dp)).clickable { nav.navigate(Routes.photo(id)) }, thumb = false)
                     }
                 }
@@ -441,7 +442,7 @@ fun RescueDetailScreen(nav: NavHostController, reportId: String) {
             MiniMap(r.lat, r.lng, PointKind.RESCUE, LocalIsDark.current)
             if (isVolunteer) {
                 OutlinedButton(onClick = {
-                    val uri = Uri.parse("geo:${r.lat},${r.lng}?q=${r.lat},${r.lng}")
+                    val uri = "geo:${r.lat},${r.lng}?q=${r.lat},${r.lng}".toUri()
                     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
                 }) {
                     Icon(Icons.Default.Directions, null); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.directions))

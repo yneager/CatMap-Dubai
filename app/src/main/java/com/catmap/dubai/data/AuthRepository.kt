@@ -20,6 +20,8 @@ class AuthRepository(
     private val notifications: NotificationRepository,
     private val images: ImageRepository,
     private val settings: SettingsRepository,
+    private val drafts: PostDraftStore,
+    private val dataExport: UserDataExportRepository,
 ) {
     private val _user = MutableStateFlow(auth.currentUser)
     val user: StateFlow<FirebaseUser?> = _user.asStateFlow()
@@ -128,6 +130,7 @@ class AuthRepository(
         user.reauthenticate(credential).await()
         val uid = user.uid
         val savedProfile = users.ref(uid).get().await().toObject(UserProfile::class.java) ?: profile
+        CommunityAccountCleanup(db).clean(uid)
 
         // Each transaction includes the source deletion and its aggregate change. A retry after
         // partial cleanup sees a missing source and cannot decrement the count a second time.
@@ -166,7 +169,8 @@ class AuthRepository(
             }.await()
         }
 
-        val photos = db.collection(Col.IMAGES).whereEqualTo("ownerId", uid).get().await().documents
+        val photos = mutableListOf<DocumentReference>()
+        db.collection(Col.IMAGES).whereEqualTo("ownerId", uid).pages().collect {page -> photos.addAll(page.map {it.reference})}
         val photoIds = photos.map { it.id }.filterNot { it.endsWith("_t") }
         // Gallery and cover references must be detached before deleting the actual JPEGs.
         for (chunk in photoIds.chunked(10)) {
@@ -188,7 +192,7 @@ class AuthRepository(
 
         val refs = buildList {
             addAll(db.collection(Col.PRIVATE_LOCATIONS).whereEqualTo("ownerId", uid).get().await().documents.map { it.reference })
-            addAll(photos.map { it.reference })
+            addAll(photos)
             for ((collection, ownerField) in listOf(Col.RESCUES to "reporterId", Col.MAINTENANCE to "userId", Col.REPORTS to "reporterId", Col.MERGES to "requestedBy")) {
                 addAll(db.collection(collection).whereEqualTo(ownerField, uid).get().await().documents.map { it.reference })
             }
@@ -206,6 +210,8 @@ class AuthRepository(
         // Local cache trouble must not turn a completed account deletion into a reported failure.
         runCatching {
             settings.clearDeliveredNotifications(uid)
+            drafts.clear(uid)
+            dataExport.clear(uid)
             images.clearCache()
         }.onFailure { android.util.Log.w("CatMap", "Local cleanup after account deletion failed", it) }
     }

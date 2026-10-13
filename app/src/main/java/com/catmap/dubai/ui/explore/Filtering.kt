@@ -1,5 +1,8 @@
 package com.catmap.dubai.ui.explore
 
+import com.catmap.dubai.ui.icons.CatMapIcon
+import com.catmap.dubai.ui.icons.CatMapIcons
+import com.catmap.dubai.ui.icons.IconLabel
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -46,16 +49,7 @@ val MapLayer.label: Int
         MapLayer.SITTING -> R.string.layer_sitting
     }
 
-val MapLayer.emoji: String
-    get() = when (this) {
-        MapLayer.LOST -> "🔴"
-        MapLayer.FOUND -> "🟢"
-        MapLayer.SPOTTED -> "👀"
-        MapLayer.NEEDS_HELP -> "🆘"
-        MapLayer.STREET_CATS -> "🐈"
-        MapLayer.ADOPTION -> "💜"
-        MapLayer.SITTING -> "🏠"
-    }
+val MapLayer.icon: Int get() = CatMapIcons.layer(this)
 
 private val MapLayer.category: PostCategory?
     get() = when (this) {
@@ -70,6 +64,8 @@ private val MapLayer.category: PostCategory?
 
 /** Whether a post passes the chip and advanced filters. Closed cases only show in lists, never on the map. */
 fun FeedFilters.matches(post: Post, fix: Fix?, now: Long = System.currentTimeMillis(), includeClosed: Boolean = false): Boolean {
+    if (!includeOlder && com.catmap.dubai.data.PostStaleness.hiddenByDefault(post, now)) return false
+    if(microchip!=null && microchip!=post.microchip) return false
     if (!includeClosed && post.status != PostStatus.OPEN.key) return false
     if (layers.isNotEmpty()) {
         val categories = layers.mapNotNull { it.category?.key }
@@ -104,7 +100,7 @@ fun FilterSheet(
     extra: (@Composable () -> Unit)? = null,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).navigationBarsPadding()) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.filters), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 TextButton(onClick = { onChange(FeedFilters()) }) { Text(stringResource(R.string.clear_filters)) }
@@ -115,7 +111,7 @@ fun FilterSheet(
                     FilterChip(
                         layer in filters.layers,
                         { onChange(filters.copy(layers = filters.layers.toggle(layer))) },
-                        label = { Text(layer.emoji + "  " + stringResource(layer.label)) },
+                        label = { IconLabel(layer.icon, stringResource(layer.label)) },
                     )
                 }
             }
@@ -125,7 +121,7 @@ fun FilterSheet(
                     FilterChip(
                         type.key in filters.animalTypes,
                         { onChange(filters.copy(animalTypes = filters.animalTypes.toggle(type.key))) },
-                        label = { Text(type.emoji + "  " + stringResource(type.label)) },
+                        label = { IconLabel(type.icon, stringResource(type.label)) },
                     )
                 }
             }
@@ -157,6 +153,13 @@ fun FilterSheet(
                 }
             }
             SwitchRow(stringResource(R.string.reward_only), filters.rewardOnly) { onChange(filters.copy(rewardOnly = it)) }
+            SwitchRow(stringResource(R.string.include_older_posts), filters.includeOlder) { onChange(filters.copy(includeOlder = it)) }
+            Text(stringResource(R.string.microchip),style=MaterialTheme.typography.titleSmall)
+            FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                for((key,label) in listOf(null to R.string.all,"yes" to R.string.yes,"no" to R.string.no,"unknown" to R.string.unknown)) {
+                    FilterChip(filters.microchip==key,{onChange(filters.copy(microchip=key))},label={Text(stringResource(label))})
+                }
+            }
             extra?.invoke()
             androidx.compose.foundation.layout.Spacer(Modifier.padding(12.dp))
         }

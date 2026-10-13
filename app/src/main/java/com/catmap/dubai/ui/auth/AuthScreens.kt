@@ -156,6 +156,7 @@ fun LoginScreen(nav: NavHostController) {
         OutlinedButton(onClick = { nav.navigate(Routes.REGISTER) }, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.create_account))
         }
+        TextButton(onClick={nav.navigate(Routes.HELP_DIRECTORY)}) {Text(stringResource(R.string.help_directory))}
     }
 }
 

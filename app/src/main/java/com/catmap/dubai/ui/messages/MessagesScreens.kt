@@ -1,5 +1,8 @@
 package com.catmap.dubai.ui.messages
 
+import com.catmap.dubai.ui.icons.CatMapIcon
+import com.catmap.dubai.ui.icons.CatMapIcons
+import com.catmap.dubai.ui.icons.IconLabel
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -118,9 +121,9 @@ fun MessagesScreen(nav: NavHostController) {
         val list = chats?.filter { it.lastText.isNotBlank() || it.lastSender.isNotBlank() }
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
             when {
-                list == null -> items(5) { SkeletonRow(Modifier.padding(horizontal = 16.dp)) }
+                list == null -> items(5, contentType = { "loading" }) { SkeletonRow(Modifier.padding(horizontal = 16.dp)) }
                 list.isEmpty() -> item { EmptyState(Icons.Outlined.Forum, stringResource(R.string.no_chats)) }
-                else -> items(list, key = { it.id }) { chat ->
+                else -> items(list, key = { it.id }, contentType = { "MessagesScreens" }) { chat ->
                     ChatRow(chat, uid, chat.other(uid) in blocked, Modifier.animateItem()) { nav.navigate(Routes.chat(chat.id)) }
                 }
             }
@@ -238,11 +241,12 @@ fun ChatScreen(nav: NavHostController, chatId: String, sharePostId: String?) {
     Scaffold(
         topBar = {
             Surface(tonalElevation = 2.dp) {
-                Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-                    Avatar(c?.photos?.get(other).orEmpty(), c?.names?.get(other).orEmpty(), size = 40.dp, modifier = Modifier.clickable { if (other.isNotBlank()) nav.navigate(Routes.user(other)) })
-                    Spacer(Modifier.width(10.dp))
-                    Text("@" + c?.names?.get(other).orEmpty(), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f), maxLines = 1)
+                AppTopBar("@"+c?.names?.get(other).orEmpty(),onBack={nav.popBackStack()},titleContent={
+                    Row(verticalAlignment=Alignment.CenterVertically) {
+                        Avatar(c?.photos?.get(other).orEmpty(), c?.names?.get(other).orEmpty(), size = 40.dp, modifier = Modifier.clickable { if (other.isNotBlank()) nav.navigate(Routes.user(other)) })
+                        Text("@"+c?.names?.get(other).orEmpty(),Modifier.padding(start=8.dp),style=MaterialTheme.typography.titleMedium,maxLines=1)
+                    }
+                }) {
                     Box {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.more)) }
                         DropdownMenu(menu, { menu = false }) {
@@ -317,7 +321,7 @@ fun ChatScreen(nav: NavHostController, chatId: String, sharePostId: String?) {
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 val reversed = list.asReversed()
-                items(reversed.size, key = { reversed[it].id }) { i ->
+                items(reversed.size, key = { reversed[it].id }, contentType = { "MessagesScreens" }) { i ->
                     val m = reversed[i]
                     val mine = m.senderId == uid
                     // A time label above the first message of each gap of 15+ minutes.
@@ -375,7 +379,7 @@ private fun Bubble(m: Message, mine: Boolean, onPost: (String) -> Unit, onDelete
                     ) {
                         Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (m.postPhotoId.isNotBlank()) RemoteImage(m.postPhotoId, Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)))
-                            else Text("🐾", style = MaterialTheme.typography.titleLarge)
+                            else CatMapIcon(CatMapIcons.PAW)
                             Spacer(Modifier.width(8.dp))
                             Column {
                                 Text(m.postTitle.ifBlank { stringResource(R.string.view_post) }, style = MaterialTheme.typography.labelLarge, maxLines = 1)

@@ -1,5 +1,8 @@
 package com.catmap.dubai.ui.posts
 
+import com.catmap.dubai.ui.icons.CatMapIcon
+import com.catmap.dubai.ui.icons.CatMapIcons
+import com.catmap.dubai.ui.icons.IconLabel
 import android.Manifest
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
@@ -128,10 +131,19 @@ import java.util.Calendar
 fun PostEditorScreen(nav: NavHostController, postId: String?, presetCategory: String?, presetType: String?) {
     val container = LocalContainer.current
     val vm: PostEditorViewModel = viewModel { PostEditorViewModel(container, postId, presetCategory, presetType) }
+    androidx.compose.runtime.DisposableEffect(vm) {onDispose {vm.saveDraftNow()} }
     val context = LocalContext.current
     val snackbar = LocalSnackbar.current
     val scope = rememberCoroutineScope()
     val me by container.session.profile.collectAsStateWithLifecycle()
+    if (vm.savedDraft != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {},
+            title = { Text(stringResource(R.string.draft_available)) },
+            confirmButton = { TextButton(onClick = { vm.continueDraft() }) { Text(stringResource(R.string.continue_draft)) } },
+            dismissButton = { TextButton(onClick = { vm.discardDraft() }) { Text(stringResource(R.string.discard_draft)) } },
+        )
+    }
     val settings by container.settings.settings.collectAsStateWithLifecycle(AppSettings())
     val published = stringResource(if (postId == null) R.string.post_published else R.string.saved)
 
@@ -157,6 +169,7 @@ fun PostEditorScreen(nav: NavHostController, postId: String?, presetCategory: St
     fun go(to: Int) {
         forward = to > vm.step
         vm.step = to.coerceIn(0, steps.lastIndex)
+        vm.saveDraftNow()
         if (steps[vm.step] == PostStep.REVIEW) vm.checkDuplicates(me)
     }
     BackHandler(enabled = vm.step > 0 && !vm.publishing) { go(vm.step - 1) }
@@ -269,7 +282,7 @@ private fun TypeStep(vm: PostEditorViewModel) {
                     selected = vm.category == c.key,
                     title = stringResource(c.label),
                     subtitle = stringResource(categoryHint(c)),
-                    emoji = categoryEmoji(c),
+                    icon = categoryIcon(c),
                     color = Color(c.color),
                     modifier = Modifier.weight(1f),
                 ) {
@@ -283,20 +296,12 @@ private fun TypeStep(vm: PostEditorViewModel) {
     Text(stringResource(R.string.which_animal), style = MaterialTheme.typography.titleMedium)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AnimalType.entries.forEach { t ->
-            FilterChip(vm.animalType == t.key, { vm.animalType = t.key }, label = { Text(t.emoji + "  " + stringResource(t.label)) })
+            FilterChip(vm.animalType == t.key, { vm.animalType = t.key }, label = { IconLabel(t.icon, stringResource(t.label)) })
         }
     }
 }
 
-fun categoryEmoji(c: PostCategory) = when (c) {
-    PostCategory.LOST -> "🔍"
-    PostCategory.FOUND -> "🤲"
-    PostCategory.SPOTTED -> "👀"
-    PostCategory.NEEDS_HELP -> "🆘"
-    PostCategory.STREET -> "🏙️"
-    PostCategory.ADOPTION -> "💜"
-    PostCategory.OTHER -> "📝"
-}
+fun categoryIcon(c: PostCategory) = CatMapIcons.category(c)
 
 fun categoryHint(c: PostCategory) = when (c) {
     PostCategory.LOST -> R.string.hint_lost
@@ -309,17 +314,17 @@ fun categoryHint(c: PostCategory) = when (c) {
 }
 
 @Composable
-fun ChoiceTile(selected: Boolean, title: String, subtitle: String, emoji: String, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun ChoiceTile(selected: Boolean, title: String, subtitle: String, icon: Int, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val scale by animateFloatAsState(if (selected) 1f else 0.97f, label = "tile")
     Card(
         onClick = onClick,
         modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale },
-        shape = RoundedCornerShape(22.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = if (selected) color.copy(alpha = 0.2f) else color.copy(alpha = 0.08f)),
         border = if (selected) BorderStroke(2.dp, color) else null,
     ) {
         Column(Modifier.padding(14.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(emoji, style = MaterialTheme.typography.headlineMedium)
+            CatMapIcon(icon, Modifier.size(32.dp))
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, minLines = 2, maxLines = 2)
         }
@@ -377,7 +382,7 @@ private fun PhotosStep(vm: PostEditorViewModel) {
         }
     } else {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            itemsIndexed(vm.photos, key = { i, p -> if (p is FormPhoto.Remote) p.id else "local$i${p.hashCode()}" }) { i, p ->
+            itemsIndexed(vm.photos, key = { _, p -> if (p is FormPhoto.Remote) p.id else (p as FormPhoto.Local).draftId }, contentType = { _, _ -> "editor-photo" }) { i, p ->
                 Box(Modifier.size(132.dp).animateItem()) {
                     when (p) {
                         is FormPhoto.Remote -> RemoteImage(p.id, Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp)))
@@ -432,13 +437,18 @@ private fun PhotoAction(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DetailsStep(vm: PostEditorViewModel) {
+    Text(stringResource(R.string.microchip),style=MaterialTheme.typography.titleSmall)
+    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+        for((key,label) in listOf("yes" to R.string.yes,"no" to R.string.no,"unknown" to R.string.unknown)) FilterChip(vm.microchip==key,{vm.microchip=key},label={Text(stringResource(label))})
+    }
+    Text(stringResource(R.string.microchip_privacy),style=MaterialTheme.typography.bodySmall)
     val adoption = vm.categoryEnum == PostCategory.ADOPTION
     Text(stringResource(R.string.tell_us_more), style = MaterialTheme.typography.headlineSmall)
     // Shown here too, because starting from the Post menu skips the first step.
     Text(stringResource(R.string.which_animal), style = MaterialTheme.typography.labelLarge)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AnimalType.entries.forEach { t ->
-            FilterChip(vm.animalType == t.key, { vm.animalType = t.key }, label = { Text(t.emoji + "  " + stringResource(t.label)) })
+            FilterChip(vm.animalType == t.key, { vm.animalType = t.key }, label = { IconLabel(t.icon, stringResource(t.label)) })
         }
     }
     OutlinedTextField(vm.name, { vm.name = it.take(60) }, label = { Text(stringResource(R.string.animal_name_optional)) }, singleLine = true, modifier = Modifier.fillMaxWidth())

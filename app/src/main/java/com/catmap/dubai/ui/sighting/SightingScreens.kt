@@ -119,21 +119,21 @@ fun SightingDetailScreen(nav: NavHostController, sightingId: String) {
         },
     ) { padding ->
         if (s == null) {
-            if (sightingState == null) LoadingBox(Modifier.padding(padding)) else EmptyState(Icons.Outlined.Pets, stringResource(R.string.sighting_deleted), Modifier.padding(padding))
+            if (sightingState == null) LoadingBox(Modifier.padding(padding)) else EmptyState(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.PAW), stringResource(R.string.sighting_deleted), Modifier.padding(padding))
             return@Scaffold
         }
         val status = labeledFrom(s.status, SubmissionStatus.PENDING)
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (s.photoIds.isNotEmpty()) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(s.photoIds) { id ->
+                    items(s.photoIds, key = { it }, contentType = { "photo" }) { id ->
                         RemoteImage(id, Modifier.size(200.dp).clip(RoundedCornerShape(14.dp)).clickable { nav.navigate(Routes.photo(id, s.catId)) }, thumb = false)
                     }
                 }
             }
             Card(onClick = { nav.navigate(Routes.cat(s.catId)) }, modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Pets, null)
+                    Icon(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.PAW), null)
                     Spacer(Modifier.width(10.dp))
                     Text(s.catName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     Text(stringResource(R.string.view_profile), color = MaterialTheme.colorScheme.primary)

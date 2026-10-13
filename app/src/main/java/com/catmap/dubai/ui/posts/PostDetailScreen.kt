@@ -1,5 +1,9 @@
 package com.catmap.dubai.ui.posts
 
+import com.catmap.dubai.ui.icons.CatMapIcon
+import com.catmap.dubai.ui.icons.CatMapIcons
+import com.catmap.dubai.ui.icons.IconLabel
+import com.catmap.dubai.ui.components.AppTopBar
 import android.Manifest
 import android.net.Uri
 import android.widget.MediaController
@@ -180,6 +184,8 @@ private fun PostDetail(nav: NavHostController, post: Post) {
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
     var menu by remember { mutableStateOf(false) }
     val saved = post.id in favorites
+    val matchingFeed by remember { container.communityFeed }.collectAsStateWithLifecycle(emptyList())
+    val possibleMatches = remember(post,matchingFeed) { com.catmap.dubai.ai.PostAppearance.matches(post,matchingFeed) }
 
     Scaffold { padding ->
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + 32.dp)) {
@@ -192,9 +198,7 @@ private fun PostDetail(nav: NavHostController, post: Post) {
                         PostPhoto(post, Modifier.fillMaxSize())
                     }
                     Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent))))
-                    Row(Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RoundIcon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) { nav.popBackStack() }
-                        Spacer(Modifier.weight(1f))
+                    AppTopBar("",onBack={nav.popBackStack()},overlay=true) {
                         RoundIcon(Icons.Default.Share, stringResource(R.string.share)) {
                             scope.launch { Share.sharePost(context, container, post) }
                         }
@@ -227,15 +231,8 @@ private fun PostDetail(nav: NavHostController, post: Post) {
                     shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            CategoryPill(post.category)
-                            if (post.reward > 0) RewardPill(post.reward)
-                            StatusBadge(post)
-                            if (post.hidden) StatusPill(stringResource(R.string.hidden), Color(0xFFC62828))
-                        }
-                        Text(postTitle(post), style = MaterialTheme.typography.headlineMedium)
-                        if (post.name.isNotBlank()) Text(postHeadline(post), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        com.catmap.dubai.ui.components.PostDetailHeader(post)
                         Text(
                             listOfNotNull(
                                 Dubai.nameOf(post.neighborhood).takeIf { it.isNotBlank() },
@@ -246,18 +243,19 @@ private fun PostDetail(nav: NavHostController, post: Post) {
                         )
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             val animal = labeledFrom(post.animalType, AnimalType.OTHER)
-                            InfoChip(animal.emoji, stringResource(animal.label))
-                            labeledFrom(post.sex, CatSex.UNKNOWN).takeIf { it != CatSex.UNKNOWN }?.let { InfoChip(if (it == CatSex.MALE) "♂" else "♀", stringResource(it.label)) }
-                            labeledFrom(post.ageGroup, AgeGroup.UNKNOWN).takeIf { it != AgeGroup.UNKNOWN }?.let { InfoChip("🎂", stringResource(it.label)) }
-                            if (post.color.isNotBlank()) InfoChip("🎨", post.color)
-                            if (post.breed.isNotBlank()) InfoChip("🧬", post.breed)
+                            InfoChip(animal.icon, stringResource(animal.label))
+                            InfoChip(CatMapIcons.MICROCHIP,stringResource(R.string.microchip)+": "+stringResource(when(post.microchip){"yes"->R.string.yes;"no"->R.string.no;else->R.string.unknown}))
+                            labeledFrom(post.sex, CatSex.UNKNOWN).takeIf { it != CatSex.UNKNOWN }?.let { InfoChip(CatMapIcons.SEX, stringResource(it.label)) }
+                            labeledFrom(post.ageGroup, AgeGroup.UNKNOWN).takeIf { it != AgeGroup.UNKNOWN }?.let { InfoChip(CatMapIcons.AGE, stringResource(it.label)) }
+                            if (post.color.isNotBlank()) InfoChip(CatMapIcons.COLOUR, post.color)
+                            if (post.breed.isNotBlank()) InfoChip(CatMapIcons.BREED, post.breed)
                         }
                     }
                 }
             }
 
             item {
-                Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (post.description.isNotBlank()) Text(post.description, style = MaterialTheme.typography.bodyLarge)
                     if (post.features.isNotBlank()) {
                         DetailBlock(stringResource(R.string.identifying_features), post.features)
@@ -276,13 +274,23 @@ private fun PostDetail(nav: NavHostController, post: Post) {
             }
 
             // ---- Adoption details and requests ----
+            if (possibleMatches.isNotEmpty()) item {
+                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SectionHeader(stringResource(R.string.possible_post_matches))
+                    possibleMatches.forEach { match ->
+                        OutlinedButton(onClick = { nav.navigate(Routes.post(match.post.id)) }, modifier = Modifier.fillMaxWidth()) {
+                            Text(postTitle(match.post) + " · " + if(match.photoBased) stringResource(R.string.match_confidence, (match.score*100).toInt()) else stringResource(R.string.metadata_match))
+                        }
+                    }
+                }
+            }
             if (category == PostCategory.ADOPTION) item {
                 AdoptionSection(nav, post, isOwner, myRequest, onRequest = { dialog = "adopt" })
             }
 
             // ---- Where ----
             item {
-                Column(Modifier.padding(horizontal = 20.dp)) {
+                Column(Modifier.padding(horizontal = 16.dp)) {
                     SectionHeader(stringResource(R.string.location))
                     MiniMap(
                         post.lat, post.lng, MarkerIcons.post(post.category, post.animalType), LocalIsDark.current, height = 190.dp,
@@ -311,8 +319,8 @@ private fun PostDetail(nav: NavHostController, post: Post) {
             // ---- Who posted it ----
             item {
                 Card(
-                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
-                    shape = RoundedCornerShape(22.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
+                    shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceContainerLow),
                 ) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -352,7 +360,12 @@ private fun PostDetail(nav: NavHostController, post: Post) {
 
             // ---- Owner tools ----
             if (isOwner || isMod) item {
-                Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (isOwner && com.catmap.dubai.data.PostStaleness.searchPost(post)) {
+                    OutlinedButton(onClick = { runner.run(R.string.saved) { container.posts.stillLooking(post) } }, enabled = !runner.busy, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        Text(stringResource(R.string.still_looking))
+                    }
+                }
+                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SectionHeader(stringResource(if (isOwner) R.string.manage_post else R.string.moderation))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilledTonalButton(onClick = { nav.navigate(Routes.editPost(post.id)) }) {
@@ -396,14 +409,14 @@ private fun PostDetail(nav: NavHostController, post: Post) {
 
             // ---- Sightings and updates ----
             item {
-                Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     SectionHeader(stringResource(R.string.updates_and_sightings), Modifier.weight(1f))
                 }
             }
             item {
                 Button(
                     onClick = { dialog = "update" },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     enabled = post.status == PostStatus.OPEN.key || isOwner,
                 ) {
                     Icon(Icons.Outlined.AddAPhoto, null)
@@ -415,7 +428,7 @@ private fun PostDetail(nav: NavHostController, post: Post) {
             if (list != null && list.isEmpty()) item {
                 Text(stringResource(R.string.no_updates_yet), Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            items(list.orEmpty(), key = { it.id }) { u ->
+            items(list.orEmpty(), key = { it.id }, contentType = { "PostDetailScreen" }) { u ->
                 UpdateRow(u, canDelete = u.byUid == uid || isOwner || isMod, modifier = Modifier.animateItem()) {
                     runner.run(R.string.deleted) { container.posts.deleteUpdate(post, u, container.images) }
                 }
@@ -479,10 +492,10 @@ private fun RoundIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, lab
 }
 
 @Composable
-private fun InfoChip(emoji: String, text: String) {
+private fun InfoChip(icon: Int, text: String) {
     Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(emoji)
+            CatMapIcon(icon)
             Spacer(Modifier.width(6.dp))
             Text(text, style = MaterialTheme.typography.labelLarge)
         }
@@ -500,12 +513,12 @@ private fun DetailBlock(label: String, value: String) {
 @Composable
 private fun UpdateRow(u: PostUpdate, canDelete: Boolean, modifier: Modifier = Modifier, onDelete: () -> Unit) {
     val kind = labeledFrom(u.kind, UpdateKind.PROGRESS)
-    Column(modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+    Column(modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             Box(
                 Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center,
-            ) { Text(if (kind == UpdateKind.SIGHTING) "👀" else if (kind == UpdateKind.FOUND_IT) "🎉" else "📝") }
+            ) { CatMapIcon(if (kind == UpdateKind.SIGHTING) CatMapIcons.SPOTTED else if (kind == UpdateKind.FOUND_IT) CatMapIcons.FOUND else CatMapIcons.NOTE) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(stringResource(kind.label) + " · @" + u.byName, style = MaterialTheme.typography.labelLarge)
@@ -584,7 +597,7 @@ private fun AddUpdateDialog(post: Post, onDismiss: () -> Unit) {
 private fun AdoptionSection(nav: NavHostController, post: Post, isOwner: Boolean, myRequest: com.catmap.dubai.data.model.AdoptionRequest?, onRequest: () -> Unit) {
     val container = LocalContainer.current
     val runner = rememberRunner()
-    Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionHeader(stringResource(R.string.health_info))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatusPill(stringResource(if (post.vaccinated) R.string.vaccinated else R.string.not_vaccinated), if (post.vaccinated) Color(0xFF2E7D32) else Color(0xFF757575))

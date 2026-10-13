@@ -27,6 +27,11 @@ class SittingRepository(
 
     fun sitterFlow(uid: String): Flow<SitterProfile?> = sitters.document(uid).objectFlow()
 
+    suspend fun setVerified(sitter: SitterProfile, verified: Boolean, admin: UserProfile) {
+        sitters.document(sitter.uid).update(mapOf("verified" to verified, "updatedAt" to now())).await()
+        moderation.log(admin, if(verified) "sitter_verified" else "sitter_unverified", "sitter", sitter.uid, sitter.name, "")
+    }
+
     suspend fun saveSitter(me: UserProfile, profile: SitterProfile) {
         val existing = runCatching { sitters.document(me.uid).get().await().toObject(SitterProfile::class.java) }.getOrNull()
         val hood = Dubai.nearest(profile.lat, profile.lng).key

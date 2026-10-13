@@ -1,0 +1,51 @@
+# Arabic translation queue - 13 October 2026
+
+47 new entries in `tools/strings/strings_i.py` carry `# TODO-AR`; both columns intentionally contain English. Existing Arabic wording was not translated or reviewed. Translate in the tables, regenerate strings, then review RTL icons/insets on a device.
+
+- `help_kind_vet`: Vet
+- `help_kind_shelter`: Shelter
+- `help_kind_emergency`: Emergency
+- `help_kind_other`: Other
+- `demo_entry_label`: Demo
+- `demo_contact`: Demo entry
+- `distance_from_map_center`: Distances from the map center until GPS is available.
+- `metadata_match`: Similar type, location and time
+- `deleted_member`: Deleted member
+- `unknown`: Unknown
+- `microchip`: Microchip
+- `microchip_privacy`: Record only yes/no/unknown. Never publish a microchip number.
+- `release_notes_unavailable`: Release notes are unavailable for this version.
+- `whats_new_version`: What's new in %1$s
+- `admin_analytics`: Community analytics
+- `weekly_posts`: Posts per week
+- `weekly_members`: New members per week
+- `analytics_axis`: Horizontal: week · Vertical: count
+- `analytics_accessibility`: Weekly posts: %1$s. Weekly new members: %2$s.
+- `reunion_rate`: Reunion rate: %1$s%%
+- `reunion_rate_basis`: Lost/found posts created in the last eight weeks that are currently marked reunited.
+- `quiet_hours`: Quiet hours
+- `quiet_start`: Start
+- `quiet_end`: End
+- `quiet_hours_note`: Uses your device time. Alerts remain in your inbox and are not replayed later. Equal start/end times silence alerts all day.
+- `download_my_data`: Download my data
+- `name`: Name
+- `verified_only`: Verified only
+- `verified_sitter`: Verified sitter
+- `verify_sitter`: Verify sitter
+- `remove_verification`: Remove verification
+- `help_directory`: Help directory
+- `no_help_contacts`: No contacts have been added yet.
+- `help_phone`: Phone
+- `help_address`: Address
+- `help_website`: Website
+- `show_map_view`: Map view
+- `show_list_view`: List view
+- `possible_post_matches`: Possible matches
+- `match_confidence`: Match score: %1$d%%
+- `stale_post_title`: Still missing?
+- `stale_post_body`: Please update %1$s: mark reunited/resolved or confirm you are still looking.
+- `include_older_posts`: Include older posts
+- `still_looking`: Still looking
+- `draft_available`: Continue your saved post?
+- `continue_draft`: Continue draft
+- `discard_draft`: Discard

@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import androidx.core.graphics.scale
 import android.net.Uri
 import androidx.exifinterface.media.ExifInterface
 import java.io.ByteArrayOutputStream
@@ -75,8 +76,7 @@ object ImageUtils {
         val largest = max(bitmap.width, bitmap.height)
         if (largest <= maxDim) return bitmap
         val scale = maxDim.toFloat() / largest
-        return Bitmap.createScaledBitmap(
-            bitmap,
+        return bitmap.scale(
             (bitmap.width * scale).roundToInt().coerceAtLeast(1),
             (bitmap.height * scale).roundToInt().coerceAtLeast(1),
             true,

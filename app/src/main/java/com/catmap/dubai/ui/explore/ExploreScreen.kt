@@ -1,5 +1,8 @@
 package com.catmap.dubai.ui.explore
 
+import com.catmap.dubai.ui.icons.CatMapIcon
+import com.catmap.dubai.ui.icons.CatMapIcons
+import com.catmap.dubai.ui.icons.IconLabel
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -76,15 +79,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
-private data class Shortcut(val emoji: String, val label: Int, val route: String, val color: Long)
+private data class Shortcut(val icon: Int, val label: Int, val route: String, val color: Long)
 
 private val shortcuts = listOf(
-    Shortcut("💜", R.string.adoption, Routes.ADOPTION, 0xFF8E24AA),
-    Shortcut("🏠", R.string.pet_sitters, Routes.SITTERS, 0xFF5E35B1),
-    Shortcut("🐈", R.string.community_cats, Routes.CATS, 0xFFA9531A),
-    Shortcut("🚑", R.string.tab_rescue, Routes.RESCUE, 0xFFC62828),
-    Shortcut("🥣", R.string.tab_stations, Routes.STATIONS, 0xFF00897B),
-    Shortcut("🔔", R.string.area_alerts, Routes.AREA_ALERTS, 0xFFF9A825),
+    Shortcut(CatMapIcons.HELP, R.string.help_directory, Routes.HELP_DIRECTORY, 0xFF00696B),
+    Shortcut(CatMapIcons.ADOPTION, R.string.adoption, Routes.ADOPTION, 0xFF8E24AA),
+    Shortcut(CatMapIcons.SITTER, R.string.pet_sitters, Routes.SITTERS, 0xFF5E35B1),
+    Shortcut(CatMapIcons.CAT, R.string.community_cats, Routes.CATS, 0xFFA9531A),
+    Shortcut(CatMapIcons.RESCUE, R.string.tab_rescue, Routes.RESCUE, 0xFFC62828),
+    Shortcut(CatMapIcons.STATION, R.string.tab_stations, Routes.STATIONS, 0xFF00897B),
+    Shortcut(CatMapIcons.BELL, R.string.area_alerts, Routes.AREA_ALERTS, 0xFFF9A825),
 )
 
 private enum class Sort(val label: Int) { NEWEST(R.string.sort_newest), NEAREST(R.string.sort_nearest) }
@@ -99,7 +103,7 @@ fun ExploreScreen(nav: NavHostController) {
     val uid = container.session.uid
     val settings by container.settings.settings.collectAsStateWithLifecycle(AppSettings())
     val filters = settings.filters
-    val posts by remember { container.posts.feed() }.collectAsStateWithLifecycle(null)
+    val posts by remember { container.communityFeed }.collectAsStateWithLifecycle(null)
     val favorites by remember(uid) { if (uid == null) flowOf(emptySet()) else container.favorites.ids(uid) }.collectAsStateWithLifecycle(emptySet())
     val fix by container.location.last.collectAsStateWithLifecycle()
     var sort by rememberSaveable { mutableStateOf(Sort.NEWEST) }
@@ -115,6 +119,7 @@ fun ExploreScreen(nav: NavHostController) {
         }
     }
 
+    Box(Modifier.fillMaxSize()) {
     PullToRefreshBox(
         isRefreshing = refreshing,
         onRefresh = {
@@ -131,7 +136,7 @@ fun ExploreScreen(nav: NavHostController) {
             item { Header(nav) }
             item {
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(shortcuts.size) { i ->
+                    items(shortcuts.size, key = { shortcuts[it].route }, contentType = { "shortcut" }) { i ->
                         val s = shortcuts[i]
                         PopIn(i) { ShortcutCard(s) { nav.navigate(s.route) } }
                     }
@@ -163,9 +168,9 @@ fun ExploreScreen(nav: NavHostController) {
                             leadingIcon = { Icon(Icons.Default.Tune, null, Modifier.size(18.dp)) })
                     }
                     item { FilterChip(filters.layers.isEmpty() && filters.animalTypes.isEmpty(), { setFilters(filters.copy(layers = emptySet(), animalTypes = emptySet())) }, label = { Text(stringResource(R.string.all_animals)) }) }
-                    items(MapLayer.entries.filter { it != MapLayer.SITTING }) { layer ->
+                    items(MapLayer.entries.filter { it != MapLayer.SITTING },key={it.name},contentType={"layer-chip"}) { layer ->
                         FilterChip(layer in filters.layers, { setFilters(filters.copy(layers = filters.layers.toggle(layer))) },
-                            label = { Text(layer.emoji + " " + stringResource(layer.label)) })
+                            label = { IconLabel(layer.icon, stringResource(layer.label)) })
                     }
                     item {
                         AnimatedVisibility(!filters.isEmpty, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
@@ -176,13 +181,13 @@ fun ExploreScreen(nav: NavHostController) {
             }
             val list = shown
             when {
-                list == null -> items(3) { SkeletonCard(Modifier.padding(horizontal = 16.dp)) }
+                list == null -> items(3, contentType = { "loading" }) { SkeletonCard(Modifier.padding(horizontal = 16.dp)) }
                 list.isEmpty() -> item {
                     EmptyState(Icons.Outlined.TravelExplore, stringResource(if (filters.isEmpty) R.string.no_posts_yet else R.string.no_posts_filters)) {
                         if (!filters.isEmpty) TextButton(onClick = { setFilters(FeedFilters()) }) { Text(stringResource(R.string.clear_filters)) }
                     }
                 }
-                else -> items(list, key = { it.id }) { p ->
+                else -> items(list, key = { it.id }, contentType = { "ExploreScreen" }) { p ->
                     PostCard(
                         p, p.id in favorites,
                         onFavorite = { uid?.let { u -> runner.run { container.favorites.set(u, p.id, p.id !in favorites) } } },
@@ -195,7 +200,8 @@ fun ExploreScreen(nav: NavHostController) {
     }
 
     // Content scrolls under the transparent status bar; a scrim keeps the clock readable.
-    Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(MaterialTheme.colorScheme.background.copy(alpha = 0.92f)))
+    Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(MaterialTheme.colorScheme.background.copy(alpha = 0.92f)))
+    }
 
     if (showFilters) FilterSheet(filters, { setFilters(it) }, { showFilters = false }, hasLocation = fix != null)
 }
@@ -209,7 +215,7 @@ private fun Header(nav: NavHostController) {
             .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
             .background(BrandGradient)
             .statusBarsPadding()
-            .padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 22.dp),
+            .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 22.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -243,13 +249,13 @@ private fun Header(nav: NavHostController) {
 private fun ShortcutCard(s: Shortcut, onClick: () -> Unit) {
     Card(
         onClick = onClick,
-        shape = RoundedCornerShape(22.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = Color(s.color).copy(alpha = 0.12f)),
         modifier = Modifier.width(112.dp),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Color(s.color).copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
-                Text(s.emoji, style = MaterialTheme.typography.titleLarge)
+                CatMapIcon(s.icon)
             }
             Text(stringResource(s.label), style = MaterialTheme.typography.labelLarge, maxLines = 2, minLines = 2)
         }

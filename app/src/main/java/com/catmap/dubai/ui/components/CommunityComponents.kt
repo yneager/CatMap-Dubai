@@ -1,5 +1,9 @@
 package com.catmap.dubai.ui.components
 
+import androidx.core.net.toUri
+import com.catmap.dubai.ui.icons.CatMapIcon
+import com.catmap.dubai.ui.icons.CatMapIcons
+import com.catmap.dubai.ui.icons.IconLabel
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.animation.AnimatedVisibility
@@ -211,13 +215,13 @@ fun PostCard(
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 10f)) {
-            // Large cards use the full photo so they stay sharp; the thumbnail shows first while it loads.
-            if (cover != null) cover(Modifier.fillMaxSize()) else PostPhoto(post, Modifier.fillMaxSize(), thumb = false)
+            // Lists use thumbnails; only detail/gallery and posters request full photos.
+            if (cover != null) cover(Modifier.fillMaxSize()) else PostPhoto(post, Modifier.fillMaxSize(), thumb = true)
             Box(
                 Modifier.fillMaxSize().background(
                     Brush.verticalGradient(0.55f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.55f)),
@@ -257,11 +261,11 @@ fun PostGridCard(post: Post, saved: Boolean, onFavorite: () -> Unit, onClick: ()
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(1f)) {
-            PostPhoto(post, Modifier.fillMaxSize(), thumb = false)
+            PostPhoto(post, Modifier.fillMaxSize(), thumb = true)
             FavoriteButton(saved, onFavorite, Modifier.align(Alignment.TopEnd), onImage = true)
             StatusBadge(post, Modifier.align(Alignment.BottomStart).padding(8.dp), onImage = true)
         }
@@ -289,7 +293,7 @@ fun PostPhoto(post: Post, modifier: Modifier = Modifier, thumb: Boolean = true) 
     } else {
         val c = Color(labeledFrom(post.category, PostCategory.OTHER).color)
         Box(modifier.background(Brush.linearGradient(listOf(c.copy(alpha = 0.35f), c.copy(alpha = 0.12f)))), contentAlignment = Alignment.Center) {
-            Text(labeledFrom(post.animalType, AnimalType.OTHER).emoji, style = MaterialTheme.typography.displaySmall)
+            CatMapIcon(labeledFrom(post.animalType, AnimalType.OTHER).icon, Modifier.size(48.dp))
         }
     }
 }
@@ -415,6 +419,6 @@ fun OfflineBanner(online: Boolean, modifier: Modifier = Modifier) {
 /** Opens the system dialer or mail app; nothing happens if no app can handle it. */
 fun openContact(context: android.content.Context, uri: String) {
     runCatching {
-        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(uri)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri.toUri()).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }

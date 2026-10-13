@@ -1,6 +1,6 @@
 S = [
 ("app_name","CatMap Dubai","خريطة قطط دبي"),
-("tagline","Spot, protect and care for Dubai's community cats","رصد قطط دبي المجتمعية وحمايتها ورعايتها"),
+("tagline","Find, reunite and care for Dubai's animals","رصد قطط دبي المجتمعية وحمايتها ورعايتها"),
 # ---- common ----
 ("back","Back","رجوع"),("cancel","Cancel","إلغاء"),("confirm","Confirm","تأكيد"),("save","Save","حفظ"),("saved","Saved","تم الحفظ"),
 ("delete","Delete","حذف"),("deleted","Deleted","تم الحذف"),("edit","Edit","تعديل"),("add","Add","إضافة"),("remove","Remove","إزالة"),

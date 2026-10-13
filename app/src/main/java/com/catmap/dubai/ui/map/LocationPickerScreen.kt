@@ -106,14 +106,14 @@ fun LocationPickerScreen(nav: NavHostController, initialLat: Double?, initialLng
                 Icons.Default.Place,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.align(Alignment.Center).size(52.dp).offset(y = (-26).dp + lift),
+                modifier = Modifier.align(Alignment.Center).size(52.dp).offset { androidx.compose.ui.unit.IntOffset(0, ((-26).dp + lift).roundToPx()) },
             )
             SmallFloatingActionButton(
                 onClick = { permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)) },
                 modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
             ) { Icon(Icons.Default.MyLocation, stringResource(R.string.my_location)) }
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(16.dp).navigationBarsPadding()) {
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), elevation = CardDefaults.cardElevation(8.dp)) {
+                Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, elevation = CardDefaults.cardElevation(8.dp)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             if (inside) Dubai.nearest(lat, lng).displayName() else stringResource(R.string.outside_dubai),

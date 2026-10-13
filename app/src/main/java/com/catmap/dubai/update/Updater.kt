@@ -1,5 +1,6 @@
 package com.catmap.dubai.update
 
+import androidx.core.net.toUri
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -20,7 +21,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /** A GitHub release that carries an APK. */
-data class Release(val version: String, val title: String, val notes: String, val apkUrl: String, val sizeBytes: Long)
+data class Release(val version: String, val title: String, val notes: String, val apkUrl: String, val sizeBytes: Long, val checksumUrl:String?=null, val assetName:String="")
 
 sealed interface DownloadState {
     data object Idle : DownloadState
@@ -56,17 +57,22 @@ class Updater(private val context: Context, private val settings: SettingsReposi
             if (connection.responseCode !in 200..299) throw IOException("GitHub responded ${connection.responseCode}")
             val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
             if (json.optBoolean("draft") || json.optBoolean("prerelease")) return@withContext null
+            val version=json.optString("tag_name").removePrefix("v")
+            if(version.length>32 || !version.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+"))) return@withContext null
             val assets = json.optJSONArray("assets") ?: return@withContext null
             val apk = (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.optString("name").endsWith(".apk") }
                 ?: return@withContext null
             val url = apk.optString("browser_download_url")
             if (!url.startsWith("https://github.com/")) return@withContext null
+            val checksum=(0 until assets.length()).map {assets.getJSONObject(it)}.firstOrNull {it.optString("name")==apk.optString("name")+".sha256"}?.optString("browser_download_url")
             Release(
-                version = json.optString("tag_name").removePrefix("v"),
+                version = version,
                 title = json.optString("name"),
                 notes = json.optString("body").trim(),
                 apkUrl = url,
                 sizeBytes = apk.optLong("size"),
+                checksumUrl = checksum?.takeIf {it.startsWith("https://github.com/")},
+                assetName = apk.optString("name"),
             )
         } finally {
             connection.disconnect()
@@ -90,6 +96,10 @@ class Updater(private val context: Context, private val settings: SettingsReposi
 
     /** Downloads the APK into the app's private cache, reporting progress through [download]. */
     suspend fun fetch(release: Release) = withContext(Dispatchers.IO) {
+        if(release.version.length>32 || !release.version.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+"))) {
+            _download.value=DownloadState.Failed
+            return@withContext
+        }
         _download.value = DownloadState.Downloading(0f)
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
@@ -133,11 +143,56 @@ class Updater(private val context: Context, private val settings: SettingsReposi
                 }
             }
             connection.disconnect()
+            if(total>0 && target.length()!=total) throw IOException("Incomplete APK")
+            release.checksumUrl?.let { checksumUrl ->
+                if(!ApkChecksum.verify(target,httpsText(checksumUrl),release.assetName)) throw IOException("APK checksum mismatch")
+            }
+            settings.saveReleaseNotes(release.version,release.notes)
+            verifyPackage(target,release.version)
             _download.value = DownloadState.Ready(target)
         } catch (e: Exception) {
             target.delete()
             _download.value = DownloadState.Failed
+            if(e is kotlinx.coroutines.CancellationException) throw e
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun verifyPackage(file:File,version:String) {
+        val flags=if(android.os.Build.VERSION.SDK_INT>=28) android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES else android.content.pm.PackageManager.GET_SIGNATURES
+        val archive=context.packageManager.getPackageArchiveInfo(file.absolutePath,flags) ?: throw IOException("Invalid APK")
+        val installed=context.packageManager.getPackageInfo(context.packageName,flags)
+        require(archive.packageName==context.packageName && archive.versionName==version) {"Wrong APK package or version"}
+        val incomingCode=if(android.os.Build.VERSION.SDK_INT>=28) archive.longVersionCode else archive.versionCode.toLong()
+        val installedCode=if(android.os.Build.VERSION.SDK_INT>=28) installed.longVersionCode else installed.versionCode.toLong()
+        require(incomingCode>installedCode) {"APK is not a newer version"}
+        fun certificates(info:android.content.pm.PackageInfo):Set<String> {
+            val signatures=if(android.os.Build.VERSION.SDK_INT>=28) info.signingInfo?.apkContentsSigners else info.signatures
+            return signatures.orEmpty().map {signature -> java.security.MessageDigest.getInstance("SHA-256").digest(signature.toByteArray()).joinToString("") {"%02x".format(it)} }.toSet()
+        }
+        require(certificates(archive).isNotEmpty() && certificates(archive)==certificates(installed)) {"APK signing identity mismatch"}
+    }
+
+    private fun httpsText(value:String):String {
+        var url=URL(value)
+        repeat(6) { hop ->
+            require(url.protocol=="https")
+            val connection=(url.openConnection() as HttpURLConnection).apply {instanceFollowRedirects=false; connectTimeout=15_000; readTimeout=15_000}
+            try {
+                val code=connection.responseCode
+                if(code in 300..399 && hop<5) {url=URL(url,connection.getHeaderField("Location")); return@repeat}
+                if(code !in 200..299) throw IOException("HTTP $code")
+                val text=connection.inputStream.bufferedReader().use {it.readText()}
+                require(text.length<=500_000)
+                return text
+            } finally {connection.disconnect()}
+        }
+        throw IOException("Too many redirects")
+    }
+
+    suspend fun installedReleaseNotes():String?=withContext(Dispatchers.IO) {
+        if(!configured) return@withContext null
+        runCatching {JSONObject(httpsText("https://api.github.com/repos/$repo/releases/tags/v${BuildConfig.VERSION_NAME}")).optString("body").trim().takeIf {it.isNotBlank()} }.getOrNull()
     }
 
     fun reset() {
@@ -149,7 +204,7 @@ class Updater(private val context: Context, private val settings: SettingsReposi
 
     fun openInstallPermissionSettings() {
         context.startActivity(
-            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${context.packageName}".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }
 

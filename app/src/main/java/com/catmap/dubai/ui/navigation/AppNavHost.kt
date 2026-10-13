@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -173,6 +172,7 @@ fun AppNavHost(pendingRoute: MutableState<String?>) {
     val nav = rememberNavController()
     val user by container.session.user.collectAsStateWithLifecycle()
     val online by container.connectivity.online.collectAsStateWithLifecycle()
+    val listenerError by AppErrors.listenerError.collectAsStateWithLifecycle()
     var choosingPost by rememberSaveable { mutableStateOf(false) }
     val start = remember {
         val u = container.session.user.value
@@ -188,6 +188,11 @@ fun AppNavHost(pendingRoute: MutableState<String?>) {
 
     // A quiet location fix (only if already allowed) lets lists show distances straight away.
     LaunchedEffect(user) { if (user != null) container.location.refreshQuietly() }
+    LaunchedEffect(user?.uid) {
+        user?.takeIf { it.isEmailVerified }?.uid?.let { uid ->
+            runCatching { container.posts.remindStalePosts(uid) }.onFailure { AppErrors.report(it) }
+        }
+    }
 
     // Signing out or deleting the account anywhere returns to the login screen.
     LaunchedEffect(user) {
@@ -232,10 +237,21 @@ fun AppNavHost(pendingRoute: MutableState<String?>) {
         Column(Modifier.fillMaxSize().padding(bottom).consumeWindowInsets(bottom)) {
             val showBanner = current !in Routes.authRoutes
             if (showBanner) OfflineBanner(online, Modifier.statusBarsPadding())
+            listenerError?.let { message ->
+                androidx.compose.material3.Surface(color = MaterialTheme.colorScheme.errorContainer) {
+                    androidx.compose.foundation.layout.Row(
+                        Modifier.fillMaxWidth().then(if (online) Modifier.statusBarsPadding() else Modifier).padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(message, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        androidx.compose.material3.TextButton(onClick = { AppErrors.retryListeners() }) { Text(stringResource(R.string.try_again)) }
+                    }
+                }
+            }
             NavHost(
                 nav, startDestination = start,
                 // While the banner is up it already sits below the status bar, so screens shouldn't pad for it again.
-                modifier = Modifier.weight(1f).then(if (showBanner && !online) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
+                modifier = Modifier.weight(1f).then(if ((showBanner && !online) || listenerError != null) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
                 enterTransition = { forwardIn(rtl) },
                 exitTransition = { forwardOut(rtl) },
                 popEnterTransition = { backIn(rtl) },
@@ -255,6 +271,7 @@ fun AppNavHost(pendingRoute: MutableState<String?>) {
                 composable(Routes.CATS) { CatListScreen(nav) }
                 composable(Routes.RESCUE) { RescueListScreen(nav) }
                 composable(Routes.STATIONS) { StationsScreen(nav) }
+                composable(Routes.HELP_DIRECTORY) { com.catmap.dubai.ui.help.HelpDirectoryScreen(nav) }
 
                 composable(Routes.CAT) { CatProfileScreen(nav, it.arg("id")) }
                 composable(Routes.CAT_EDIT) { CatEditScreen(nav, it.arg("id")) }
@@ -373,7 +390,7 @@ private fun optionalString(name: String) = navArgument(name) {
     defaultValue = null
 }
 
-/** Map · Explore · (+ Post) · Messages · Profile, with a raised gradient Post button in the middle. */
+/** Map · Explore · (+ Post) · Messages · Profile, with a centered gradient Post button. */
 @Composable
 private fun BottomBar(nav: NavHostController, current: String?, unreadMessages: Long, onPost: () -> Unit) {
     Surface(tonalElevation = 3.dp, shadowElevation = 12.dp, color = MaterialTheme.colorScheme.surfaceContainer) {
@@ -438,9 +455,8 @@ private fun PostButton(onClick: () -> Unit, modifier: Modifier) {
     Box(modifier, contentAlignment = Alignment.Center) {
         Box(
             Modifier
-                .offset(y = (-10).dp)
-                .size(58.dp)
-                .shadow(10.dp, CircleShape, spotColor = Color(0xFFE5486B))
+                .size(52.dp)
+                .shadow(2.dp, CircleShape, spotColor = Color(0xFFE5486B))
                 .clip(CircleShape)
                 .background(BrandGradient)
                 .clickable(onClick = onClick)

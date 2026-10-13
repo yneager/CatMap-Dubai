@@ -1,5 +1,10 @@
 package com.catmap.dubai.ui.explore
 
+import com.catmap.dubai.ui.icons.CatMapIcon
+import com.catmap.dubai.ui.icons.CatMapIcons
+import com.catmap.dubai.ui.icons.IconLabel
+import com.catmap.dubai.ui.components.AppTopBar
+import androidx.compose.foundation.layout.imePadding
 import com.catmap.dubai.ui.components.currentLocale
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -73,7 +78,7 @@ fun SearchScreen(nav: NavHostController) {
     val container = LocalContainer.current
     val resources = LocalResources.current
     val locale = currentLocale()
-    val posts by remember { container.posts.feed() }.collectAsStateWithLifecycle(emptyList())
+    val posts by remember { container.communityFeed }.collectAsStateWithLifecycle(emptyList())
     val cats by remember { container.cats.allCats() }.collectAsStateWithLifecycle(emptyList())
     var query by rememberSaveable { mutableStateOf("") }
     var type by rememberSaveable { mutableStateOf<String?>(null) }
@@ -107,8 +112,7 @@ fun SearchScreen(nav: NavHostController) {
 
     Scaffold(
         topBar = {
-            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+            AppTopBar("",onBack={nav.popBackStack()},titleContent={
                 TextField(
                     query, { query = it },
                     placeholder = { Text(stringResource(R.string.search_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -116,38 +120,38 @@ fun SearchScreen(nav: NavHostController) {
                     trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, stringResource(R.string.clear)) } },
                     shape = RoundedCornerShape(28.dp),
                     colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
-                    modifier = Modifier.weight(1f).focusRequester(focus),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
                 )
-            }
+            })
         },
     ) { padding ->
-        LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+        LazyColumn(Modifier.padding(padding).fillMaxSize().imePadding(), contentPadding = PaddingValues(bottom = 24.dp)) {
             item {
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(AnimalType.entries) { t ->
-                        FilterChip(type == t.key, { type = if (type == t.key) null else t.key }, label = { Text(t.emoji + " " + stringResource(t.label)) })
+                    items(AnimalType.entries,key={it.key},contentType={"animal-chip"}) { t ->
+                        FilterChip(type == t.key, { type = if (type == t.key) null else t.key }, label = { IconLabel(t.icon, stringResource(t.label)) })
                     }
                 }
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(PostCategory.entries) { c ->
+                    items(PostCategory.entries, key = { it.key }, contentType = { "category-chip" }) { c ->
                         FilterChip(category == c.key, { category = if (category == c.key) null else c.key }, label = { Text(stringResource(c.label)) })
                     }
                     item { FilterChip(includeClosed, { includeClosed = !includeClosed }, label = { Text(stringResource(R.string.include_closed)) }) }
                 }
             }
-            items(areas, key = { "a" + it.key }) { hood ->
+            items(areas, key = { "a" + it.key }, contentType = { "SearchScreen" }) { hood ->
                 ResultRow(onClick = {
                     MapFocus.request.value = MapFocus.Request(hood.lat, hood.lng, 14.5)
                     nav.navigate(Routes.MAP) { popUpTo(Routes.MAP); launchSingleTop = true }
                 }) {
-                    Text("📍", style = MaterialTheme.typography.titleLarge, modifier = Modifier.width(48.dp))
+                    CatMapIcon(CatMapIcons.PIN, Modifier.width(48.dp))
                     Column(Modifier.weight(1f)) {
                         Text(hood.displayName(), style = MaterialTheme.typography.bodyLarge)
                         Text(stringResource(R.string.show_on_map), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
-            items(results, key = { "p" + it.id }) { p ->
+            items(results, key = { "p" + it.id }, contentType = { "SearchScreen" }) { p ->
                 ResultRow(onClick = { nav.navigate(Routes.post(p.id)) }, modifier = Modifier.animateItem()) {
                     PostPhoto(p, Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)))
                     Spacer(Modifier.width(12.dp))
@@ -162,7 +166,7 @@ fun SearchScreen(nav: NavHostController) {
                     CategoryPill(p.category, solid = false)
                 }
             }
-            items(catResults, key = { "c" + it.id }) { c ->
+            items(catResults, key = { "c" + it.id }, contentType = { "SearchScreen" }) { c ->
                 ResultRow(onClick = { nav.navigate(Routes.cat(c.id)) }) {
                     CatThumb(c.coverPhotoId, labeledFrom(c.coatColor, CoatColor.UNKNOWN), Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)), c.name)
                     Spacer(Modifier.width(12.dp))

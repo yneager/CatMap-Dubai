@@ -92,15 +92,16 @@ jobs:
           test -f "$APK" || { echo "::error::No signed APK was produced"; exit 1; }
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" | grep -E "Signer #1 certificate (DN|SHA-256)"
           cp "$APK" "CatMap-$VERSION.apk"
+          sha256sum "CatMap-$VERSION.apk" > "CatMap-$VERSION.apk.sha256"
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "CatMap-$VERSION.apk" --clobber
+            gh release upload "$GITHUB_REF_NAME" "CatMap-$VERSION.apk" "CatMap-$VERSION.apk.sha256" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "CatMap-$VERSION.apk" --title "CatMap $VERSION" --generate-notes
+            gh release create "$GITHUB_REF_NAME" "CatMap-$VERSION.apk" "CatMap-$VERSION.apk.sha256" --title "CatMap $VERSION" --generate-notes
           fi
 
       - name: Remove secrets from the runner

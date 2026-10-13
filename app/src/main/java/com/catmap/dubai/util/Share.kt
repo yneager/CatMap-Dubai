@@ -37,12 +37,13 @@ object Share {
         val headline = context.getString(labeledFrom(post.category, PostCategory.OTHER).headline, animal)
         return buildString {
             append(if (post.name.isNotBlank()) "$headline: ${post.name}" else headline)
-            append('\n').append("📍 ").append(Dubai.nameOf(post.neighborhood))
+            append('\n').append("").append(Dubai.nameOf(post.neighborhood))
             if (post.lastSeenAt > 0) append(" · ").append(dateOnly(post.lastSeenAt))
-            if (post.reward > 0) append('\n').append("💰 ").append(context.getString(R.string.reward_aed, post.reward.toString()))
+            if (post.reward > 0) append('\n').append("").append(context.getString(R.string.reward_aed, post.reward.toString()))
             val details = post.features.ifBlank { post.description }
             if (details.isNotBlank()) append('\n').append(details.take(280))
             append('\n').append('\n').append(context.getString(R.string.share_post_footer, post.ownerName))
+            if (post.id.isNotBlank()) append('\n').append(PostLinks.create(post.id))
         }
     }
 

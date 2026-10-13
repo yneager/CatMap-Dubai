@@ -5,7 +5,7 @@ S = [
 ("sighting_saved","Sighting saved – thank you!","تم حفظ المشاهدة – شكراً لك!"),
 ("photos_hint","Add up to 5 clear photos of the cat. Side views and the face help the AI recognise it later.","أضف حتى 5 صور واضحة للقطة. الصور الجانبية والوجه تساعد الذكاء الاصطناعي على التعرف عليها لاحقاً."),
 ("take_photo","Camera","الكاميرا"),("from_gallery","Gallery","المعرض"),("analyzing_photos","Analysing photos on your phone…","جارٍ تحليل الصور على هاتفك…"),
-("metadata_removed_note","🔒 Photos are re-encoded on your phone before upload, which removes GPS and all other hidden metadata.","🔒 يُعاد ترميز الصور على هاتفك قبل الرفع، مما يزيل بيانات الموقع وكل البيانات المخفية."),
+("metadata_removed_note"," Photos are re-encoded on your phone before upload, which removes GPS and all other hidden metadata."," يُعاد ترميز الصور على هاتفك قبل الرفع، مما يزيل بيانات الموقع وكل البيانات المخفية."),
 ("auto_time","Recorded automatically: %1$s","سُجل تلقائياً: %1$s"),
 ("ai_needs_photo","Add a photo to use AI recognition, or continue without it.","أضف صورة لاستخدام التعرف بالذكاء الاصطناعي، أو تابع بدونها."),
 ("ai_results","On-device AI analysis","تحليل الذكاء الاصطناعي على الجهاز"),
@@ -27,7 +27,7 @@ S = [
 ("medical_rescue_tip","If it's urgent, also send a rescue report from the cat's profile so volunteers are alerted.","إذا كان الأمر عاجلاً، أرسل أيضاً بلاغ إنقاذ من ملف القطة لتنبيه المتطوعين."),
 ("location_hint","Where did you see the cat?","أين رأيت القطة؟"),("use_gps","Use GPS","استخدام GPS"),("pick_on_map","Pick on map","اختر على الخريطة"),
 ("near_x","Near %1$s","بالقرب من %1$s"),("accuracy_m","±%1$d m","±%1$d م"),("no_location_yet","No location yet.","لا يوجد موقع بعد."),
-("privacy_public_map","🔒 On the public map this sighting appears about %1$d m from the real spot.","🔒 تظهر هذه المشاهدة على الخريطة العامة على بعد نحو %1$d م من المكان الحقيقي."),
+("privacy_public_map"," On the public map this sighting appears about %1$d m from the real spot."," تظهر هذه المشاهدة على الخريطة العامة على بعد نحو %1$d م من المكان الحقيقي."),
 ("privacy_exact_shared","The exact point is visible only to you and verified volunteers (change in Settings).","النقطة الدقيقة مرئية لك وللمتطوعين الموثقين فقط (يمكن تغييرها من الإعدادات)."),
 ("privacy_exact_not_shared","The exact point is not stored.","لا يتم حفظ النقطة الدقيقة."),
 # ---- sighting detail ----

@@ -13,6 +13,7 @@ import kotlinx.coroutines.CancellationException
 import com.catmap.dubai.notifications.PushService
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import org.maplibre.android.MapLibre
 
 class CatMapApp : Application() {
@@ -25,12 +26,12 @@ class CatMapApp : Application() {
         container = AppContainer(this)
         AppErrors.init(this)
 
-        // Vector maps: initialise once; tiles are cached by MapLibre itself.
-        MapLibre.getInstance(this)
-
-        SystemNotifications.createChannels(this)
+        // The map initializes lazily on its UI thread in CommunityMap, when it is actually shown.
+        container.scope.launch(Dispatchers.IO) {
+            SystemNotifications.createChannels(this@CatMapApp)
+            if(container.firebaseReady) SystemNotifications.schedulePolling(this@CatMapApp)
+        }
         if (container.firebaseReady) {
-            SystemNotifications.schedulePolling(this)
             // While the app is running, inbox changes arrive in real time.
             container.session.user
                 .flatMapLatest { user ->

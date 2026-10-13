@@ -88,7 +88,7 @@ fun StatsPanel() {
     val container = LocalContainer.current
     var refresh by remember { mutableIntStateOf(0) }
     val stats by produceState<AppStats?>(null, refresh) { value = container.admin.stats() }
-    Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
+    Card(shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = Color.Transparent)) {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(BrandGradient).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.app_statistics), style = MaterialTheme.typography.titleLarge, color = Color.White, modifier = Modifier.weight(1f))
@@ -164,13 +164,13 @@ fun AdminPostsScreen(nav: NavHostController) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item { FilterChip(hiddenOnly, { hiddenOnly = !hiddenOnly }, label = { Text(stringResource(R.string.hidden_only)) }) }
                     item { FilterChip(category == null, { category = null }, label = { Text(stringResource(R.string.all)) }) }
-                    items(PostCategory.entries) { c -> FilterChip(category == c.key, { category = c.key }, label = { Text(stringResource(c.label)) }) }
+                    items(PostCategory.entries, key = { it.key }, contentType = { "category-chip" }) { c -> FilterChip(category == c.key, { category = c.key }, label = { Text(stringResource(c.label)) }) }
                 }
             }
             when {
-                shown == null -> items(4) { SkeletonRow() }
+                shown == null -> items(4, contentType = { "loading" }) { SkeletonRow() }
                 shown.isEmpty() -> item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.queue_empty)) }
-                else -> items(shown, key = { it.id }) { p ->
+                else -> items(shown, key = { it.id }, contentType = { "AdminCommunityScreens" }) { p ->
                     AdminPostRow(p, Modifier.animateItem(), onOpen = { nav.navigate(Routes.post(p.id)) }, onEdit = { nav.navigate(Routes.editPost(p.id)) }) { action -> acting = p to action }
                 }
             }
@@ -251,9 +251,9 @@ fun AdminUsersScreen(nav: NavHostController) {
             item { FilterChip(suspendedOnly, { suspendedOnly = !suspendedOnly }, label = { Text(stringResource(R.string.suspended_only)) }) }
             item { Text(stringResource(R.string.members_n, shown?.size ?: 0), style = MaterialTheme.typography.labelLarge) }
             when {
-                shown == null -> items(5) { SkeletonRow() }
+                shown == null -> items(5, contentType = { "loading" }) { SkeletonRow() }
                 shown.isEmpty() -> item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.user_not_found)) }
-                else -> items(shown, key = { it.uid }) { u ->
+                else -> items(shown, key = { it.uid }, contentType = { "AdminCommunityScreens" }) { u ->
                     var menu by remember { mutableStateOf(false) }
                     ClickableCard(onClick = { nav.navigate(Routes.user(u.uid)) }, modifier = Modifier.animateItem()) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -311,9 +311,9 @@ fun AdminSittersScreen(nav: NavHostController) {
     Scaffold(topBar = { AppTopBar(stringResource(R.string.manage_sitters), onBack = { nav.popBackStack() }) }) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             when {
-                sitters == null -> items(4) { SkeletonRow() }
+                sitters == null -> items(4, contentType = { "loading" }) { SkeletonRow() }
                 sitters!!.isEmpty() -> item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.no_sitters)) }
-                else -> items(sitters!!, key = { it.uid }) { s ->
+                else -> items(sitters!!, key = { it.uid }, contentType = { "AdminCommunityScreens" }) { s ->
                     ClickableCard(onClick = { nav.navigate(Routes.sitter(s.uid)) }, modifier = Modifier.animateItem()) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Avatar(s.photoId, s.name)
@@ -327,6 +327,9 @@ fun AdminSittersScreen(nav: NavHostController) {
                                     Text(Dubai.nameOf(s.neighborhood), style = MaterialTheme.typography.labelSmall)
                                 }
                                 if (!s.active) StatusPill(stringResource(R.string.inactive), Color(0xFF757575))
+                                if (me?.role == "admin") TextButton(enabled=!runner.busy,onClick={
+                                    runner.run(R.string.saved) { container.sitting.setVerified(s,!s.verified,me ?: return@run) }
+                                }) { Text(stringResource(if(s.verified) R.string.remove_verification else R.string.verify_sitter)) }
                             }
                             TextButton(onClick = { removing = s }) { Text(stringResource(R.string.remove), color = MaterialTheme.colorScheme.error) }
                         }

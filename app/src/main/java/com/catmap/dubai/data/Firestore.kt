@@ -24,6 +24,10 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.tasks.await
 
 object Col {
     const val USERS = "users"
@@ -58,6 +62,18 @@ object Col {
 
 fun now() = System.currentTimeMillis()
 
+/** Bounded batches avoid loading every JPEG blob into memory during export/cleanup. */
+fun Query.pages(size:Long=10):Flow<List<DocumentSnapshot>> = kotlinx.coroutines.flow.flow {
+    var cursor:DocumentSnapshot?=null
+    while(true) {
+        val page=(cursor?.let {startAfter(it)} ?: this@pages).limit(size).get().await().documents
+        if(page.isEmpty()) break
+        emit(page)
+        if(page.size<size) break
+        cursor=page.last()
+    }
+}
+
 /** An error with a message that can be shown to people as-is. */
 class AppException(@StringRes val messageRes: Int) : Exception()
 
@@ -66,6 +82,21 @@ object AppErrors {
     private lateinit var appContext: Context
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages: SharedFlow<String> = _messages
+    val listenerError = MutableStateFlow<String?>(null)
+    val retryVersion = MutableStateFlow(0L)
+
+    fun retryListeners() {
+        listenerError.value = null
+        retryVersion.value += 1
+    }
+
+    suspend fun awaitListenerRetry(error: Throwable): Boolean {
+        val version = retryVersion.value
+        report(error)
+        if (::appContext.isInitialized) listenerError.value = error.userMessage(appContext)
+        retryVersion.first { it > version }
+        return true
+    }
 
     fun init(context: Context) {
         appContext = context.applicationContext
@@ -130,18 +161,12 @@ fun DocumentReference.snapshotFlow(): Flow<DocumentSnapshot> = callbackFlow {
 inline fun <reified T : Any> Query.listFlow(): Flow<List<T>> =
     snapshotFlow()
         .map { it.toObjects(T::class.java) }
-        .catch {
-            AppErrors.report(it)
-            emit(emptyList())
-        }
+        .retryWhen { error, _ -> AppErrors.awaitListenerRetry(error) }
 
 inline fun <reified T : Any> DocumentReference.objectFlow(): Flow<T?> =
     snapshotFlow()
         .map { it.toObject(T::class.java) }
-        .catch {
-            AppErrors.report(it)
-            emit(null)
-        }
+        .retryWhen { error, _ -> AppErrors.awaitListenerRetry(error) }
 
 /** One finished document load; [value] is null when the document doesn't exist or can't be read. */
 data class Loaded<out T>(val value: T?)

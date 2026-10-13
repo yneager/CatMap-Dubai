@@ -60,8 +60,8 @@ class ChatRepository(
         val messageRef = chats.document(chat.id).collection(Col.MESSAGES).document()
         val preview = when {
             clean.isNotEmpty() -> clean.take(120)
-            imageId.isNotEmpty() -> "📷"
-            else -> "🐾 " + post?.name.orEmpty()
+            imageId.isNotEmpty() -> "Photo"
+            else -> "Post: " + post?.name.orEmpty()
         }
         db.runBatch { b ->
             b.set(

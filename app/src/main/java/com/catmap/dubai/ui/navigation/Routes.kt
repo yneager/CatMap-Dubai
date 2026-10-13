@@ -16,6 +16,7 @@ object Routes {
     const val CATS = "cats"
     const val RESCUE = "rescue"
     const val STATIONS = "stations"
+    const val HELP_DIRECTORY = "help-directory"
 
     const val CAT = "cat/{id}"
     fun cat(id: String) = "cat/$id"
@@ -114,5 +115,5 @@ object Routes {
     const val PICKED_RADIUS = "picked_radius"
 
     val tabs = listOf(MAP, EXPLORE, MESSAGES, PROFILE)
-    val authRoutes = setOf(LOGIN, REGISTER, FORGOT, VERIFY)
+    val authRoutes = setOf(LOGIN, REGISTER, FORGOT, VERIFY, HELP_DIRECTORY)
 }

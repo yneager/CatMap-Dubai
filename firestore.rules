@@ -56,7 +56,8 @@ service cloud.firestore {
       }
 
       match /notifications/{notificationId} {
-        allow read, update, delete: if signedIn() && uid() == userId;
+        allow read, delete: if signedIn() && uid() == userId;
+        allow update: if signedIn() && uid() == userId && onlyChanging(['read']);
         allow create: if (signedIn() && uid() == userId)
           || (verified() && incoming().fromUid == uid());
       }
@@ -222,6 +223,14 @@ service cloud.firestore {
     }
 
     // ---------- animal posts: lost, found, spotted, needs help, street, adoption, other ----------
+    function fingerprintPart0(f) { return (f[0] >= 0 && f[0] <= 1) && (f[1] >= 0 && f[1] <= 1) && (f[2] >= 0 && f[2] <= 1) && (f[3] >= 0 && f[3] <= 1) && (f[4] >= 0 && f[4] <= 1) && (f[5] >= 0 && f[5] <= 1) && (f[6] >= 0 && f[6] <= 1) && (f[7] >= 0 && f[7] <= 1); }
+    function fingerprintPart1(f) { return (f[8] >= 0 && f[8] <= 1) && (f[9] >= 0 && f[9] <= 1) && (f[10] >= 0 && f[10] <= 1) && (f[11] >= 0 && f[11] <= 1) && (f[12] >= 0 && f[12] <= 1) && (f[13] >= 0 && f[13] <= 1) && (f[14] >= 0 && f[14] <= 1) && (f[15] >= 0 && f[15] <= 1); }
+    function fingerprintPart2(f) { return (f[16] >= 0 && f[16] <= 1) && (f[17] >= 0 && f[17] <= 1) && (f[18] >= 0 && f[18] <= 1) && (f[19] >= 0 && f[19] <= 1) && (f[20] >= 0 && f[20] <= 1) && (f[21] >= 0 && f[21] <= 1) && (f[22] >= 0 && f[22] <= 1) && (f[23] >= 0 && f[23] <= 1); }
+    function fingerprintPart3(f) { return (f[24] >= 0 && f[24] <= 1) && (f[25] >= 0 && f[25] <= 1) && (f[26] >= 0 && f[26] <= 1); }
+    function validFingerprint(f) {
+      return f is list && (f.size() == 0 || (f.size() == 27 && fingerprintPart0(f) && fingerprintPart1(f) && fingerprintPart2(f) && fingerprintPart3(f)));
+    }
+
     function validPost() {
       let d = incoming();
       return d.category in ['lost', 'found', 'spotted', 'needs_help', 'street', 'adoption', 'other']
@@ -231,7 +240,11 @@ service cloud.firestore {
         && d.description.size() <= 2000 && d.name.size() <= 60
         && d.photoIds.size() <= 6
         && d.reward is int && d.reward >= 0 && d.reward < 1000000
-        && d.areaRadiusM is int && d.areaRadiusM >= 0 && d.areaRadiusM <= 5000;
+        && d.areaRadiusM is int && d.areaRadiusM >= 0 && d.areaRadiusM <= 5000
+        && d.get('lastActivityAt', 0) is int && d.get('lastActivityAt', 0) >= 0
+        && d.get('microchip', 'unknown') in ['yes','no','unknown']
+        && validFingerprint(d.get('fingerprint', []))
+        && d.keys().hasOnly(['ownerId', 'ownerName', 'ownerPhotoId', 'animalType', 'category', 'status', 'name', 'description', 'color', 'breed', 'features', 'sex', 'ageGroup', 'photoIds', 'videoPath', 'lat', 'lng', 'approximate', 'areaRadiusM', 'neighborhood', 'lastSeenAt', 'reward', 'contactMethod', 'contactPhone', 'contactEmail', 'adoptionStatus', 'health', 'vaccinated', 'neutered', 'updatesCount', 'hidden', 'keywords', 'createdAt', 'updatedAt', 'resolvedAt', 'lastActivityAt', 'fingerprint', 'microchip']);
     }
 
     match /posts/{postId} {
@@ -244,7 +257,7 @@ service cloud.firestore {
         && incoming().updatesCount == 0
         && validPost()
         && rateLimited();
-      allow update: if isMod()
+      allow update: if (isMod() && validPost())
         || (verified() && resource.data.ownerId == uid()
             && notChanging(['ownerId', 'hidden', 'createdAt', 'updatesCount'])
             && validPost())
@@ -270,6 +283,11 @@ service cloud.firestore {
       allow write: if signedIn() && uid() == followerId;
     }
 
+    // Ownership-filtered collection-group query used by export and account cleanup.
+    match /{path=**}/updates/{updateId} {
+      allow list: if signedIn() && resource.data.byUid == uid();
+    }
+
     // ---------- adoption requests: id = "{postId}_{requesterId}" ----------
     match /adoptionRequests/{requestId} {
       // A missing request can be looked up, so the app can show "not requested yet" without failing.
@@ -288,7 +306,7 @@ service cloud.firestore {
         || (signedIn() && resource.data.requesterId == uid()
           && onlyChanging(['status']) && resource.data.status == 'pending' && incoming().status == 'withdrawn')
         || isMod();
-      allow delete: if signedIn() && (resource.data.requesterId == uid() || isMod());
+      allow delete: if signedIn() && (resource.data.requesterId == uid() || resource.data.ownerId == uid() || isMod());
     }
 
     // ---------- pet sitting ----------
@@ -297,8 +315,9 @@ service cloud.firestore {
     match /sitters/{sitterId} {
       allow read: if signedIn();
       allow create: if verified() && sitterId == uid()
-        && incoming().ratingSum == 0 && incoming().ratingCount == 0;
-      allow update: if
+        && incoming().ratingSum == 0 && incoming().ratingCount == 0
+        && incoming().get('verified', false) == false;
+      allow update: if incoming().get('verified', false) is bool && (notChanging(['verified']) || isAdmin()) && (
         (verified() && sitterId == uid() && notChanging(['ratingSum', 'ratingCount', 'lastReviewId']))
         // A reviewer adds exactly their new review's rating, in the same transaction that creates the review.
         || (verified() && onlyChanging(['ratingSum', 'ratingCount', 'lastReviewId', 'updatedAt'])
@@ -307,7 +326,7 @@ service cloud.firestore {
             && reviewAfter(incoming().lastReviewId).sitterId == sitterId
             && incoming().ratingCount == resource.data.ratingCount + 1
             && incoming().ratingSum == resource.data.ratingSum + reviewAfter(incoming().lastReviewId).rating)
-        || isMod();
+        || isMod());
       allow delete: if signedIn() && (sitterId == uid() || isMod());
     }
 
@@ -321,6 +340,9 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/sitters/$(incoming().sitterId))
         && rateLimited();
       allow update: if
+        (signedIn() && resource.data.ownerId == uid() && onlyChanging(['ownerName','notes']) && incoming().ownerName == '' && incoming().notes == '')
+        || (signedIn() && resource.data.sitterId == uid() && onlyChanging(['sitterName','sitterNote']) && incoming().sitterName == '' && incoming().sitterNote == '')
+        ||
         (signedIn() && resource.data.sitterId == uid()
           && onlyChanging(['status', 'sitterNote', 'updatedAt'])
           && ((resource.data.status == 'requested' && incoming().status in ['accepted', 'declined'])
@@ -341,6 +363,7 @@ service cloud.firestore {
     match /reviews/{bookingId} {
       function booking() { return get(/databases/$(database)/documents/bookings/$(bookingId)).data; }
       allow read: if signedIn();
+      allow update: if signedIn() && resource.data.authorId == uid() && onlyChanging(['authorName','text']) && incoming().authorName == '' && incoming().text == '';
       allow create: if verified()
         && incoming().authorId == uid()
         && incoming().rating is int && incoming().rating >= 1 && incoming().rating <= 5
@@ -377,6 +400,21 @@ service cloud.firestore {
           && !exists(/databases/$(database)/documents/users/$(otherMember())/blocked/$(uid()));
         allow delete: if signedIn() && (resource.data.senderId == uid() || isAdmin());
       }
+    }
+
+    match /helpDirectory/{contactId} {
+      allow read: if true;
+      allow create, update: if isAdmin()
+        && incoming().keys().hasOnly(['name','kind','phone','address','website','note','demo','updatedAt'])
+        && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 80
+        && incoming().kind in ['vet','shelter','emergency','other']
+        && incoming().phone is string && incoming().phone.size() <= 40
+        && incoming().address is string && incoming().address.size() <= 300
+        && incoming().website is string && incoming().website.size() <= 300
+        && (incoming().website == '' || incoming().website.matches('https://.*'))
+        && incoming().note is string && incoming().note.size() <= 600
+        && incoming().demo is bool && incoming().updatedAt is int;
+      allow delete: if isAdmin();
     }
 
     // ---------- photos (JPEG blobs, EXIF already stripped on the phone) ----------

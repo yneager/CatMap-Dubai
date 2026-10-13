@@ -141,9 +141,9 @@ fun CatListScreen(nav: NavHostController) {
                 }
             }
             if (cats != null && shown.isEmpty()) {
-                item { EmptyState(Icons.Default.Pets, stringResource(R.string.no_cats_found)) }
+                item { EmptyState(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.PAW), stringResource(R.string.no_cats_found)) }
             }
-            items(shown, key = { it.id }) { cat ->
+            items(shown, key = { it.id }, contentType = { "CatListScreen" }) { cat ->
                 CatCard(cat, following = cat.id in (profile?.followedCats ?: emptyList())) { nav.navigate(Routes.cat(cat.id)) }
             }
         }

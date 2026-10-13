@@ -173,7 +173,7 @@ fun MergeSuggestScreen(nav: NavHostController, catId: String) {
                     placeholder = { Text(stringResource(R.string.search_cats)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
             }
-            items(ranked, key = { it.first.id }) { (other, score) ->
+            items(ranked, key = { it.first.id }, contentType = { "CatToolsScreens" }) { (other, score) ->
                 ClickableCard(onClick = { chosen = other to score }) {
                     Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         CatThumb(other.coverPhotoId, labeledFrom(other.coatColor, CoatColor.UNKNOWN), Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)))
