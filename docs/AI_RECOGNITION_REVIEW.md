@@ -1,5 +1,10 @@
 # CatMap Dubai – AI recognition review
 
+> **Update, 13 Oct 2026:** the owner decided to use the PC (proposal B) for the demo, scoped to **street-animal
+> posts**. It runs pet-recognition-base on the RX 9070 XT, reached over **USB only** (`adb reverse`). Details are
+> in `tools/ai-server/README.md`. The concerns below still apply to running it without a cable: availability,
+> exposure, and calibration. The app falls back to on-device matching whenever the PC is unavailable.
+
 Answer to `prompt.txt` (13 Oct 2026, Claude). The owner then asked for the review to be implemented. This
 file records the assessment, what was built from it, and the decisions still needing the owner.
 "Unverified" marks anything not checked first-hand.

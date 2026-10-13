@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.tasks.await
 
 object Col {
+    const val CONFIG = "config"
     const val USERS = "users"
     const val PRIVATE = "private"
     const val NOTIFICATIONS = "notifications"

@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.withLock
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.exp
@@ -94,9 +95,7 @@ class CatAnalyzer {
         val catLabel = labels.filter { it.text.equals("Cat", true) || it.text.equals("Kitten", true) }.maxOfOrNull { it.confidence } ?: 0f
         val animalHint = labels.any { it.text in setOf("Pet", "Whiskers", "Mammal", "Fur") }
 
-        val segmentation = runCatching {
-            withTimeoutOrNull(4_000) { segmenter.process(image).await() }
-        }.onFailure { Log.i("CatAnalyzer", "Segmentation unavailable, using centre mask", it) }.getOrNull()
+        val segmentation = segment(image)
 
         val w = bitmap.width
         val h = bitmap.height
@@ -136,6 +135,44 @@ class CatAnalyzer {
         val analysis = describe(pixels, weights, w, h)
         val detected = catLabel >= 0.5f || (catLabel > 0.2f && animalHint)
         analysis.copy(catDetected = detected, catConfidence = catLabel, usedSegmentation = usedSegmentation, subjectCount = subjects.size.coerceAtLeast(1))
+    }
+
+    /**
+     * One segmentation at a time. ML Kit's segmenter crashes natively when a second request starts while one
+     * is still running (which happened when a slow first run outlasted a short timeout), so calls queue here.
+     */
+    private suspend fun segment(image: InputImage) = if (onEmulator) null else segmentLock.withLock {
+        runCatching { withTimeoutOrNull(20_000) { segmenter.process(image).await() } }
+            .onFailure { Log.i("CatAnalyzer", "Segmentation unavailable, using centre mask", it) }.getOrNull()
+    }
+    private val segmentLock = kotlinx.coroutines.sync.Mutex()
+
+    /**
+     * The segmentation module crashes natively (SIGSEGV in its GL runner) on the x86 Android emulator once it is
+     * downloaded, so emulators use the centre-weighted fallback. Phones are unaffected.
+     */
+    private val onEmulator = android.os.Build.HARDWARE in setOf("ranchu", "goldfish") || android.os.Build.PRODUCT.startsWith("sdk_gphone")
+
+    /**
+     * The largest animal in the photo, cropped with a small margin, for the AI server's recognition model
+     * (it expects a crop of the animal, not the whole scene). Falls back to a centred square when the
+     * segmenter finds nothing.
+     */
+    suspend fun cropSubject(bitmap: Bitmap): Bitmap = withContext(Dispatchers.Default) {
+        val result = segment(InputImage.fromBitmap(bitmap, 0))
+        val subject = result?.subjects.orEmpty().maxByOrNull { it.width * it.height }
+        val (x, y, w, h) = if (subject != null && subject.width * subject.height > bitmap.width * bitmap.height / 50) {
+            val mx = subject.width / 10
+            val my = subject.height / 10
+            val left = (subject.startX - mx).coerceAtLeast(0)
+            val top = (subject.startY - my).coerceAtLeast(0)
+            listOf(left, top, (subject.width + 2 * mx).coerceAtMost(bitmap.width - left), (subject.height + 2 * my).coerceAtMost(bitmap.height - top))
+        } else {
+            val side = (min(bitmap.width, bitmap.height) * 0.85f).toInt()
+            listOf((bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side)
+        }
+        val crop = Bitmap.createBitmap(bitmap, x, y, w.coerceAtLeast(1), h.coerceAtLeast(1))
+        com.catmap.dubai.util.ImageUtils.scaleToMax(crop, 320)
     }
 
     private fun centreWeights(w: Int, h: Int, out: FloatArray) {

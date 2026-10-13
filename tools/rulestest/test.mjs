@@ -92,6 +92,15 @@ await check("profile edit allowed", assertSucceeds(updateDoc(doc(ctx("alice"), "
   await check("demo admin claim restores its admin role", assertSucceeds(updateDoc(doc(DA, "users", "demoadmin"), { role: "admin" })));
 }
 
+console.log("AI server config");
+await check("members read the AI server address", assertSucceeds(getDoc(doc(ctx("alice"), "config", "ai"))));
+await check("signed-out cannot read the AI server address", assertFails(getDoc(doc(anon, "config", "ai"))));
+await check("member cannot set the AI server address", assertFails(setDoc(doc(ctx("alice"), "config", "ai"), { url: "https://evil.example", updatedBy: "alice", updatedAt: now() })));
+await check("admin sets the AI server address", assertSucceeds(setDoc(doc(ctx("admin"), "config", "ai"), { url: "http://127.0.0.1:8765", updatedBy: "admin", updatedAt: now() })));
+await check("admin clears the AI server address", assertSucceeds(setDoc(doc(ctx("admin"), "config", "ai"), { url: "", updatedBy: "admin", updatedAt: now() })));
+await check("AI server address must be http(s)", assertFails(setDoc(doc(ctx("admin"), "config", "ai"), { url: "javascript:alert(1)", updatedBy: "admin", updatedAt: now() })));
+await check("AI server config rejects extra fields", assertFails(setDoc(doc(ctx("admin"), "config", "ai"), { url: "", updatedBy: "admin", updatedAt: now(), token: "x" })));
+
 console.log("Sightings");
 const A = ctx("alice"), B = ctx("bob");
 await check("unverified user cannot post", assertFails((async () => {

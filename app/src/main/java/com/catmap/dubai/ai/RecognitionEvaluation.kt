@@ -106,6 +106,75 @@ object RecognitionEvaluation {
         )
     }
 
+    data class EmbeddingResult(
+        val probes: Int,
+        val top1Average: Double,
+        val top1BestPhoto: Double,
+        val top3BestPhoto: Double,
+        val unseenSame: Double,
+        val unseenMaybe: Double,
+        val knownSame: Double,
+        val genuineMean: Double,
+        val impostorMean: Double,
+        val threshold5: Double?,
+        val genuineAtThreshold5: Double?,
+    )
+
+    /**
+     * The same leave-one-out protocol for the AI server's embeddings (cosine similarity), so both methods
+     * are measured on the same photos. [same]/[maybe] are the server's verdict thresholds: "unseen" rates say
+     * how often a cat that isn't on the map would still be called the same as one that is.
+     */
+    fun evaluateEmbeddings(samples: List<Pair<String, List<Double>>>, same: Double, maybe: Double): EmbeddingResult? {
+        val valid = samples.filter { it.second.isNotEmpty() }
+        val byCat = valid.groupBy { it.first }
+        if (byCat.size < 2) return null
+        val probes = valid.filter { byCat.getValue(it.first).size >= 2 }
+        if (probes.isEmpty()) return null
+        fun cos(a: List<Double>, b: List<Double>) = a.indices.sumOf { a[it] * b[it] } /
+            (kotlin.math.sqrt(a.sumOf { it * it }) * kotlin.math.sqrt(b.sumOf { it * it })).coerceAtLeast(1e-9)
+        fun mean(list: List<List<Double>>) = List(list.first().size) { i -> list.sumOf { it[i] } / list.size }
+        var top1a = 0; var top1b = 0; var top3b = 0; var unseenSame = 0; var unseenMaybe = 0; var knownSame = 0
+        val genuine = ArrayList<Double>(); val impostor = ArrayList<Double>()
+        for (probe in probes) {
+            val galleries = byCat.mapValues { (id, list) -> (if (id == probe.first) list.filter { it !== probe } else list).map { it.second } }
+            val avg = galleries.mapValues { (_, g) -> cos(probe.second, mean(g)) }
+            val best = galleries.mapValues { (_, g) -> g.maxOf { cos(probe.second, it) } }
+            val own = probe.first
+            if (avg.count { (id, s) -> id != own && s > avg.getValue(own) } == 0) top1a++
+            val rankBest = 1 + best.count { (id, s) -> id != own && s > best.getValue(own) }
+            if (rankBest == 1) top1b++
+            if (rankBest <= 3) top3b++
+            genuine += best.getValue(own)
+            if (best.getValue(own) >= same) knownSame++
+            val others = best.filterKeys { it != own }.values
+            impostor += others
+            val top = others.maxOrNull() ?: 0.0
+            if (top >= same) unseenSame++
+            if (top >= maybe) unseenMaybe++
+        }
+        val n = probes.size.toDouble()
+        val sorted = impostor.sorted()
+        val t = sorted.takeIf { it.isNotEmpty() }?.let { it[((it.size - 1) * 0.95).toInt()] }
+        return EmbeddingResult(
+            probes.size, top1a / n, top1b / n, top3b / n, unseenSame / n, unseenMaybe / n, knownSame / n,
+            genuine.average(), impostor.average(), t, t?.let { th -> genuine.count { it > th } / genuine.size.toDouble() },
+        )
+    }
+
+    fun embeddingReport(r: EmbeddingResult, model: String, same: Double, maybe: Double): String {
+        fun pct(v: Double) = String.format(Locale.US, "%.1f%%", v * 100)
+        fun num(v: Double) = String.format(Locale.US, "%.3f", v)
+        return buildString {
+            appendLine("AI model ($model on the AI server; verdict thresholds same >= ${num(same)}, maybe >= ${num(maybe)})")
+            appendLine("  Known cat: top-1 ${pct(r.top1BestPhoto)} (best photo), ${pct(r.top1Average)} (averaged), top-3 ${pct(r.top3BestPhoto)}")
+            appendLine("  Same cat reaches \"same\": ${pct(r.knownSame)}")
+            appendLine("  Unseen cat called \"same\": ${pct(r.unseenSame)}; \"maybe\" or better: ${pct(r.unseenMaybe)}")
+            appendLine("  Cosine: same cat mean ${num(r.genuineMean)}, different cats mean ${num(r.impostorMean)}")
+            r.threshold5?.let { appendLine("  At most 5% of different-cat pairs score above ${num(it)}; ${pct(r.genuineAtThreshold5 ?: 0.0)} of same-cat pairs do.") }
+        }
+    }
+
     /** A plain-text report to share or paste into the capstone write-up. */
     fun report(r: Result, appVersion: String): String {
         fun pct(v: Double) = String.format(Locale.US, "%.1f%%", v * 100)

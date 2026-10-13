@@ -28,3 +28,7 @@ __pycache__/
 /release-keys/
 /functions/node_modules/
 /app/src/staging/generated/
+
+# AI server (local virtualenv and downloaded model)
+/tools/ai-server/.venv/
+/tools/ai-server/models/

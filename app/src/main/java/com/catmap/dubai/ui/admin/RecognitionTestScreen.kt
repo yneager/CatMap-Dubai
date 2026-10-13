@@ -23,6 +23,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +64,8 @@ fun RecognitionTestScreen(nav: NavHostController) {
     var status by remember { mutableStateOf<String?>(null) }
     var report by remember { mutableStateOf<String?>(null) }
     var result by remember { mutableStateOf<RecognitionEvaluation.Result?>(null) }
+    var aiResult by remember { mutableStateOf<RecognitionEvaluation.EmbeddingResult?>(null) }
+    var aiChecked by remember { mutableStateOf(false) }
     val tooFew = stringResource(R.string.recognition_too_few)
     val analysing = stringResource(R.string.recognition_analysing)
 
@@ -72,17 +75,20 @@ fun RecognitionTestScreen(nav: NavHostController) {
             running = true
             report = null
             result = null
+            aiResult = null
+            aiChecked = false
             progress = 0f
             try {
                 val photos = withContext(Dispatchers.IO) { listLabelledPhotos(context, tree) }
                 val samples = ArrayList<RecognitionEvaluation.Sample>()
+                val health = container.aiServer.health()
+                val crops = ArrayList<Pair<String, android.graphics.Bitmap?>>()
                 photos.forEachIndexed { i, (identity, name, uri) ->
                     status = String.format(Locale.getDefault(), analysing, i + 1, photos.size)
                     val started = System.currentTimeMillis()
-                    val analysis = runCatching {
-                        val bitmap = withContext(Dispatchers.IO) { ImageUtils.analysisBitmap(context, uri) }
-                        container.analyzer.analyze(bitmap)
-                    }.getOrNull()
+                    val bitmap = runCatching { withContext(Dispatchers.IO) { ImageUtils.analysisBitmap(context, uri) } }.getOrNull()
+                    val analysis = bitmap?.let { b -> runCatching { container.analyzer.analyze(b) }.getOrNull() }
+                    if (health != null) crops += identity to bitmap?.let { b -> runCatching { container.analyzer.cropSubject(b) }.getOrNull() }
                     samples += RecognitionEvaluation.Sample(
                         identity, name.replace(',', ' '), analysis?.features.orEmpty(),
                         analysis?.coatColor?.key.orEmpty(), analysis?.pattern?.key.orEmpty(), System.currentTimeMillis() - started,
@@ -90,8 +96,21 @@ fun RecognitionTestScreen(nav: NavHostController) {
                     progress = (i + 1f) / photos.size
                 }
                 val r = withContext(Dispatchers.Default) { RecognitionEvaluation.evaluate(samples) }
+                // The AI model, measured on exactly the same photos (embeddings from the server, compared here).
+                var aiText = ""
+                if (health != null) {
+                    val vectors = ArrayList<Pair<String, List<Double>>>()
+                    crops.chunked(16).forEach { chunk ->
+                        val ok = chunk.filter { it.second != null }
+                        val emb = if (ok.isEmpty()) null else container.aiServer.embed(ok.map { it.second!! })
+                        if (emb != null) ok.zip(emb).forEach { (c, v) -> vectors += c.first to v }
+                    }
+                    aiResult = withContext(Dispatchers.Default) { RecognitionEvaluation.evaluateEmbeddings(vectors, health.same, health.maybe) }
+                    aiResult?.let { aiText = "\n" + RecognitionEvaluation.embeddingReport(it, health.model, health.same, health.maybe) }
+                }
+                aiChecked = true
                 result = r
-                report = r?.let { RecognitionEvaluation.report(it, BuildConfig.VERSION_NAME) }
+                report = r?.let { RecognitionEvaluation.report(it, BuildConfig.VERSION_NAME).replaceFirst("\nidentity,", aiText + "\nidentity,") }
                 status = if (r == null) tooFew else null
             } catch (e: CancellationException) {
                 throw e
@@ -125,6 +144,9 @@ fun RecognitionTestScreen(nav: NavHostController) {
                         Metric(stringResource(R.string.recognition_false_suggestion), r.unseenAnySuggestion)
                         Metric(stringResource(R.string.recognition_false_strong), r.unseenStrong)
                         Text(stringResource(R.string.recognition_time, r.averageMillis.toInt()), style = MaterialTheme.typography.bodySmall)
+                        aiResult?.let { ai ->
+                            Metric(stringResource(R.string.recognition_ai_top1), ai.top1BestPhoto)
+                        } ?: run { if (aiChecked) Text(stringResource(R.string.recognition_ai_unavailable), style = MaterialTheme.typography.bodySmall) }
                     }
                 }
             }
@@ -167,4 +189,42 @@ private fun listLabelledPhotos(context: Context, tree: Uri): List<Triple<String,
         }
     }
     return out
+}
+
+/** Admin > AI server: where the app finds the PC running tools/ai-server, and a connection test. */
+@Composable
+fun AiServerScreen(nav: NavHostController) {
+    val container = LocalContainer.current
+    val scope = rememberCoroutineScope()
+    val runner = com.catmap.dubai.ui.components.rememberRunner()
+    val me by container.session.profile.collectAsStateWithLifecycle()
+    var url by remember { mutableStateOf("") }
+    var result by remember { mutableStateOf<String?>(null) }
+    var testing by remember { mutableStateOf(false) }
+    val down = stringResource(R.string.ai_server_down)
+    val okText = stringResource(R.string.ai_server_ok, "%s")
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        url = container.aiServer.url().takeIf { it != com.catmap.dubai.data.AiServer.DEFAULT_URL }.orEmpty()
+    }
+    Scaffold(topBar = { AppTopBar(stringResource(R.string.ai_server), onBack = { nav.popBackStack() }) }) { padding ->
+        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(stringResource(R.string.ai_server_intro), style = MaterialTheme.typography.bodyMedium)
+            androidx.compose.material3.OutlinedTextField(
+                url, { url = it.trim() }, label = { Text(stringResource(R.string.ai_server_url)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+            )
+            Button(onClick = {
+                val profile = me ?: return@Button
+                runner.run(R.string.saved) { container.aiServer.setUrl(url, profile) }
+            }, enabled = !runner.busy, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.save)) }
+            OutlinedButton(onClick = {
+                scope.launch {
+                    testing = true
+                    val h = container.aiServer.health(url.ifBlank { com.catmap.dubai.data.AiServer.DEFAULT_URL })
+                    result = h?.let { okText.replace("%s", it.toString()) } ?: down
+                    testing = false
+                }
+            }, enabled = !testing, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ai_server_test)) }
+            result?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+        }
+    }
 }

@@ -62,9 +62,9 @@ S = [
 ("posted_x","Posted %1$s","نُشر %1$s"),("posted_by","Posted by","نشره"),
 # ---- post chooser and editor ----
 ("post_what","What would you like to post?","ماذا تريد أن تنشر؟"),("post_what_hint","Pick one – it only takes a minute.","اختر واحداً – لن يستغرق سوى دقيقة."),
-("chooser_sighting","Cat sighting (AI)","رصد قطة (بالذكاء الاصطناعي)"),("chooser_sighting_hint","Register a community cat with smart matching","سجّل قطة مجتمعية مع مطابقة ذكية"),
+
 ("chooser_rescue_hint","Urgent help for an animal in danger","مساعدة عاجلة لحيوان في خطر"),
-("chooser_sitter","Offer pet sitting","قدّم رعاية الحيوانات"),("chooser_sitter_hint","Become a sitter in your area","كن مربياً مؤقتاً في منطقتك"),
+("chooser_sitter","Pet sitting","رعاية الحيوانات الأليفة"),("chooser_sitter_hint","Offer pet sitting, or request it from a sitter","قدّم رعاية الحيوانات أو اطلبها من مربٍّ"),
 ("edit_post","Edit post","تعديل المنشور"),("step_type","What happened","ماذا حدث"),("step_place","Where & when","أين ومتى"),
 ("step_contact","Contact","التواصل"),("step_review","Review","المراجعة"),("post_what_happened","What happened?","ماذا حدث؟"),
 ("add_photos_title","Add photos","أضف صوراً"),("add_photos_hint","Clear photos help people recognise the animal. The first photo is the cover.","الصور الواضحة تساعد الناس على التعرف على الحيوان. الصورة الأولى هي الغلاف."),

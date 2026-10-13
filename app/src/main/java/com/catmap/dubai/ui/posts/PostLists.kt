@@ -43,6 +43,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -84,19 +85,31 @@ import kotlinx.coroutines.launch
 
 private data class ChooserItem(val icon: Int, val title: Int, val subtitle: Int, val color: Long, val route: String)
 
-/** The sheet behind the "+" button: every way to post, in one tap. Tiles pop in one after another. */
+/** Categories offered by the "+" sheet. Spotted and Other stay valid for existing posts but aren't offered. */
+private val chooserCategories = PostCategory.entries - setOf(PostCategory.SPOTTED, PostCategory.OTHER)
+private const val SITTING_CHOICE = "choose-sitting"
+
+/**
+ * The sheet behind the "+" button: every way to post, in one tap. Tiles pop in one after another.
+ * "Pet sitting" opens a second step: offer pet sitting, or find a sitter to request it from.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PostChooserSheet(nav: NavHostController, onDismiss: () -> Unit) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
-    val main = PostCategory.entries.map { c -> ChooserItem(categoryIcon(c), c.label, categoryHint(c), c.color, Routes.newPost(c.key)) }
+    var sitting by rememberSaveable { mutableStateOf(false) }
+    val main = chooserCategories.map { c -> ChooserItem(categoryIcon(c), c.label, categoryHint(c), c.color, Routes.newPost(c.key)) }
     val community = listOf(
-        ChooserItem(CatMapIcons.CAMERA, R.string.chooser_sighting, R.string.chooser_sighting_hint, 0xFFA9531A, Routes.newSighting()),
         ChooserItem(CatMapIcons.RESCUE, R.string.report_emergency, R.string.chooser_rescue_hint, 0xFFC62828, Routes.newRescue()),
-        ChooserItem(CatMapIcons.SITTER, R.string.chooser_sitter, R.string.chooser_sitter_hint, 0xFF5E35B1, Routes.SITTER_EDIT),
+        ChooserItem(CatMapIcons.SITTER, R.string.chooser_sitter, R.string.chooser_sitter_hint, 0xFF5E35B1, SITTING_CHOICE),
+    )
+    val sittingItems = listOf(
+        ChooserItem(CatMapIcons.SITTER, R.string.sitting_offer, R.string.sitting_offer_hint, 0xFF5E35B1, Routes.SITTER_EDIT),
+        ChooserItem(CatMapIcons.CALENDAR, R.string.sitting_request, R.string.sitting_request_hint, 0xFF00897B, Routes.SITTERS),
     )
     fun open(route: String) {
+        if (route == SITTING_CHOICE) { sitting = true; return }
         scope.launch {
             state.hide()
             onDismiss()
@@ -105,10 +118,10 @@ fun PostChooserSheet(nav: NavHostController, onDismiss: () -> Unit) {
     }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = state) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding()) {
-            Text(stringResource(R.string.post_what), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(stringResource(R.string.post_what_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(if (sitting) R.string.chooser_sitter else R.string.post_what), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(stringResource(if (sitting) R.string.chooser_sitter_hint else R.string.post_what_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
-            (main + community).chunked(2).forEachIndexed { row, items ->
+            (if (sitting) sittingItems else main + community).chunked(2).forEachIndexed { row, items ->
                 Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items.forEachIndexed { col, item ->
                         PopIn(row * 2 + col, Modifier.weight(1f)) {
@@ -121,6 +134,7 @@ fun PostChooserSheet(nav: NavHostController, onDismiss: () -> Unit) {
                     if (items.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
+            if (sitting) TextButton(onClick = { sitting = false }) { Text(stringResource(R.string.back)) }
             Spacer(Modifier.height(12.dp))
         }
     }

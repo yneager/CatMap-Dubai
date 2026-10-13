@@ -69,4 +69,28 @@ S = [
 ('recognition_false_strong','Unknown cat got a "strong" match','Unknown cat got a "strong" match'), # TODO-AR
 ('recognition_time','Average analysis time: %1$d ms per photo','Average analysis time: %1$d ms per photo'), # TODO-AR
 ('recognition_share','Share full report','Share full report'), # TODO-AR
+('sitting_offer','Offer pet sitting','Offer pet sitting'), # TODO-AR
+('sitting_offer_hint','Become a sitter in your area','Become a sitter in your area'), # TODO-AR
+('sitting_request','Request pet sitting','Request pet sitting'), # TODO-AR
+('sitting_request_hint','Find a sitter near you and book','Find a sitter near you and book'), # TODO-AR
+('same_animal_title','Already on the map?','Already on the map?'), # TODO-AR
+('same_animal_hint_ai',"Our AI compared your photo with street animals posted nearby. If it's the same animal, your photo is added to that post instead of creating a second one.","Our AI compared your photo with street animals posted nearby. If it's the same animal, your photo is added to that post instead of creating a second one."), # TODO-AR
+('same_animal_hint_local',"Street animals posted nearby look similar (checked on this phone; the AI server isn't reachable). If it's the same animal, your photo is added to that post.","Street animals posted nearby look similar (checked on this phone; the AI server isn't reachable). If it's the same animal, your photo is added to that post."), # TODO-AR
+('same_animal_checking','Checking for the same animal nearby...','Checking for the same animal nearby...'), # TODO-AR
+('same_animal_likely','Likely the same','Likely the same'), # TODO-AR
+('same_animal_maybe','Might be the same','Might be the same'), # TODO-AR
+('same_animal_yes','Same animal','Same animal'), # TODO-AR
+('same_animal_no','Different animal','Different animal'), # TODO-AR
+('same_animal_added','Added your photo to the existing post','Added your photo to the existing post'), # TODO-AR
+('same_animal_add','Add to that post','Add to that post'), # TODO-AR
+('same_animal_post_anyway','Post anyway','Post anyway'), # TODO-AR
+('same_animal_publish_body','Our AI thinks this is the same animal as "%1$s", already on the map. Add your photo to that post instead of making a second one?','Our AI thinks this is the same animal as "%1$s", already on the map. Add your photo to that post instead of making a second one?'), # TODO-AR
+('ai_server','AI server','AI server'), # TODO-AR
+('ai_server_intro',"Street-animal posts are checked against nearby posts by the recognition model (pet-recognition-base) running on the owner's PC. With the phone plugged in by USB and tools/ai-server/start.ps1 running, leave this blank.","Street-animal posts are checked against nearby posts by the recognition model (pet-recognition-base) running on the owner's PC. With the phone plugged in by USB and tools/ai-server/start.ps1 running, leave this blank."), # TODO-AR
+('ai_server_url','Server address (blank = USB, http://127.0.0.1:8765)','Server address (blank = USB, http://127.0.0.1:8765)'), # TODO-AR
+('ai_server_test','Test connection','Test connection'), # TODO-AR
+('ai_server_ok','Connected: %1$s','Connected: %1$s'), # TODO-AR
+('ai_server_down',"Can't reach the AI server. Is start.ps1 running and the phone plugged in?","Can't reach the AI server. Is start.ps1 running and the phone plugged in?"), # TODO-AR
+('recognition_ai_top1','AI model: right cat ranked first','AI model: right cat ranked first'), # TODO-AR
+('recognition_ai_unavailable','AI server not reachable, so only the on-device method was tested.','AI server not reachable, so only the on-device method was tested.'), # TODO-AR
 ]

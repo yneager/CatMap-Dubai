@@ -170,7 +170,46 @@ fun PostEditorScreen(nav: NavHostController, postId: String?, presetCategory: St
         forward = to > vm.step
         vm.step = to.coerceIn(0, steps.lastIndex)
         vm.saveDraftNow()
+        // Street animals: start the same-animal check as soon as photo and place are known.
+        if (vm.step > PostStep.PLACE.ordinal) vm.checkSameAnimal()
         if (steps[vm.step] == PostStep.REVIEW) vm.checkDuplicates(me)
+    }
+    val addedToExisting = stringResource(R.string.same_animal_added)
+    var askSameAnimal by remember { mutableStateOf<SameAnimalCandidate?>(null) }
+    fun publishNow() {
+        val profile = me ?: return
+        scope.launch {
+            runCatching { vm.publish(profile, settings.privacyLevel) }
+                .onSuccess { id ->
+                    snackbar.showSnackbar(published)
+                    nav.popBackStack()
+                    if (postId == null) nav.navigate(Routes.post(id))
+                }
+                .onFailure { snackbar.showSnackbar(it.userMessage(context)) }
+        }
+    }
+    fun addToExisting(candidate: SameAnimalCandidate) {
+        val profile = me ?: return
+        scope.launch {
+            runCatching { vm.addToExisting(candidate.post, profile, settings.privacyLevel) }
+                .onSuccess { id ->
+                    snackbar.showSnackbar(addedToExisting)
+                    nav.popBackStack()
+                    nav.navigate(Routes.post(id))
+                }
+                .onFailure { snackbar.showSnackbar(it.userMessage(context)) }
+        }
+    }
+    askSameAnimal?.let { c ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { askSameAnimal = null },
+            title = { Text(stringResource(R.string.same_animal_title)) },
+            text = { Text(stringResource(R.string.same_animal_publish_body, postTitle(c.post))) },
+            confirmButton = { TextButton(onClick = { askSameAnimal = null; addToExisting(c) }) { Text(stringResource(R.string.same_animal_add)) } },
+            dismissButton = {
+                TextButton(onClick = { askSameAnimal = null; vm.notSameAnimal += c.post.id; publishNow() }) { Text(stringResource(R.string.same_animal_post_anyway)) }
+            },
+        )
     }
     BackHandler(enabled = vm.step > 0 && !vm.publishing) { go(vm.step - 1) }
 
@@ -207,18 +246,12 @@ fun PostEditorScreen(nav: NavHostController, postId: String?, presetCategory: St
                     } else {
                         Button(
                             onClick = {
-                                val profile = me ?: return@Button
-                                scope.launch {
-                                    runCatching { vm.publish(profile, settings.privacyLevel) }
-                                        .onSuccess { id ->
-                                            snackbar.showSnackbar(published)
-                                            nav.popBackStack()
-                                            if (postId == null) nav.navigate(Routes.post(id))
-                                        }
-                                        .onFailure { snackbar.showSnackbar(it.userMessage(context)) }
-                                }
+                                // The AI said this animal is already on the map: ask before making a second post.
+                                val same = vm.unresolvedSameAnimal
+                                if (same != null) askSameAnimal = same else publishNow()
                             },
-                            enabled = !vm.publishing && me != null,
+                            // Street posts wait for the same-animal check, so a duplicate can't slip through.
+                            enabled = !vm.publishing && !vm.sameAnimalChecking && me != null,
                             modifier = Modifier.weight(1f),
                         ) {
                             if (vm.publishing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
@@ -253,7 +286,7 @@ fun PostEditorScreen(nav: NavHostController, postId: String?, presetCategory: St
                     PostStep.DETAILS -> DetailsStep(vm)
                     PostStep.PLACE -> PlaceStep(vm, nav)
                     PostStep.CONTACT -> ContactStep(vm)
-                    PostStep.REVIEW -> ReviewStep(vm, nav)
+                    PostStep.REVIEW -> ReviewStep(vm, nav, onSameAnimal = ::addToExisting)
                 }
                 Spacer(Modifier.height(24.dp))
             }
@@ -596,10 +629,13 @@ private fun ContactStep(vm: PostEditorViewModel) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ReviewStep(vm: PostEditorViewModel, nav: NavHostController) {
+private fun ReviewStep(vm: PostEditorViewModel, nav: NavHostController, onSameAnimal: (SameAnimalCandidate) -> Unit) {
     val container = LocalContainer.current
     val me by container.session.profile.collectAsStateWithLifecycle()
     Text(stringResource(R.string.looks_good), style = MaterialTheme.typography.headlineSmall)
+    // Also covers reaching Review from a restored draft or the edit shortcuts (the check is keyed, so it runs once).
+    LaunchedEffect(Unit) { vm.checkSameAnimal() }
+    SameAnimalCard(vm, nav, onSameAnimal)
     val preview = vm.previewPost(me)
     val localCover = (vm.photos.firstOrNull() as? FormPhoto.Local)?.preview
     PostCard(
@@ -615,7 +651,9 @@ private fun ReviewStep(vm: PostEditorViewModel, nav: NavHostController) {
             }
         }
     }
-    AnimatedVisibility(vm.duplicates.isNotEmpty()) {
+    // Posts already offered by the AI same-animal card aren't listed again here.
+    val otherDuplicates = vm.duplicates.filter { d -> vm.sameAnimal.none { it.post.id == d.id } }
+    AnimatedVisibility(otherDuplicates.isNotEmpty()) {
         Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.tertiaryContainer)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -624,7 +662,7 @@ private fun ReviewStep(vm: PostEditorViewModel, nav: NavHostController) {
                     Text(stringResource(R.string.possible_duplicates), style = MaterialTheme.typography.titleMedium)
                 }
                 Text(stringResource(R.string.possible_duplicates_hint), style = MaterialTheme.typography.bodySmall)
-                vm.duplicates.forEach { d ->
+                otherDuplicates.forEach { d ->
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable { nav.navigate(Routes.post(d.id)) }.padding(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -641,4 +679,61 @@ private fun ReviewStep(vm: PostEditorViewModel, nav: NavHostController) {
         }
     }
     Text(stringResource(R.string.post_rules_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Start)
+}
+
+/**
+ * Street posts: "Is this animal already on the map?" Nearby street posts that the AI server (or, when it's
+ * offline, the on-device colour check) thinks show the same animal. Confirming adds the photo to that post.
+ */
+@Composable
+private fun SameAnimalCard(vm: PostEditorViewModel, nav: NavHostController, onSameAnimal: (SameAnimalCandidate) -> Unit) {
+    val visible = vm.sameAnimal.filter { it.post.id !in vm.notSameAnimal }
+    if (vm.sameAnimalChecking) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.width(10.dp))
+            Text(stringResource(R.string.same_animal_checking), style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+    AnimatedVisibility(visible.isNotEmpty()) {
+        Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.secondaryContainer)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(stringResource(R.string.same_animal_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    stringResource(if (visible.any { it.byServer }) R.string.same_animal_hint_ai else R.string.same_animal_hint_local),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                visible.forEach { c ->
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable { nav.navigate(Routes.post(c.post.id)) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            com.catmap.dubai.ui.components.PostPhoto(c.post, Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)))
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(postTitle(c.post), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                                Text(
+                                    stringResource(R.string.km_away, "%.1f".format(c.distanceKm)) + " · " + com.catmap.dubai.ui.components.relativeTime(c.post.createdAt),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    stringResource(if (c.verdict == "same") R.string.same_animal_likely else R.string.same_animal_maybe),
+                                    style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
+                                    color = if (c.verdict == "same") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                                )
+                                Text(stringResource(R.string.percent, (c.similarity * 100).toInt()), style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { onSameAnimal(c) }, enabled = !vm.publishing) { Text(stringResource(R.string.same_animal_yes)) }
+                            OutlinedButton(onClick = { vm.notSameAnimal += c.post.id }, enabled = !vm.publishing) { Text(stringResource(R.string.same_animal_no)) }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

@@ -85,6 +85,7 @@ class AppContainer(context: Context) {
     val videos by lazy { VideoRepository(appContext) }
     val connectivity by lazy { Connectivity(appContext) }
     val updater by lazy { com.catmap.dubai.update.Updater(appContext, settings) }
+    val aiServer by lazy { com.catmap.dubai.data.AiServer(db, auth) }
 
     val session by lazy { Session(this) }
 }

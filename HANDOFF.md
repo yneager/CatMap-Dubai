@@ -1,7 +1,67 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 13 Oct 2026 (v0.0.4 released; demo accounts, List view, icons and the AI review implemented and committed locally; the owner still has to deploy the rules and create the demo accounts).**
+and what's left. **Last updated: 13 Oct 2026 (v0.0.5 released; + menu and the street-animal AI check via the PC server committed locally; the owner still has to deploy the rules and create the demo accounts).**
+
+## 13 October 2026 - v0.0.5, + menu, street-animal AI check on the PC (Claude)
+
+**Released v0.0.5** at `755c80e` (demo admin, Recognition test, List view, icons). CI and the release workflow passed.
+
+**+ menu** (`ui/posts/PostLists.kt`) now has seven options:
+* Lost, Found, Needs help, Street animal, Adoption, Report an emergency, and **Pet sitting**.
+* Pet sitting opens a second step: **Offer pet sitting** (sitter profile) or **Request pet sitting** (sitter directory).
+* Removed: Spotted, Other and Cat sighting (AI). Existing posts of those categories still display, and the
+  sighting screen is still reachable from cat profiles.
+
+**Street-animal same-animal check** (the owner chose to run pet-recognition-base on the PC):
+* Flow (`PostEditorViewModel.checkSameAnimal`):
+  1. It runs when a new Street-animal post reaches Review.
+  2. It finds open street posts of the same animal type within 1 km.
+  3. It crops the largest animal (`CatAnalyzer.cropSubject`).
+  4. It sends the crops to `tools/ai-server` (`data/AiServer.kt`).
+  5. A **Same animal** answer adds the photo to that post as a sighting update instead of creating a new post.
+  6. **Publish** waits for the check. If the AI said "same", Publish asks "Add to that post / Post anyway".
+* **Fallback:** if the server can't be reached, the on-device colour fingerprint is used (≥ 0.85), and the card
+  says it was checked on the phone.
+* **Connection:** USB only, so nothing is exposed.
+  * `start.ps1` runs `adb reverse tcp:8765 tcp:8765`, and the server listens on 127.0.0.1.
+  * The app allows cleartext only to 127.0.0.1/localhost (`res/xml/network_security_config.xml`).
+  * The server verifies the Firebase ID token (verified email), rate-limits, size-checks images, and never touches
+    Firestore.
+  * A public Cloudflare tunnel was attempted and **blocked by the auto-mode classifier** ("External Ingress
+    Tunnel"). It was removed; the owner can decide on it later.
+* `config/ai` in Firestore (admin-writable, rules plus 7 tests) lets **Admin > AI server** point the app at
+  another `https://` server. Blank means USB. It needs the rules deploy; without it the app simply uses the USB
+  default.
+* **Thresholds are provisional: same ≥ 0.75, maybe ≥ 0.60** (`SAME_THRESHOLD` / `MAYBE_THRESHOLD`). Uncropped photos
+  of two different kittens scored 0.57. The Recognition test now also measures the AI model (`/embed`) on the same
+  photos; calibrate it with real cats.
+* **Emulator:** ML Kit subject segmentation crashes natively (SIGSEGV in its GL runner) on the x86 emulator once its
+  module is downloaded, so `CatAnalyzer` skips segmentation on emulators and uses a centre crop. Phones are
+  unchanged. The earlier emulator runs had only worked because the module wasn't downloaded yet. Segmentation calls
+  are also serialised now.
+* **Verified on the emulator** with the PC server (DirectML on the RX 9070 XT):
+  * a street post next to the seeded "Simba" got "Likely the same 94%";
+  * Publish asked first;
+  * "Add to that post" created a sighting update on Simba and no new post (checked in Firestore);
+  * without a token the server returns 401;
+  * the Recognition test showed AI top-1 100% on the 3-cat cartoon set. As a caution, an unseen cat was called
+    "same" 67% of the time, so the thresholds need real photos.
+* Fixed during testing: a draft restored straight onto Review skipped the check and published. The check now runs
+  whenever Review is shown, and Publish waits for it.
+
+**Owner steps for the demo**
+1. Turn on USB debugging on the phone, plug it in, and run `.\tools\ai-server\start.ps1`. The first run
+   downloads about 350 MB.
+2. In the app, check **Admin > AI server > Test connection**.
+3. Still pending from before: `npx.cmd -y firebase-tools@latest deploy --only firestore` and
+   `node tools/demo/create-demo-accounts.mjs`.
+
+**Checks:** 69 unit tests, 0 failures; screenshots match; lint shows no errors in debug or release; the rules suite
+passes 260/260.
+
+**Not done:** the next release (v0.0.6) isn't tagged; Arabic placeholders remain for the new strings; the
+thresholds aren't calibrated on real cats.
 
 ## 13 October 2026 - v0.0.4, demo accounts, AI review (Claude)
 

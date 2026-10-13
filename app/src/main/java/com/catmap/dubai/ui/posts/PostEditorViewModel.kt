@@ -54,7 +54,18 @@ sealed interface FormPhoto {
 
 enum class PostStep { TYPE, PHOTOS, DETAILS, PLACE, CONTACT, REVIEW }
 
+/**
+ * A nearby street-animal post that may show the same animal. [similarity] is the AI server's cosine score,
+ * or the on-device colour similarity when [byServer] is false. [verdict] is "same" or "maybe".
+ */
+data class SameAnimalCandidate(val post: Post, val similarity: Double, val verdict: String, val byServer: Boolean, val distanceKm: Double)
+
 @OptIn(FlowPreview::class)
+/** Street animals within this distance are checked for being the same animal (public positions are blurred). */
+const val SAME_ANIMAL_RADIUS_KM = 1.0
+/** On-device fallback: colour similarity needed before a nearby post is suggested without the AI server. */
+private const val LOCAL_MAYBE = 0.85
+
 class PostEditorViewModel(
     private val container: AppContainer,
     val postId: String?,
@@ -100,6 +111,15 @@ class PostEditorViewModel(
         private set
     var duplicates by mutableStateOf<List<Post>>(emptyList())
         private set
+
+    /** Street posts: nearby posts that may show the same animal, best first. */
+    var sameAnimal by mutableStateOf<List<SameAnimalCandidate>>(emptyList())
+        private set
+    var sameAnimalChecking by mutableStateOf(false)
+        private set
+    /** Candidates the person said are a different animal. */
+    val notSameAnimal = mutableStateListOf<String>()
+    private var sameAnimalKey: String? = null
 
     private val removedRemote = mutableListOf<String>()
     var savedDraft by mutableStateOf<SavedPostDraft?>(null)
@@ -277,6 +297,81 @@ class PostEditorViewModel(
         viewModelScope.launch {
             val feed = runCatching { container.posts.feedOnce(300) }.getOrDefault(emptyList())
             duplicates = PostRepository.likelyDuplicates(previewPost(me), feed)
+        }
+    }
+
+    /**
+     * For a new street-animal post: looks for open street posts of the same kind of animal within
+     * [SAME_ANIMAL_RADIUS_KM] and asks the AI server (pet-recognition-base on the owner's PC) whether the
+     * new photo shows one of them. If the server can't be reached, the on-device colour fingerprint ranks
+     * them instead, and only clearly similar ones are shown, marked as such.
+     */
+    fun checkSameAnimal() {
+        if (postId != null || categoryEnum != PostCategory.STREET) { sameAnimal = emptyList(); return }
+        val photo = photos.filterIsInstance<FormPhoto.Local>().firstOrNull() ?: run { sameAnimal = emptyList(); return }
+        val la = lat ?: return
+        val ln = lng ?: return
+        val key = "${photo.draftId}|$la|$ln|$animalType"
+        if (key == sameAnimalKey) return
+        sameAnimalKey = key
+        viewModelScope.launch {
+            sameAnimalChecking = true
+            try {
+                val nearby = runCatching { container.posts.feedOnce(400) }.getOrDefault(emptyList()).asSequence()
+                    .filter { it.category == PostCategory.STREET.key && it.status == "open" && !it.hidden && it.animalType == animalType && it.photoIds.isNotEmpty() }
+                    .map { it to com.catmap.dubai.data.distanceKm(la, ln, it.lat, it.lng) }
+                    .filter { (_, d) -> d.isFinite() && d <= SAME_ANIMAL_RADIUS_KM }
+                    .sortedBy { it.second }.take(8).toList()
+                if (nearby.isEmpty()) { sameAnimal = emptyList(); return@launch }
+                val query = container.analyzer.cropSubject(photo.photo.analysis)
+                val crops = nearby.mapNotNull { (p, _) ->
+                    container.images.bitmap(p.photoIds.first(), thumb = false, target = 640)?.let { p.id to container.analyzer.cropSubject(it) }
+                }
+                val server = if (crops.isEmpty()) null else container.aiServer.compare(query, crops)
+                val distance = nearby.associate { (p, d) -> p.id to d }
+                sameAnimal = if (server != null) {
+                    server.filter { it.verdict == "same" || it.verdict == "maybe" }.mapNotNull { m ->
+                        nearby.firstOrNull { it.first.id == m.id }?.let { (p, d) -> SameAnimalCandidate(p, m.similarity, m.verdict, true, d) }
+                    }.sortedByDescending { it.similarity }
+                } else {
+                    val mine = withContext(Dispatchers.Default) { PostAppearance.describe(photo.photo.analysis) }
+                    nearby.map { (p, d) -> SameAnimalCandidate(p, PostAppearance.similarity(mine, p.fingerprint), "maybe", false, distance.getValue(p.id)) }
+                        .filter { it.similarity >= LOCAL_MAYBE }.sortedByDescending { it.similarity }.take(3)
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                AppErrors.report(e)
+                sameAnimal = emptyList()
+            } finally {
+                sameAnimalChecking = false
+            }
+        }
+    }
+
+    /** The AI said "same" for a candidate the person hasn't ruled out, so publishing should ask first. */
+    val unresolvedSameAnimal: SameAnimalCandidate?
+        get() = sameAnimal.firstOrNull { it.verdict == "same" && it.post.id !in notSameAnimal }
+
+    /**
+     * The person confirmed the photo shows an animal already on the map: instead of a second post, the photo
+     * and note are added to that post as a sighting update. Returns the existing post's id.
+     */
+    suspend fun addToExisting(target: Post, me: UserProfile, privacyLevel: String): String {
+        val la = lat ?: throw AppException(R.string.err_location_required)
+        val ln = lng ?: throw AppException(R.string.err_location_required)
+        publishing = true
+        try {
+            val local = photos.filterIsInstance<FormPhoto.Local>().firstOrNull()
+            val photoId = local?.let { container.images.upload(me.uid, it.photo) }.orEmpty()
+            val (pubLat, pubLng) = if (approximate) LocationPrivacy.fuzz(la, ln, privacyLevel, me.uid + la + ln) else la to ln
+            val note = listOf(description, features).map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
+            container.posts.addUpdate(target, com.catmap.dubai.data.model.UpdateKind.SIGHTING, note, photoId, pubLat, pubLng, me)
+            draftPublished = true
+            draftJob?.cancelAndJoin()
+            container.drafts.clear(me.uid)
+            return target.id
+        } finally {
+            publishing = false
         }
     }
 
