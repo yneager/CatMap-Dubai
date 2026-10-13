@@ -1,9 +1,12 @@
 package com.catmap.dubai.data
 
 import com.catmap.dubai.R
+import com.catmap.dubai.data.model.Roles
 import com.catmap.dubai.data.model.UserProfile
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.DocumentReference
@@ -22,6 +25,7 @@ class AuthRepository(
     private val settings: SettingsRepository,
     private val drafts: PostDraftStore,
     private val dataExport: UserDataExportRepository,
+    val demoVault: DemoVault,
 ) {
     private val _user = MutableStateFlow(auth.currentUser)
     val user: StateFlow<FirebaseUser?> = _user.asStateFlow()
@@ -51,12 +55,12 @@ class AuthRepository(
         runCatching { user.sendEmailVerification().await() }
     }
 
-    private suspend fun createProfile(user: FirebaseUser, username: String, displayName: String) {
+    private suspend fun createProfile(user: FirebaseUser, username: String, displayName: String, role: String = Roles.USER) {
         db.runBatch { b ->
             b.set(db.collection(Col.USERNAMES).document(username.lowercase()), mapOf("uid" to user.uid))
             b.set(
                 users.ref(user.uid),
-                UserProfile(username = username, displayName = displayName.trim().take(60), createdAt = now()),
+                UserProfile(username = username, displayName = displayName.trim().take(60), role = role, createdAt = now()),
             )
             b.set(
                 users.ref(user.uid).collection(Col.PRIVATE).document("account"),
@@ -67,11 +71,16 @@ class AuthRepository(
     }
 
     /**
-     * Signs in with an email address, or with a username for accounts that allow it (the demo accounts:
-     * their username document carries a `loginEmail`, which only admin tooling can set).
+     * Signs in with an email address, or with a username for accounts that allow it: the demo accounts
+     * ([DemoAccounts], e.g. "admin"), and accounts whose username document carries a `loginEmail`
+     * (only admin tooling can set it).
      */
     suspend fun login(emailOrUsername: String, password: String) {
         val input = emailOrUsername.trim()
+        DemoAccounts.find(input)?.let { demo ->
+            signInDemo(demo, password)
+            return
+        }
         val email = if ("@" in input) input else {
             val key = input.removePrefix("@").lowercase()
             if (key.isBlank()) throw AppException(R.string.err_wrong_credentials)
@@ -81,6 +90,53 @@ class AuthRepository(
         val user = auth.signInWithEmailAndPassword(email, password).await().user ?: return
         ensureProfile(user)
     }
+
+    /** Signs in to a demo account and remembers the shared demo password on this device for switching. */
+    private suspend fun signInDemo(account: DemoAccounts.Account, password: String) {
+        val user = auth.signInWithEmailAndPassword(account.email, password).await().user ?: return
+        ensureDemoProfile(user, account)
+        demoVault.save(password)
+    }
+
+    /**
+     * Switches to another demo account with the stored demo password. Signing in replaces the current
+     * account directly (no signed-out moment, so the app doesn't jump to the login screen), and a failure
+     * leaves the current account signed in. A password that no longer works (the script was re-run with a
+     * new one) is forgotten, so the person signs in again.
+     */
+    suspend fun switchDemoAccount(account: DemoAccounts.Account) {
+        val password = demoVault.password() ?: throw AppException(R.string.err_demo_sign_in_again)
+        try {
+            signInDemo(account, password)
+        } catch (e: FirebaseAuthInvalidCredentialsException) {
+            demoVault.clear()
+            throw AppException(R.string.err_demo_sign_in_again)
+        } catch (e: FirebaseAuthInvalidUserException) {
+            throw AppException(R.string.err_demo_missing)
+        }
+    }
+
+    /**
+     * Demo accounts are created without a profile; the first sign-in makes one with the exact demo
+     * username. The admin account (custom claim `catmapAdmin`) gets the admin role, which the rules allow
+     * only for that claim, and gets it back if someone changed it.
+     */
+    private suspend fun ensureDemoProfile(user: FirebaseUser, account: DemoAccounts.Account) {
+        val admin = user.getIdToken(false).await().claims["catmapAdmin"] == true
+        val role = if (admin) Roles.ADMIN else Roles.USER
+        val snapshot = users.ref(user.uid).get().await()
+        if (!snapshot.exists()) {
+            // Fall back to a numbered name if a real account already took the demo username.
+            var name = account.username
+            while (!users.isUsernameFree(name)) name = account.username.take(14) + (1000..9999).random()
+            createProfile(user, name, account.displayName, role)
+        } else if (admin && snapshot.getString("role") != Roles.ADMIN) {
+            users.ref(user.uid).update("role", Roles.ADMIN).await()
+        }
+    }
+
+    /** True when the signed-in account is one of the demo accounts. */
+    fun isDemoAccount(): Boolean = DemoAccounts.isDemoEmail(auth.currentUser?.email)
 
     /** Recovers from a registration that created the account but not the profile. */
     private suspend fun ensureProfile(user: FirebaseUser) {
@@ -117,7 +173,11 @@ class AuthRepository(
 
     fun email(): String = auth.currentUser?.email ?: ""
 
-    fun logout() = auth.signOut()
+    /** Signs out; an explicit log out also forgets the stored demo password. */
+    fun logout() {
+        demoVault.clear()
+        auth.signOut()
+    }
 
     /**
      * Deletes the account after re-checking the password. Authored posts, photos, exact locations,
@@ -210,6 +270,7 @@ class AuthRepository(
         // Local cache trouble must not turn a completed account deletion into a reported failure.
         runCatching {
             settings.clearDeliveredNotifications(uid)
+            demoVault.clear()
             drafts.clear(uid)
             dataExport.clear(uid)
             images.clearCache()

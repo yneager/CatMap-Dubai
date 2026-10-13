@@ -65,7 +65,7 @@ class AppContainer(context: Context) {
 
     val notifications by lazy { NotificationRepository(db, auth) }
     val users by lazy { UserRepository(db, notifications) }
-    val authRepo by lazy { AuthRepository(auth, db, users, notifications, images, settings, drafts, dataExport) }
+    val authRepo by lazy { AuthRepository(auth, db, users, notifications, images, settings, drafts, dataExport, com.catmap.dubai.data.DemoVault(appContext)) }
     val images by lazy { ImageRepository(appContext, db) }
     val moderation by lazy { ModerationRepository(db, notifications) }
     val cats by lazy { CatRepository(db, users, notifications, moderation) }

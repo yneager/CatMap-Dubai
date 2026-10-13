@@ -73,6 +73,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.catmap.dubai.R
+import com.catmap.dubai.ai.Similarity
 import com.catmap.dubai.data.Dubai
 import com.catmap.dubai.data.LocationPrivacy
 import com.catmap.dubai.data.model.BehaviorTag
@@ -294,6 +295,9 @@ private fun AiStep(vm: NewSightingViewModel) {
         if (vm.matching) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
     }
     Text(stringResource(R.string.matches_hint), style = MaterialTheme.typography.bodySmall)
+    if (vm.analysis?.severalSubjects == true) {
+        Text(stringResource(R.string.several_subjects_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
+    }
     val visible = vm.matches.filter { it.cat.id !in vm.rejected }
     if (vm.matchesSearched && visible.isEmpty()) {
         // Say "you ruled them out" rather than "none found" when the person rejected every suggestion.
@@ -317,9 +321,18 @@ private fun AiStep(vm: NewSightingViewModel) {
                         )
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(stringResource(R.string.percent, (match.breakdown.total * 100).toInt()), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-                        Text(stringResource(R.string.similarity), style = MaterialTheme.typography.labelSmall)
+                        // The wording leads; the raw score is secondary, because similar-looking cats score high too.
+                        val (label, colour) = when (match.strength) {
+                            Similarity.Strength.STRONG -> R.string.match_strong to MaterialTheme.colorScheme.primary
+                            Similarity.Strength.POSSIBLE -> R.string.match_possible to MaterialTheme.colorScheme.tertiary
+                            Similarity.Strength.WEAK -> R.string.match_weak to MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                        Text(stringResource(label), style = MaterialTheme.typography.titleSmall, color = colour, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.similarity) + " " + stringResource(R.string.percent, (match.breakdown.total * 100).toInt()), style = MaterialTheme.typography.labelSmall)
                     }
+                }
+                if (match.strength != Similarity.Strength.STRONG) {
+                    Text(stringResource(R.string.match_check_marks), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 ScoreBar(stringResource(R.string.score_colour), match.breakdown.colour)
                 ScoreBar(stringResource(R.string.score_texture), match.breakdown.texture)

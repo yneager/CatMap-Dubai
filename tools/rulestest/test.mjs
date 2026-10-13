@@ -55,7 +55,8 @@ const catDoc = (uid) => ({
 const sightingDoc = (uid, catId) => ({
   catId, catName: "Zafran", userId: uid, username: uid, photoIds: ["img1"], seenAt: now(), lat: 25.27, lng: 55.30, neighborhood: "deira",
   locationSource: "gps", coatColor: "orange", pattern: "tabby", size: "medium", healthTags: [], behaviorTags: [], earTipped: "unsure",
-  possiblyNotNeutered: false, needsMedical: false, notes: "", newCat: true, matchScore: 0, aiSummary: "", status: "pending", createdAt: now(), updatedAt: now(),
+  possiblyNotNeutered: false, needsMedical: false, notes: "", newCat: true, matchScore: 0, aiSummary: "", suggestedCatIds: ["c9"], rejectedCatIds: [],
+  status: "pending", createdAt: now(), updatedAt: now(),
 });
 const userStats = (b, db, uid, stats, points, hood, rate) => {
   const u = {};
@@ -76,6 +77,20 @@ await check("username taken cannot be overwritten", assertFails(setDoc(doc(ctx("
 await check("email is private to others", assertFails(getDoc(doc(ctx("bob"), "users", "alice", "private", "account"))));
 await check("user cannot make themselves admin", assertFails(updateDoc(doc(ctx("alice"), "users", "alice"), { role: "admin" })));
 await check("profile edit allowed", assertSucceeds(updateDoc(doc(ctx("alice"), "users", "alice"), { bio: "hi", displayName: "Alice" })));
+{
+  // The demo admin account (custom claim catmapAdmin) may create or promote its own profile; nobody else can.
+  const demo = (uid, claims) => env.authenticatedContext(uid, { email: `${uid}@demo.catmap.test`, email_verified: true, ...claims }).firestore();
+  const DA = demo("demoadmin", { catmapAdmin: true }), DU = demo("demouser", { catmapDemo: true });
+  await check("user cannot create an admin profile", assertFails(setDoc(doc(DU, "users", "demouser"), { ...profile("demouser"), role: "admin" })));
+  // Before its admin profile exists, the claim alone gives no power over other accounts.
+  await check("demo admin claim cannot write others' role", assertFails(updateDoc(doc(DA, "users", "alice"), { role: "admin" })));
+  await check("demo admin claim creates admin profile", assertSucceeds(setDoc(doc(DA, "users", "demoadmin"), { ...profile("demoadmin"), role: "admin" })));
+  await check("demo user claim stays a user", assertSucceeds(setDoc(doc(DU, "users", "demouser"), profile("demouser"))));
+  await check("demo user cannot promote itself", assertFails(updateDoc(doc(DU, "users", "demouser"), { role: "admin" })));
+  await env.withSecurityRulesDisabled((c) => updateDoc(doc(c.firestore(), "users", "demoadmin"), { role: "user" }));
+  await check("demo admin role change cannot ride along other fields", assertFails(updateDoc(doc(DA, "users", "demoadmin"), { role: "admin", points: 999 })));
+  await check("demo admin claim restores its admin role", assertSucceeds(updateDoc(doc(DA, "users", "demoadmin"), { role: "admin" })));
+}
 
 console.log("Sightings");
 const A = ctx("alice"), B = ctx("bob");
@@ -91,6 +106,17 @@ await check("new cat + sighting + exact location + stats batch", assertSucceeds(
   b.set(doc(A, "cats", "c1"), catDoc("alice")); b.set(doc(A, "sightings", "s1"), sightingDoc("alice", "c1"));
   b.set(doc(A, "privateLocations", "s1"), { ownerId: "alice", lat: 25.2712, lng: 55.3001, accuracy: 8 });
   userStats(b, A, "alice", { sightings: 1, photos: 1, catsRegistered: 1 }, 27, "deira", true); await b.commit();
+})()));
+await register("zed", true);
+await check("sighting with too many match ids rejected", assertFails((async () => {
+  const Z = ctx("zed"); const b = writeBatch(Z);
+  b.set(doc(Z, "cats", "cz"), catDoc("zed")); b.set(doc(Z, "sightings", "sz"), { ...sightingDoc("zed", "cz"), rejectedCatIds: ["1", "2", "3", "4", "5", "6", "7"] });
+  userStats(b, Z, "zed", { sightings: 1 }, 10, "deira", true); await b.commit();
+})()));
+await check("sighting with match feedback accepted", assertSucceeds((async () => {
+  const Z = ctx("zed"); const b = writeBatch(Z);
+  b.set(doc(Z, "cats", "cz"), catDoc("zed")); b.set(doc(Z, "sightings", "sz"), { ...sightingDoc("zed", "cz"), rejectedCatIds: ["c9"] });
+  userStats(b, Z, "zed", { sightings: 1 }, 10, "deira", true); await b.commit();
 })()));
 await check("posting again immediately is rate limited", assertFails((async () => {
   const b = writeBatch(A); b.set(doc(A, "sightings", "s2"), sightingDoc("alice", "c1"));

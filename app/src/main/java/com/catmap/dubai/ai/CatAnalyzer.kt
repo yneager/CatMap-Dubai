@@ -59,6 +59,8 @@ data class CatAnalysis(
     val breedHints: List<BreedHint>,
     val features: List<Double>,
     val usedSegmentation: Boolean,
+    /** Separate subjects the segmenter found; with more than one, only the largest is described. */
+    val subjectCount: Int = 1,
 )
 
 /**
@@ -66,7 +68,9 @@ data class CatAnalysis(
  *
  * 1. ML Kit image labelling checks there is a cat in the picture.
  * 2. ML Kit subject segmentation separates the cat from the background (falls back to a
- *    centre-weighted mask when the model isn't available yet).
+ *    centre-weighted mask when the model isn't available yet). When the photo has several
+ *    subjects (two cats, a cat and a person), only the largest is described, so two animals
+ *    are never blended into one descriptor.
  * 3. The cat's pixels are clustered and each cluster is classified into a coat colour family,
  *    which gives the coat colour; texture (edge density and orientation) gives the pattern.
  * 4. A compact appearance descriptor (colour histogram, colour layout, texture and colour
@@ -75,7 +79,12 @@ data class CatAnalysis(
 class CatAnalyzer {
     private val labeler by lazy { ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS) }
     private val segmenter by lazy {
-        SubjectSegmentation.getClient(SubjectSegmenterOptions.Builder().enableForegroundConfidenceMask().build())
+        SubjectSegmentation.getClient(
+            SubjectSegmenterOptions.Builder()
+                .enableForegroundConfidenceMask()
+                .enableMultipleSubjects(SubjectSegmenterOptions.SubjectResultOptions.Builder().enableConfidenceMask().build())
+                .build(),
+        )
     }
 
     suspend fun analyze(bitmap: Bitmap): CatAnalysis = withContext(Dispatchers.Default) {
@@ -85,8 +94,8 @@ class CatAnalyzer {
         val catLabel = labels.filter { it.text.equals("Cat", true) || it.text.equals("Kitten", true) }.maxOfOrNull { it.confidence } ?: 0f
         val animalHint = labels.any { it.text in setOf("Pet", "Whiskers", "Mammal", "Fur") }
 
-        val mask = runCatching {
-            withTimeoutOrNull(4_000) { segmenter.process(image).await().foregroundConfidenceMask }
+        val segmentation = runCatching {
+            withTimeoutOrNull(4_000) { segmenter.process(image).await() }
         }.onFailure { Log.i("CatAnalyzer", "Segmentation unavailable, using centre mask", it) }.getOrNull()
 
         val w = bitmap.width
@@ -94,7 +103,26 @@ class CatAnalyzer {
         val pixels = IntArray(w * h).also { bitmap.getPixels(it, 0, w, 0, 0, w, h) }
         val weights = FloatArray(w * h)
         var usedSegmentation = false
-        if (mask != null && mask.capacity() >= w * h) {
+        val subjects = segmentation?.subjects.orEmpty()
+        if (subjects.size > 1) {
+            // Several subjects: keep only the largest one (most foreground confidence).
+            val largest = subjects.maxBy { subject ->
+                subject.confidenceMask?.let { m -> m.rewind(); var sum = 0f; while (m.hasRemaining()) sum += m.get(); sum } ?: 0f
+            }
+            largest.confidenceMask?.let { m ->
+                m.rewind()
+                var total = 0f
+                for (y in 0 until largest.height) for (x in 0 until largest.width) {
+                    val v = m.get().coerceIn(0f, 1f).let { if (it < 0.35f) 0f else it }
+                    val px = largest.startX + x
+                    val py = largest.startY + y
+                    if (px in 0 until w && py in 0 until h) { weights[py * w + px] = v; total += v }
+                }
+                usedSegmentation = total > w * h * 0.03f
+            }
+        }
+        val mask = segmentation?.foregroundConfidenceMask
+        if (!usedSegmentation && mask != null && mask.capacity() >= w * h) {
             mask.rewind()
             var total = 0f
             for (i in 0 until w * h) {
@@ -107,7 +135,7 @@ class CatAnalyzer {
 
         val analysis = describe(pixels, weights, w, h)
         val detected = catLabel >= 0.5f || (catLabel > 0.2f && animalHint)
-        analysis.copy(catDetected = detected, catConfidence = catLabel, usedSegmentation = usedSegmentation)
+        analysis.copy(catDetected = detected, catConfidence = catLabel, usedSegmentation = usedSegmentation, subjectCount = subjects.size.coerceAtLeast(1))
     }
 
     private fun centreWeights(w: Int, h: Int, out: FloatArray) {
@@ -411,14 +439,48 @@ object Similarity {
         candidateCoat: String,
         candidatePattern: String,
         distanceKm: Double?,
+        uncertaintyKm: Double = 0.0,
+        daysApart: Double = 0.0,
     ): Breakdown {
         val (colour, texture, layout) = visual(features, candidateFeatures)
         val attributes = (if (coat == candidateCoat) 0.65 else 0.0) + (if (pattern == candidatePattern) 0.35 else 0.0)
         val visual = 0.6 * colour + 0.25 * texture + 0.15 * layout
-        val proximity = distanceKm?.takeIf { it.isFinite() }?.let { exp(-it.coerceAtLeast(0.0) / 1.5) }
+        val proximity = distanceKm?.let { proximity(it, uncertaintyKm, daysApart) }
         val total = if (proximity != null) 0.65 * visual + 0.2 * attributes + 0.15 * proximity else 0.77 * visual + 0.23 * attributes
         return Breakdown(total.coerceIn(0.0, 1.0), colour, texture, layout, attributes, proximity)
     }
+
+    /**
+     * Location as supporting evidence, 0..1. The distance is first reduced by how uncertain the two
+     * positions are (GPS accuracy, and the blurring applied to public cat locations), so a cat seen
+     * across the street isn't marked down. The decay widens slowly with the time since the cat was last
+     * seen (about 1.5 km at first, at most 4 km), because a cat can move between neighbourhoods. Location
+     * is only 15% of the total, so it ranks candidates but never rules one out on its own.
+     */
+    fun proximity(distanceKm: Double, uncertaintyKm: Double = 0.0, daysApart: Double = 0.0): Double? {
+        if (!distanceKm.isFinite()) return null
+        val effective = (distanceKm - uncertaintyKm.coerceAtLeast(0.0)).coerceAtLeast(0.0)
+        val scale = 1.5 + (daysApart.coerceAtLeast(0.0) * 0.05).coerceAtMost(2.5)
+        return exp(-effective / scale)
+    }
+
+    /** How the app words a score, instead of showing a bare percentage. */
+    enum class Strength { STRONG, POSSIBLE, WEAK }
+
+    /**
+     * A match is "strong" only when it scores high and clearly beats the runner-up. Two similar orange
+     * tabbies both scoring 0.8 are "possible", because the descriptor can't tell them apart. These
+     * thresholds are provisional; Admin > Recognition test measures where they should sit.
+     */
+    fun strength(total: Double, runnerUp: Double?): Strength = when {
+        total >= STRONG_SCORE && (runnerUp == null || total - runnerUp >= STRONG_LEAD) -> Strength.STRONG
+        total >= POSSIBLE_SCORE -> Strength.POSSIBLE
+        else -> Strength.WEAK
+    }
+
+    const val STRONG_SCORE = 0.80
+    const val STRONG_LEAD = 0.05
+    const val POSSIBLE_SCORE = 0.62
 
     /** Averages descriptors from several photos of the same sighting. */
     fun average(list: List<List<Double>>): List<Double> {

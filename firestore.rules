@@ -17,6 +17,9 @@ service cloud.firestore {
     function isVolunteer() { return signedIn() && role() in ['volunteer', 'moderator', 'admin']; }
     function isMod() { return signedIn() && role() in ['moderator', 'admin']; }
     function isAdmin() { return signedIn() && role() == 'admin'; }
+    // The demo "admin" account carries this custom claim, set only by tools/demo/create-demo-accounts.mjs
+    // (firebase auth:import). It lets that account give its own profile the admin role.
+    function demoAdminClaim() { return signedIn() && request.auth.token.get('catmapAdmin', false) == true; }
 
     function incoming() { return request.resource.data; }
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
@@ -36,7 +39,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if signedIn();
       allow create: if signedIn() && uid() == userId
-        && incoming().role == 'user'
+        && (incoming().role == 'user' || (incoming().role == 'admin' && demoAdminClaim()))
         && incoming().volunteerStatus == 'none'
         && incoming().points == 0
         && incoming().get('suspended', false) == false;
@@ -47,7 +50,8 @@ service cloud.firestore {
           && (notChanging(['lastPostAt']) || incoming().lastPostAt == request.time)
           && (notChanging(['volunteerStatus']) || incoming().volunteerStatus == 'applied'))
         || (isMod() && notChanging(['role', 'volunteerStatus', 'lastPostAt', 'suspended']))
-        || isAdmin();
+        || isAdmin()
+        || (signedIn() && uid() == userId && demoAdminClaim() && onlyChanging(['role']) && incoming().role == 'admin');
       allow delete: if (signedIn() && uid() == userId) || isAdmin();
 
       // Email address and other account data only the owner may see.
@@ -118,6 +122,8 @@ service cloud.firestore {
       allow create: if verified()
         && incoming().userId == uid()
         && incoming().status == 'pending'
+        && incoming().get('suggestedCatIds', []).size() <= 6
+        && incoming().get('rejectedCatIds', []).size() <= 6
         && rateLimited();
       allow update: if isMod()
         || (verified() && resource.data.userId == uid()

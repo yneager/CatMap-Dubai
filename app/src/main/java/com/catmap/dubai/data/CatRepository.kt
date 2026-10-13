@@ -48,6 +48,8 @@ data class SightingDraft(
     val notes: String,
     val matchScore: Double,
     val aiSummary: String,
+    val suggestedCatIds: List<String> = emptyList(),
+    val rejectedCatIds: List<String> = emptyList(),
 )
 
 class CatRepository(
@@ -202,6 +204,8 @@ class CatRepository(
                 newCat = existing == null,
                 matchScore = draft.matchScore,
                 aiSummary = draft.aiSummary,
+                suggestedCatIds = draft.suggestedCatIds.take(6),
+                rejectedCatIds = draft.rejectedCatIds.take(6),
                 status = "pending",
                 createdAt = created,
                 updatedAt = created,

@@ -113,6 +113,9 @@ data class Sighting(
     var newCat: Boolean = false,
     var matchScore: Double = 0.0,
     var aiSummary: String = "",
+    /** Cat profiles the matcher suggested, and the ones the person said were "not this cat". */
+    var suggestedCatIds: List<String> = emptyList(),
+    var rejectedCatIds: List<String> = emptyList(),
     /** pending, approved, rejected */
     var status: String = "pending",
     var createdAt: Long = 0,

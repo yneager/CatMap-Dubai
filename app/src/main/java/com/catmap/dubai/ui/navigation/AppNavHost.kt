@@ -339,6 +339,7 @@ fun AppNavHost(pendingRoute: MutableState<String?>) {
                 composable(Routes.ADMIN_MAINTENANCE) { MaintenanceQueueScreen(nav) }
                 composable(Routes.ADMIN_SUBMISSIONS) { SubmissionsScreen(nav) }
                 composable(Routes.ADMIN_LOG) { ModLogScreen(nav) }
+                composable(Routes.ADMIN_RECOGNITION) { com.catmap.dubai.ui.admin.RecognitionTestScreen(nav) }
                 composable(Routes.ADMIN_POSTS) { AdminPostsScreen(nav) }
                 composable(Routes.ADMIN_USERS) { AdminUsersScreen(nav) }
                 composable(Routes.ADMIN_SITTERS) { AdminSittersScreen(nav) }

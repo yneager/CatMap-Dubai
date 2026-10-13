@@ -60,6 +60,7 @@ import androidx.navigation.NavHostController
 import com.catmap.dubai.BuildConfig
 import com.catmap.dubai.R
 import com.catmap.dubai.data.AppSettings
+import com.catmap.dubai.data.DemoAccounts
 import com.catmap.dubai.data.LocationPrivacy
 import com.catmap.dubai.data.MapMode
 import com.catmap.dubai.ui.map.MapStyles
@@ -244,6 +245,8 @@ fun SettingsScreen(nav: NavHostController) {
             }
             Text(stringResource(R.string.metadata_always_removed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
+            DemoAccountSwitcher(nav)
+
             SectionHeader(stringResource(R.string.account))
             TextButton(enabled=!runner.busy,onClick={
                 val uid=container.session.uid ?: return@TextButton
@@ -287,6 +290,33 @@ fun SettingsScreen(nav: NavHostController) {
             }) { container.authRepo.deleteAccount(password, me) }
         }
     }
+}
+
+/**
+ * "Demo accounts": shown only while signed in to a demo account on a device that has the demo password
+ * (after signing in as "admin"). One tap signs in as another demo user and returns to the map.
+ */
+@Composable
+private fun DemoAccountSwitcher(nav: NavHostController) {
+    val container = LocalContainer.current
+    val runner = rememberRunner()
+    val saved by container.authRepo.demoVault.saved.collectAsStateWithLifecycle()
+    val user by container.session.user.collectAsStateWithLifecycle()
+    if (!saved || !DemoAccounts.isDemoEmail(user?.email)) return
+    SectionHeader(stringResource(R.string.demo_accounts))
+    Text(stringResource(R.string.demo_accounts_body), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val admin = stringResource(R.string.role_admin)
+    DemoAccounts.ALL.forEach { account ->
+        val current = user?.email.equals(account.email, ignoreCase = true)
+        val label = if (account.admin) "${account.displayName} ($admin)" else "${account.displayName} (@${account.username})"
+        RadioRow(label, current) {
+            if (current || runner.busy) return@RadioRow
+            runner.run(onSuccess = { nav.navigate(Routes.MAP) { popUpTo(0) { inclusive = true } } }) {
+                container.authRepo.switchDemoAccount(account)
+            }
+        }
+    }
+    if (runner.busy) Text(stringResource(R.string.demo_switching), style = MaterialTheme.typography.bodySmall)
 }
 
 /** "Check for updates": asks GitHub now and shows the update sheet, or says you're up to date. */

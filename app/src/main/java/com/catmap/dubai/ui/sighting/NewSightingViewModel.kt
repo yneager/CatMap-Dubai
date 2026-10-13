@@ -16,6 +16,7 @@ import com.catmap.dubai.ai.CatAnalysis
 import com.catmap.dubai.ai.Similarity
 import com.catmap.dubai.data.AppException
 import com.catmap.dubai.data.Dubai
+import com.catmap.dubai.data.LocationPrivacy
 import com.catmap.dubai.data.SightingDraft
 import com.catmap.dubai.data.distanceKm
 import com.catmap.dubai.data.model.BehaviorTag
@@ -38,8 +39,13 @@ import kotlinx.coroutines.withContext
 
 class PickedPhoto(val key: Long, val photo: ProcessedPhoto, val analysis: CatAnalysis?)
 
-/** A possible existing profile for the cat in the photos. */
-data class CatMatch(val cat: Cat, val breakdown: Similarity.Breakdown, val distanceKm: Double?)
+/** A possible existing profile for the cat in the photos, and how confidently the app words it. */
+data class CatMatch(
+    val cat: Cat,
+    val breakdown: Similarity.Breakdown,
+    val distanceKm: Double?,
+    val strength: Similarity.Strength = Similarity.Strength.POSSIBLE,
+)
 
 /** Combined result of the on-device analysis over all photos. */
 data class CombinedAnalysis(
@@ -50,6 +56,8 @@ data class CombinedAnalysis(
     val patternConfidence: Float,
     val breedHints: List<BreedHint>,
     val features: List<Double>,
+    /** True when a photo had several animals or people in it, so only the largest was analysed. */
+    val severalSubjects: Boolean = false,
 )
 
 class NewSightingViewModel(private val container: AppContainer, presetCatId: String?) : ViewModel() {
@@ -175,6 +183,7 @@ class NewSightingViewModel(private val container: AppContainer, presetCatId: Str
             patternConfidence = bestPattern.patternConfidence,
             breedHints = best.breedHints,
             features = Similarity.average(results.map { it.features }),
+            severalSubjects = results.any { it.subjectCount > 1 },
         )
         if (!coatEdited && presetCat == null) {
             coat = best.coatColor
@@ -197,17 +206,21 @@ class NewSightingViewModel(private val container: AppContainer, presetCatId: Str
             try {
                 val cats = container.cats.allCatsOnce()
                 val here = if (lat != null && lng != null) lat!! to lng!! else null
-                matches = withContext(Dispatchers.Default) {
+                // Public cat positions are blurred (up to the "high" privacy radius) and GPS has its own error.
+                val uncertaintyKm = (accuracy + LocationPrivacy.approxRadiusMeters(LocationPrivacy.HIGH)) / 1000.0
+                val ranked = withContext(Dispatchers.Default) {
                     cats.asSequence()
                         .filter { it.features.isNotEmpty() }
                         .map { cat ->
                             val d = here?.let { distanceKm(it.first, it.second, cat.lat, cat.lng) }
-                            CatMatch(cat, Similarity.score(a.features, a.coat.key, a.pattern.key, cat.features, cat.coatColor, cat.pattern, d), d)
+                            val days = if (cat.lastSeen > 0) (seenAt - cat.lastSeen).coerceAtLeast(0) / 86_400_000.0 else 0.0
+                            CatMatch(cat, Similarity.score(a.features, a.coat.key, a.pattern.key, cat.features, cat.coatColor, cat.pattern, d, uncertaintyKm, days), d)
                         }
                         .filter { it.breakdown.total >= MATCH_THRESHOLD }
                         .sortedByDescending { it.breakdown.total }
                         .take(6).toList()
                 }
+                matches = ranked.mapIndexed { i, m -> m.copy(strength = Similarity.strength(m.breakdown.total, ranked.getOrNull(if (i == 0) 1 else 0)?.breakdown?.total)) }
                 matchesSearched = true
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
@@ -298,6 +311,9 @@ class NewSightingViewModel(private val container: AppContainer, presetCatId: Str
                     needsMedical = needsMedical,
                     notes = notes,
                     matchScore = confirmed?.let { c -> matches.firstOrNull { it.cat.id == c.id }?.breakdown?.total } ?: 0.0,
+                    // What the person was shown and ruled out, kept for measuring recognition later.
+                    suggestedCatIds = matches.map { it.cat.id },
+                    rejectedCatIds = rejected.toList(),
                     aiSummary = a?.let { "${it.coat.key}:${it.pattern.key}:${"%.2f".format(java.util.Locale.US, it.coatConfidence)}" } ?: "",
                 )
                 val catId = container.cats.submitSighting(draft, me, settings.privacyLevel, settings.shareExactWithVolunteers)

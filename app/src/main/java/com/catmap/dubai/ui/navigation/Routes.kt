@@ -98,6 +98,7 @@ object Routes {
     const val ADMIN_MAINTENANCE = "admin-maintenance"
     const val ADMIN_SUBMISSIONS = "admin-submissions"
     const val ADMIN_LOG = "admin-log"
+    const val ADMIN_RECOGNITION = "admin-recognition"
     const val ADMIN_POSTS = "admin-posts"
     const val ADMIN_USERS = "admin-users"
     const val ADMIN_SITTERS = "admin-sitters"

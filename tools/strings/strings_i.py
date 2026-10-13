@@ -46,4 +46,27 @@ S = [
 ('draft_available','Continue your saved post?','Continue your saved post?'), # TODO-AR
 ('continue_draft','Continue draft','Continue draft'), # TODO-AR
 ('discard_draft','Discard','Discard'), # TODO-AR
+('demo_accounts','Demo accounts','Demo accounts'), # TODO-AR
+('demo_accounts_body','Switch between the admin and the four demo users to show the app. Logging out forgets the demo password on this phone.','Switch between the admin and the four demo users to show the app. Logging out forgets the demo password on this phone.'), # TODO-AR
+('demo_switching','Switching account...','Switching account...'), # TODO-AR
+('err_demo_sign_in_again','The demo password has changed. Log out and sign in as admin again.','The demo password has changed. Log out and sign in as admin again.'), # TODO-AR
+('err_demo_missing',"That demo account doesn't exist yet. Run tools/demo/create-demo-accounts.mjs first.","That demo account doesn't exist yet. Run tools/demo/create-demo-accounts.mjs first."), # TODO-AR
+('match_strong','Strong match','Strong match'), # TODO-AR
+('match_possible','Possible match','Possible match'), # TODO-AR
+('match_weak','Weak match','Weak match'), # TODO-AR
+('match_check_marks','Similar-looking cats can score high. Compare ear tips, face markings and the tail before confirming.','Similar-looking cats can score high. Compare ear tips, face markings and the tail before confirming.'), # TODO-AR
+('several_subjects_hint','More than one animal or person was found in a photo. Only the largest one was analysed; crop the photo for better matches.','More than one animal or person was found in a photo. Only the largest one was analysed; crop the photo for better matches.'), # TODO-AR
+('recognition_test','Recognition test','Recognition test'), # TODO-AR
+('recognition_test_intro','Measures how well the app tells individual cats apart, using its own analyser. Put photos on this phone in one folder with a sub-folder per cat (for example CatTest/Zafran/1.jpg), with at least two photos of each cat. Nothing is uploaded.','Measures how well the app tells individual cats apart, using its own analyser. Put photos on this phone in one folder with a sub-folder per cat (for example CatTest/Zafran/1.jpg), with at least two photos of each cat. Nothing is uploaded.'), # TODO-AR
+('recognition_choose_folder','Choose photo folder','Choose photo folder'), # TODO-AR
+('recognition_analysing','Analysing photo %1$d of %2$d...','Analysing photo %1$d of %2$d...'), # TODO-AR
+('recognition_too_few','Need at least two cats, and two photos of a cat, in sub-folders of the chosen folder.','Need at least two cats, and two photos of a cat, in sub-folders of the chosen folder.'), # TODO-AR
+('recognition_dataset','%1$d cats, %2$d photos','%1$d cats, %2$d photos'), # TODO-AR
+('recognition_top1','Right cat ranked first','Right cat ranked first'), # TODO-AR
+('recognition_top3','Right cat in the top three','Right cat in the top three'), # TODO-AR
+('recognition_top1_best_photo','First, comparing photo by photo','First, comparing photo by photo'), # TODO-AR
+('recognition_false_suggestion','Unknown cat still got a suggestion','Unknown cat still got a suggestion'), # TODO-AR
+('recognition_false_strong','Unknown cat got a "strong" match','Unknown cat got a "strong" match'), # TODO-AR
+('recognition_time','Average analysis time: %1$d ms per photo','Average analysis time: %1$d ms per photo'), # TODO-AR
+('recognition_share','Share full report','Share full report'), # TODO-AR
 ]

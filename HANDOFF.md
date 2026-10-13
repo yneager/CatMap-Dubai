@@ -1,7 +1,91 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 13 Oct 2026 (all CODEX_PROMPT.md tasks implemented and locally verified; no release).**
+and what's left. **Last updated: 13 Oct 2026 (v0.0.4 released; demo accounts, List view, icons and the AI review implemented and committed locally; the owner still has to deploy the rules and create the demo accounts).**
+
+## 13 October 2026 - v0.0.4, demo accounts, AI review (Claude)
+
+**Released:** the four review commits were pushed and **v0.0.4** was tagged at `ad68256`. GitHub CI and the release
+workflow both passed; the release has `CatMap-0.0.4.apk` and its `.sha256`.
+
+**Production rules are NOT deployed yet.** The auto-mode classifier blocked `firebase deploy` from this session, so
+the owner must run it (see "Owner steps"). Until then, v0.0.4's help directory, data export and analytics read
+against the 12 Oct rules, and the demo admin can't create its profile.
+
+**Demo accounts (for showing the app to the supervisor)**
+* Sign in with username **`admin`** and the demo password. Settings then shows **Demo accounts**: admin plus
+  `demo_ali`, `demo_mohammad`, `demo_anirudh` and `demo_hassan`. One tap switches account and returns to the map;
+  switching signs straight into the next account, so a failure leaves the current one signed in.
+* The accounts are `<username>@demo.catmap.test`, with fixed uids `catmap-demo-*`, already verified, created by
+  `tools/demo/create-demo-accounts.mjs` through `firebase auth:import`.
+  * The **owner runs the script**. Claude may not create accounts on the production project.
+  * It asks for the password (never stored in the repo), hashes it into a temporary file, imports it and deletes
+    the file.
+  * It then test-signs-in with the API key from `app/google-services.json`, and falls back to the next hash format
+    if Firebase rejects the first. scrypt is first; the formats couldn't be verified locally because the Auth
+    emulator doesn't check imported hashes.
+* **What makes `admin` an admin is the custom claim `catmapAdmin`, not the password.**
+  * `firestore.rules`: `demoAdminClaim()` lets only that account create or restore its own profile with role
+    `admin`.
+  * On first sign-in `AuthRepository.ensureDemoProfile` creates the profile, and gives the role back if someone
+    removed it. Demo users get role `user`; promote them live from Manage users.
+* The shared password is kept on the phone, encrypted with an Android Keystore AES-GCM key
+  (`data/DemoAccounts.kt`, `DemoVault`). App backups are disabled. An explicit Log out or account deletion wipes
+  it, which hides the switcher.
+* **Security note:** anyone who learns the demo password gets admin rights over real users' data. Use a strong
+  password, and re-run the script with a new one after the presentation; the switcher then asks for a fresh
+  admin sign-in.
+* Verified on the emulator against the local emulators:
+  * admin login by username;
+  * switching admin → Ali → admin;
+  * Ali's profile created as "Community member";
+  * the admin profile recreated from scratch with the Administrator role (the old rules would refuse this);
+  * rules suite **253/253**, including 7 new demo-claim tests.
+
+**Map "List view"** is now a solid pill with an icon (`ui/map/MapScreen.kt`), like the search bar and chips, instead
+of floating orange text.
+
+**Icons redrawn** in `tools/icons/create_icons.py` (regenerated):
+* found is now a pin with a check (it had looked like the sitter house);
+* hands is a heart held in an open hand;
+* pearl is an open shell;
+* breed is a rosette;
+* camel is a one-humped side view;
+* falcon is perched;
+* the bird uses the same peach fill as the other animals instead of blue.
+
+The Roborazzi baselines were re-recorded and checked by eye.
+
+**AI recognition review** (`prompt.txt` → [docs/AI_RECOGNITION_REVIEW.md](docs/AI_RECOGNITION_REVIEW.md)). Implemented:
+* Only the largest subject is described when a photo has several.
+* Proximity allows for GPS error and the privacy blur, and widens with time since last seen.
+* Matches are worded Strong / Possible / Weak; "strong" needs ≥ 0.80 and a 0.05 lead over the runner-up.
+* A look-alike prompt and a several-animals hint were added.
+* Sightings store `suggestedCatIds` and `rejectedCatIds`, limited to 6 each by the rules.
+* **Admin > Recognition test** measures top-1/top-3 and false matches on a labelled photo folder using the app's
+  own analyser.
+
+The review recommends a learned on-device model (`pet-recognition-small`, ONNX Runtime), adopted only if the
+Recognition test shows a gain. That needs the owner's approval: a new dependency and a model file of about
+20–90 MB. Rejected: the PC GPU service. Deferred: vector search.
+
+**Checks run:** 69 unit tests, 0 failures; `verifyRoborazziDebug` matches; lint shows no errors in debug or
+release; `assembleDebug` passes; the rules suite passes 253/253. The staging build was installed and exercised on
+the emulator.
+
+**Owner steps, in order**
+1. `npx.cmd -y firebase-tools@latest deploy --only firestore`: rules and indexes, which cover both v0.0.4 and the
+   demo admin.
+2. `node tools/demo/create-demo-accounts.mjs`: type the demo password twice.
+3. Install the next release (v0.0.5, once tagged), sign in as `admin`, and open Settings > Demo accounts.
+
+**Not done**
+* v0.0.5 isn't tagged; waiting for the owner's OK.
+* The Arabic strings for the new features are English placeholders (`# TODO-AR`).
+* No real-world accuracy figure exists yet: the Recognition test needs a labelled dataset (20–40 local cats × 3–6
+  photos).
+* The emulator's seeded `admin` account (the same email) had its password changed during testing. The emulator
+  isn't persisted, so re-seeding after a restart fixes it.
 
 ## 13 October 2026 - review of the Codex work (Claude)
 

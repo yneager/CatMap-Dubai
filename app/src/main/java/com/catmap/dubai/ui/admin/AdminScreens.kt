@@ -118,6 +118,7 @@ fun AdminDashboardScreen(nav: NavHostController) {
         add(DashTile(R.string.maintenance_reports, Icons.Outlined.Build, maintenance?.size, Routes.ADMIN_MAINTENANCE))
         if (isAdmin) add(DashTile(R.string.feeding_stations, com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.STATION), stations?.size, Routes.STATIONS))
         add(DashTile(R.string.moderation_log, Icons.Outlined.History, null, Routes.ADMIN_LOG))
+        if (isAdmin) add(DashTile(R.string.recognition_test, com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.CAT), null, Routes.ADMIN_RECOGNITION))
     }
 
     Scaffold(topBar = { AppTopBar(stringResource(R.string.admin_dashboard), onBack = { nav.popBackStack() }) }) { padding ->

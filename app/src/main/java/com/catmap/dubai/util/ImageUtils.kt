@@ -37,6 +37,9 @@ object ImageUtils {
         return ProcessedPhoto(full, thumb, analysis)
     }
 
+    /** The same analysis-sized, upright bitmap that [process] gives the cat analyser, without encoding JPEGs. */
+    fun analysisBitmap(context: Context, uri: Uri): Bitmap = scaleToMax(decodeUpright(context, uri, FULL_MAX * 2), ANALYSIS_MAX)
+
     fun decodeUpright(context: Context, uri: Uri, maxDim: Int): Bitmap {
         val resolver = context.contentResolver
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
