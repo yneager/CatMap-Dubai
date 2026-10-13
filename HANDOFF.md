@@ -14,8 +14,17 @@ README, the model (`models\`), its own Python (`.venv\`) and `worker.local.json`
   there was blocked as credential handling, so by default it uses the project's copy.
 * Older sections below that mention `tools/ai-server` now mean the `cat-server` folder.
 
-**Owner steps:** deploy the rules, run `node tools/demo/create-demo-accounts.mjs`, then double-click
-`Desktop\cat-server\start.cmd`.
+* **Demo-accounts script fix:** the script crashed on Windows on its second password prompt (a libuv assertion in
+  Node 24). It now asks both questions on one readline. `--worker-only` creates just the AI worker account, with
+  nothing to type.
+* **One-click setup:** `Desktop\cat-server\setup.cmd` uploads the rules, creates the worker account, offers to create
+  the demo accounts, then starts the server. The owner runs it, because Claude's deploy was blocked again as
+  "Production Deploy".
+* **Skill for new chats:** the `catmap` user skill (`C:\Users\mohammad\.claude\skills\catmap\SKILL.md`) summarises
+  how everything works, the owner's rules, and how to build, test, release and hand off. Keep it in step with this
+  file.
+
+**Owner steps:** double-click `Desktop\cat-server\setup.cmd`.
 
 ## 13 October 2026 - live listener instead of polling (Claude)
 
