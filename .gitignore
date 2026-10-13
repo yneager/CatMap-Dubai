@@ -5,6 +5,7 @@
 .DS_Store
 /build/
 /app/build/
+/baselineprofile/build/
 /captures/
 .externalNativeBuild/
 .cxx/
@@ -26,3 +27,4 @@ __pycache__/
 /tools/seed/demo-accounts.local.json
 /release-keys/
 /functions/node_modules/
+/app/src/staging/generated/

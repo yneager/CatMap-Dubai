@@ -1,7 +1,338 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 12 Oct 2026 (the 2.0 feature set, released as v0.0.1 and v0.0.2).**
+and what's left. **Last updated: 13 Oct 2026 (all CODEX_PROMPT.md tasks implemented and locally verified; no release).**
+
+## 13 October 2026 - review of the Codex work (Claude)
+
+Everything Codex reported below was re-checked independently before it was committed.
+
+**Confirmed**
+* **Tests:** a forced re-run of `testDebugUnitTest` gave **63 tests, 0 failures**. `verifyRoborazziDebug` matched all 14 screenshot fixtures.
+* **Lint:** 0 errors in debug (13 warnings, 10 hints) and in release (11 warnings, 10 hints).
+* **Rules suite:** `emulators:exec` on port 8180 reported **244 passed, 0 failed**.
+* **`firestore.rules` diff:** read line by line, and the changes are mostly tighter:
+  * Notification updates are limited to `read`.
+  * Posts accept only a whitelist of fields. It matches every `Post` field; `id` is `@DocumentId` and never written.
+  * Sitters can't set `verified`.
+  * The help directory is admin-write.
+  * The owner-only `updates` collection-group list rule is fine.
+* **Emoji:** a broader search than Codex's (all of `app/src/main`, `tools/strings`, `tools/seed`, including variation selectors and ZWJ) found **0** lines.
+* **Icons:** the contact sheet shows 60 consistent icons in both themes.
+* **Device checks:**
+  * The Explore band is gone: scrolled on the emulator, with the scrim anchored at the top.
+  * The + button sits inside the bottom bar.
+  * Map markers and chips use the new icons.
+* **Protected files untouched:** `keystore.properties`, `release-keys/` and `app/google-services.json` still have their 12 Oct timestamps.
+* **No secrets in the new files:** a scan of all 200 new or changed files for every local password found none. `tools/qa/provision_runtime.ps1` only targets the local emulators and uses a random password that isn't stored.
+
+**Corrections**
+* **Startup claim not reproduced.**
+  * Codex reported a staging cold start of ~335 ms. Three `am start -W` cold launches (LaunchState COLD) of the same installed staging build on the same emulator gave **3636, 2602 and 2738 ms**.
+  * That's no measurable change from the 12 Oct figure (2.3–2.9 s). Treat the startup work and the Baseline Profile as unproven until they are measured on a real device.
+  * The other performance changes (shared feed, thumbnail decode, marker cache) are reasonable but weren't timed.
+* **CI pixel compare removed.**
+  * Codex had added `:app:verifyRoborazziDebug` to `ci.yml`. The baselines are rendered on Windows, and Linux runners render text differently, so it would have failed on every push.
+  * CI still runs the rendering tests through `testDebugUnitTest`, which catches crashes and runs the poster QR decode assertion. Pixel comparison is now a local check: `.\gradlew.bat :app:verifyRoborazziDebug`.
+* **Duplicate profiles removed.** The four 3.8 MB baseline/startup profile files were identical. The `app/src/staging/generated` copy was deleted and is now git-ignored; `app/src/main/generated` is kept.
+
+**Before the next release (v0.0.4)**
+1. **Deploy the new rules and indexes first:** `npx.cmd -y firebase-tools@latest deploy --only firestore`, with the owner's OK. Production still runs the 12 Oct rules, so the help directory and data export would fail, and the new indexes (analytics, export collection group) don't exist yet.
+2. **Fix the map's "List view" control.** It's plain orange text floating on the map with no container, and it's hard to see.
+3. **Optionally redraw the weakest icons:** found, hands, pearl, breed, camel and falcon. The bird is the only blue icon in an otherwise orange set.
+4. Watch the first GitHub CI run on this commit.
+
+## 13 October 2026 - bottom-bar + follow-up
+
+The owner reported the + button sticking out of the bottom bar. In
+`app/src/main/java/com/catmap/dubai/ui/navigation/AppNavHost.kt`, removed the -10dp vertical offset,
+reduced the circle from 58dp to 52dp and the shadow from 10dp to 2dp. It is centered inside the 68dp row;
+the accessible Post action and 52dp touch target remain intact. No strings, dependencies or rules changed.
+
+Installed on the local staging emulator. The before/after images are
+[before](docs/verification/bottom-plus-before.png) and [after](docs/verification/bottom-plus-after.png).
+Visually confirmed the whole circle sits within the bar; tapped Post and confirmed the chooser opens.
+Install log: `build/bottom-plus-install.log` (BUILD SUCCESSFUL in 2m 8s).
+Final test/screenshot/lint/debug/release checks: `build/bottom-plus-verification.log`
+(**BUILD SUCCESSFUL in 4m 32s**): 63 tests, 14 screenshot fixtures, zero lint errors in both variants,
+and both APKs built. Existing release signature reverified.
+No commit, push, release or production deployment.
+
+## 13 October 2026 - prompt implementation complete
+
+This section supersedes the historical 12 October status below. The user requested a review first, then
+explicitly authorized all of `CODEX_PROMPT.md`. All tasks have implementation and the required local checks
+passed. No commit, push, tag, release, remote change or production Firebase deployment was made.
+Protected signing/configuration/password files were not read out, printed, copied or changed; the existing
+build configuration signed the APK. The pinned toolchain is unchanged. All new work remains Spark-compatible;
+video/push retain their existing Blaze flags. English login now describes all animals.
+
+### What I did, files and verification
+
+Kotlin paths below are relative to `app/src/main/java/com/catmap/dubai/`. Every row is covered by the final
+63-test suite, debug/release lint with zero errors, and both APK builds. Feature-specific evidence follows.
+
+| Task | Status | Main files and result | Additional verification |
+| --- | --- | --- | --- |
+| 0 Explore scrim | Done | `ui/explore/ExploreScreen.kt`: one root Box, scrim anchored at the top. Checked map/profile/detail root layouts. | Before/after emulator images; middle band gone. |
+| A Original icons | Done | `ui/icons/CatMapIcons.kt`, 60 `res/drawable/ic_cm_*.xml`, `gamification/Badges.kt`, `data/model/Community.kt`, `ui/map/MapMarkers.kt`, `util/PosterMaker.kt`, migrated UI and string tables. Drawable references replace emoji APIs; vector bitmap pins retain clustering/pulse/selection. | No emoji matches in requested directories; light/dark 48/16dp contact sheet and runtime screens. Full 100-line inventory below. |
+| B Consistent UI | Done | `ui/components/Components.kt`, `CommunityComponents.kt`, `PostDetailHeader.kt`, `ui/navigation/AppNavHost.kt`, `data/Firestore.kt`, map/explore/posts/messages/profile/admin/sitting/adoption/cats/stations/rescue/sighting screens. Shared bars, shapes, gutters, headers, stable keys/content types on all lazy data rows, loading/empty states, listener retry and offline banner; keyboard/inset fixes. | Device screenshots across these routes; English light/dark fixtures; larger-text/dark map-list visual check. |
+| C Performance | Done; optional checks skipped | `AppContainer.kt`, `CatMapApp.kt`, `data/ImageRepository.kt`, `ui/components/Components.kt`, `ui/map/CommunityMap.kt`, `location/LocationHelper.kt`, `baselineprofile/`, generated profiles, Gradle and ignore files. Shared feed, thumbnails, target decode/cache keys, deferred startup, safe style access and cached markers. | Three cold launches before/after, image memory/disk test, actual baseline capture and packaged ART profile, APK size/signature. Paging and Layout Inspector limits below. |
+| 1 Screenshots | Done | `app/build.gradle.kts`, `ui/VisualRegressionTest.kt`, `app/src/test/screenshots/`, CI workflow. English light/dark cards, pills, detail header, filter sheet and icons; poster and full contact sheet. | `verifyRoborazziDebug` passed: 14 fixtures. Poster QR decoded back to the expected link inside the rendering test. |
+| 2 Lint | Done | English quantity labels in `tools/strings/strings_g/h.py`, map/location offset lambdas, `LocalResources`, bitmap/URI/canvas KTX changes. | Debug: 0 errors, 13 warnings, 10 hints. Release: 0 errors, 11 warnings, 10 hints. Intentional remaining categories noted below. |
+| 3 Drafts | Done | `data/PostDraftStore.kt`, `ui/posts/PostEditorViewModel.kt`, `PostEditorScreen.kt`. Per-account DataStore, cached JPEGs, debounced field/immediate step save, continue/discard, publish cleanup, retained upload fingerprint on retry and stable per-photo draft IDs. Existing-post edits excluded. | 3 serialization tests; name/microchip/step/photo survived force-stop; successful publishing cleared the draft. |
+| 4 Reminders | Done | `data/PostStaleness.kt`, `PostRepository.kt`, `NotificationRepository.kt`, models/settings/filtering, inbox/navigation, rules/tests. 14-day deterministic alerts; activity bumps; 90-day older-post filter. | 4 policy tests and positive/negative rules checks. Both inbox actions saved on local posts: fresh activity and reunited status. A 100-day QA post was hidden by default and returned with Include older; Microchip Yes narrowed the same shared map filter. |
+| 5 Links and QR | Done | `util/PostLinks.kt`, `Share.kt`, `PosterMaker.kt`, manifest, `MainActivity.kt`, navigation. Strict custom URI routing, share links and printable QR. Contact footer wraps beside QR. | 3 parsing tests; QR decode assertion; actual `catmap://post/TFNWfAoHrbaNKoRKg5KY` opened the QA post; poster visually checked. |
+| 6 Matching | Done | `ai/PostAppearance.kt`, post model/repository/editor/detail, rules/indexes. 27-value folded HSV + RGB-layout descriptor; same-animal lost/found/spotted ranking by photo, distance and time. Legacy metadata label is explicit. Existing deterministic match alert retained. | 3 logic tests and rules shape/range negatives. Actual photo wizard stored 27 values; two synthetic photo fixtures ranked together and legacy post had the metadata-only label. |
+| 7 Map list | Done | `ui/map/MapScreen.kt`. Same feature list, distance sorting, real titles, drawable icons, preview semantics, GPS/map-center basis. Header measurement now includes insets and constrains the list viewport. | Map/list screenshots with GPS and without it; final dark/larger-text no-GPS screen has no header overlap. |
+| 8 Help directory | Done | `data/HelpDirectoryRepository.kt`, `ui/help/HelpDirectoryScreen.kt`, Explore/login/admin/navigation, Proguard, rules/tests. Public reads; validated admin CRUD, localized kinds and explicit Demo marker. | Positive/negative rules checks and local admin create/edit/delete. Empty state and editor captured. No real contacts added. |
+| 9 Sitters | Done | `data/SittingRepository.kt`, models, `ui/sitting/SittingScreens.kt`, `ui/admin/AdminCommunityScreens.kt`, rules/tests. Admin verified boolean, moderation log, list/detail badges and Verified only. | Rules forbid self-verification; local admin toggle, detail badge and filtered list. Demo sitter restored to unverified afterwards. |
+| 10 Export | Done | `data/UserDataExport.kt`, settings/container; ownership collection-group rule/index. JSON profile/private account, posts, own updates/contributions/locations, sitter/applications/subscriptions, participant requests/bookings/reviews/chats/messages, favorites/blocked/inbox and image metadata. | 2 JSON builder tests, privacy rules checks, final local export reached Android's share sheet. No file sent externally. |
+| 11 Quiet hours | Done | `notifications/QuietHours.kt`, `Notifications.kt`, `data/SettingsRepository.kt`, settings UI. Device-clock windows suppress system posts but advance delivery checkpoints; inbox retained without replay. | 3 boundary/overnight/full-day tests plus existing delivery tests; settings switch and time dialog exercised. |
+| 12 Analytics | Done | `data/AdminAnalytics.kt`, `ui/admin/AnalyticsPanel.kt`, dashboard, indexes. Eight Dubai weeks, count() posts/members, cohort reunion rate, five-minute cache, native Canvas/accessibility. | Real local count() aggregations and rendered charts inspected; no new chart library. |
+| 13 What's new | Done | `update/UpdateUi.kt`, `WhatsNewPolicy.kt`, `Updater.kt`, settings. Once-per-version notes with download cache and installed-tag fallback; first upgrade from pre-feature app handled. | 4 first-install/upgrade/dismissal policy tests; temporary staging upgrade showed fallback notes once and stayed dismissed after relaunch. Published release-note retrieval not exercised. |
+| 14 Integrity | Done | `.github/workflows/release.yml`, `update/ApkChecksum.kt`, `Updater.kt`. Matching SHA-256 sidecar, digest/filename/truncation checks, HTTPS redirects, package/version/current signing identity and increasing versionCode. | 2 checksum tests; signed local release verified. New workflow/published-download/final installer path deliberately not run. |
+| 15 Microchip | Done | Post model/draft/editor/detail, poster, filter/preferences, rules/tests, `strings_i.py`. Yes/no/unknown only; post-field whitelist blocks public chip-number fields. | Wizard restore/detail/poster and stored `yes` value checked; shared Microchip Yes filter narrowed to the matching QA post; serialization/filter/rules tests. |
+
+Extra privacy fix: `data/CommunityAccountCleanup.kt` and `AuthRepository.kt` remove authored community
+posts/updates/messages/requests, sitter/subscriptions/private docs and local draft/export caches on account
+delete, and redact names/notes in retained counterpart booking/review history. Own comments decrement the
+surviving post transactionally. New rules checks cover these boundaries. Full account deletion was not
+run live; historical shared-cat/care records retain attribution, large client cleanup is not globally atomic,
+and retries/suspended shared-cat cleanup still need a separate owner-approved hardening pass.
+
+### Checks and reproducible commands
+
+Run from this folder in PowerShell, using the existing protected local configuration internally:
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
+$env:GRADLE_USER_HOME = 'C:\Users\mohammad\.gradle'
+python tools/strings/build_strings.py .
+.\gradlew.bat --no-parallel --max-workers=1 :app:testDebugUnitTest :app:verifyRoborazziDebug :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease
+npm --prefix tools/rulestest ci
+$env:PATH = $env:JAVA_HOME + '\bin;' + $env:PATH
+npx.cmd -y firebase-tools@latest emulators:exec --config firebase.rules-test.json --only firestore --project demo-catmap-rules-test "npm --prefix tools/rulestest test"
+```
+
+Build log `build/verification-final.log`: **BUILD SUCCESSFUL in 4m 12s**. The last row-key refinements were rechecked in `build/lazy-rows-final-verification.log` (**BUILD SUCCESSFUL in 4m 21s**), with final staging install in `build/lazy-rows-final-install.log` (**BUILD SUCCESSFUL in 1m 41s**). Rules log
+`build/final-rules-validation.log`: **244 passed, 0 failed**, isolated rules emulator 8180 stopped cleanly.
+String generator: **1112 per language**, missing `[]`, unused `[]`. Android JUnit XML: **63 methods,
+0 failures/errors**, including 3 rendering methods producing 14 fixtures. Signature checked with SDK
+`build-tools/36.0.0/apksigner.bat verify`; no signing key was opened.
+
+One earlier parallel lint run stalled in Kotlin UAST traversal. Restarting that build's daemon and using
+`--no-parallel --max-workers=1` completed all detectors; no lint detector was disabled to make it pass.
+Remaining warnings are LogNotTimber, pinned GradleDependency, intentional OldTargetApi/ARM-only
+ChromeOsAbiSupport and unused generated Firebase resource metadata. Ten AutoboxingStateCreation hints
+remain in existing state holders. These are recorded rather than hidden.
+
+Re-record screenshots only for reviewed intentional changes:
+
+```powershell
+.\gradlew.bat :app:recordRoborazziDebug
+# Inspect app/src/test/screenshots and docs/icons-preview.png.
+.\gradlew.bat :app:verifyRoborazziDebug
+```
+
+Use **separate invocations**. Locale en-US, Dubai time, SDK35 native Robolectric graphics are fixed.
+MapLibre, Arabic and system permission/installer dialogs are excluded from these fixtures. CI runs these
+rendering tests and both lint variants, but **not** the pixel comparison (see the review below). GitHub CI hasn't run on this work yet.
+
+### Performance and artifacts
+
+* Staging before samples: **2191, 2056, 1572 ms**, median **2056 ms**.
+* Final R8 staging samples: **335, 338, 333 ms**, median **335 ms**. **Not reproduced:** see the review below, which measured 2.6–3.6 s.
+* Method: `adb shell am force-stop com.catmap.dubai.staging`, then `adb shell am start -W -n com.catmap.dubai.staging/com.catmap.dubai.MainActivity`, three times. Raw results are in `build/prompt-shots/startup-before.txt` and `startup-after.txt`.
+* These are first-draw timings from one emulator, not map/network readiness. Cache/authentication/test-data state changed during QA; this is a rough comparison, not an isolated causal benchmark or real-device guarantee.
+* Image loading test decoded a 360 px image to 90 px, reused the exact memory bitmap, then hit disk after constructing a new repository; source fetched once. Feeds use `{id}_t` and decode to measured targets. Memory cap 64 MiB/heap 1/8; existing disk cap 40 MiB/24h retained.
+* `:app:generateStagingBaselineProfile -Pcatmap.emulatorHost=10.0.2.2` **succeeded in 10m 4s** on emulator-5554 with default collector stability. **37,037 rules**; startup+Explore references. Staging output copied into `app/src/main/generated/baselineProfiles` for release. The identical `app/src/staging/generated` copy was later removed and git-ignored, because main covers all variants. Normal builds do not regenerate. APK contains `assets/dexopt/baseline.prof` and `.profm`. Capture can reset staging sign-in; use disposable demo accounts.
+* Final signed ARM release: **24,120,027 bytes = 23.003 MiB = 24.12 MB**, approximately 1.42 MiB above the earlier 21.58 MiB local measurement, within the requested approximately24MB range.
+* APK: `app/build/outputs/apk/release/app-release.apk`, package `com.catmap.dubai`, normal local version **0.0.1/code 1**. It is a review artifact, not a new release. The owner must select/override the next real version before publishing.
+* Installed demo package remains **com.catmap.dubai.staging**, temporary QA version **2.0.2**, R8 with catmap.blaze=false (existing demo override still enables free local Storage; push is off), localhost emulator host via 10.0.2.2. The real app/production backend were untouched.
+
+### UI before/after and evidence
+
+* Explore: floating middle scrim -> anchored status overlay in one root.
+* Emoji/system-dependent artwork -> original theme-tinted vectors and separate 18 badge medallions.
+* Mixed detail/chat/search bars and card shapes -> shared bars/header/theme roles and 16dp screen gutters.
+* Failed listeners looked like empty/not-found -> common error banner with listener retry; offline handling shared.
+* Full feed image decode/duplicate feed listeners -> target thumbnails/shared feed and tested cache hits.
+* Map list had an overlapping distance note -> outer header measured including insets, separate constrained list viewport; large text/dark confirmed.
+* Poster contact line clipped beside QR -> two-line reserved contact footer; QR test decodes actual bitmap.
+
+Core images retained under `docs/verification/`: Explore before/final, dark larger-text map list, poster,
+photo matching, export chooser, upgrade notes, stale inbox, demo directory, verified sitter, older/microchip filter and time picker.
+[49 route/screen captures](docs/runtime-screens.md) and XML/label evidence remain locally under git-ignored `build/prompt-shots/` (including
+map/Explore/profile/editor/detail/badges/poster; adoption/sitting/messages/chat/search/settings; community
+cats/stations/rescue/sighting; dashboard and all admin queues). Individual captures are smoke/visual evidence,
+not proof of every state or workflow. Synthetic posts and the empty local QA chat remain for owner review;
+no messages were sent. Directory test entry was deleted, sitter verification restored, and appearance/quiet
+preferences restored. Original saved demo passwords were never read. The generated disposable QA credential
+file was removed; staging remains signed in as QA Tester. Saved seed export was not modified.
+
+### What I did not do, and why
+
+* **Arabic translation/RTL review:** explicitly excluded. New Arabic columns equal English and carry TODO-AR; only original emoji removal changed old Arabic wording.
+* **Explore paging:** optional, skipped because current global search/distance/filter ordering over 400 posts would be changed by naive page-by-page filtering. Cap400 remains; a future server/index design needs its own test coverage.
+* **Layout Inspector recomposition counts:** unavailable through the current tooling. Stable keys/content types and hoisting reviewed; no fabricated recomposition measurements.
+* **Production Firebase/index/auth smoke tests:** prohibited by the prompt. Current production rules/indexes do not automatically receive these changes.
+* **GitHub workflow/published update/end installer:** no release/tag authorized; checksum units and local APK signature passed. Older assets without sidecars stay compatible, with Android signing still authoritative. Live published-note/body caching, installer permission and hostile APK package/signature cases were not integration-tested.
+* **Every OS/background transition:** quiet-hour logic/delivery unit tests and settings UI passed; no overnight wall-clock/background system-notification endurance run. Listener retry/offline UI was not exhaustively fault-injected on every route.
+* **Full account-delete runtime:** privacy rules checked; no complete new multi-collection delete was driven live.
+* **Draft video URI restoration:** optional Blaze video URI not persisted. The requested text/pin/reward/photo draft fields are persisted; cached photos can still be removed by Android cache eviction.
+* **Push/Blaze tests/deployment:** no new push function code. Release flags remain Spark-safe; free local Storage is enabled by the existing emulator override. Push function and video paths were not retested.
+
+### Next owner work, in priority order
+
+1. Review this uncommitted diff, icon artwork and runtime screenshots. Before shipping, separately approve deployment of the updated Firestore rules/indexes to production and smoke-test real verified/non-admin users. This session did not deploy them.
+2. Translate the **47 TODO-AR keys** in `tools/strings/strings_i.py`; the complete key/text list is [docs/arabic-todo.md](docs/arabic-todo.md). Regenerate strings and review RTL, mirrored navigation icons and new layouts on a device.
+3. Choose the next real 0.0.x version, verify existing signing and repository secrets privately, then run/review CI. Publish only when explicitly authorized. Exercise `.sha256` download verification, the actual release-note body and the final Android installer/unknown-app permission on an old signed production build.
+4. Check a physical device with larger text/TalkBack, offline transitions, notifications across quiet-hour boundaries and realistic image/post volume. Paging and a controlled macrobenchmark can follow if those measurements warrant it.
+5. Harden the historical account-deletion limitations and large exports/cleanup separately; retained counterpart history keeps UIDs and shared-care attribution after names/notes are redacted.
+
+### Dependencies, collections, fields, rules and indexes
+
+Added dependencies (existing versions/toolchain retained):
+
+* ZXing core **3.5.4** (poster QR).
+* Roborazzi Gradle/core/compose **1.76.0**, Robolectric **4.17**, Compose ui-test-junit4 and debug test-manifest using the existing BOM (device-free screenshots).
+* AndroidX baselineprofile Gradle plugin and benchmark-macro-junit4 **1.5.0**, ProfileInstaller **1.4.1**, test ext JUnit **1.3.0**, UIAutomator **2.3.0** in the macrobenchmark module. Benchmark dependencies stay outside the production app except ProfileInstaller/profile data.
+* No icon pack, chart library, paid API or API key added.
+
+Schema/rules (all changes in `firestore.rules`, with positive/negative coverage in `tools/rulestest/test.mjs`):
+
+* New `helpDirectory/{id}`: name/kind/phone/address/website/note/demo/updatedAt. Public reads, validated admin writes/deletes, strict fields/lengths and HTTPS websites.
+* Optional legacy-compatible posts fields: `lastActivityAt` nonnegative integer, `microchip` yes/no/unknown, `fingerprint` empty or exactly 27 finite numeric values in 0..1. A whitelist rejects unexpected public chip-number fields even in moderator writes. The descriptor was reduced from an initial 63-value approach to fit the rules evaluation budget without weakening per-element checks.
+* Optional `sitters.verified` boolean: createfalse for members, only admins may set/change it. Protected in all update branches; moderation log entry added.
+* Owner-only self-reminder inbox creation: `stale_{postId}_{floor(now/14days)}`, eligible own lost/found post; notification updates restricted to read state. Existing match create-only IDs unchanged.
+* Ownership-filtered `updates` collection-group list for export/cleanup (`byUid==uid`); foreign-user negative tests.
+* Own comment delete/count decrement and limited self-redaction of booking/review/chat history for cleanup; counterparty ownership cannot be reassigned.
+* New indexes: posts category+createdAt and category+status+createdAt for analytics; updates.byUid collection-group ascending; fingerprint deliberately unindexed. Emulator rules checks do not prove deployed composite indexes; owner deployment is still required.
+* Local DataStore additions: per-user draft fields/photo references; includeOlder/microchip filters; quiet start/end/enabled; lastSeenVersion and downloaded-note cache. No new remote collection for these preferences.
+* Export schemaVersion 1 is cached under hashed per-user filenames and shared read-only through FileProvider. JPEG bytes, push tokens and credentials excluded; current-session UID checked before opening chooser. Own exact locations are intentionally present in the private export.
+
+### Complete emoji inventory
+
+The **100 original source-line occurrences across 22 files**, including both generated string languages,
+are listed here with replacements. Exact original lines are in [docs/emoji-inventory.json](docs/emoji-inventory.json);
+the compact copy is [docs/emoji-replacements.md](docs/emoji-replacements.md). No original wording was rewritten
+for icon migration. The review sheet is [docs/icons-preview.png](docs/icons-preview.png).
+
+Search used, with the explicitly forbidden credential file excluded:
+
+```powershell
+rg -n '[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{FE0F}]' app/src/main tools/strings tools/seed -g '!demo-accounts.local.json' -g '!__pycache__/**'
+```
+
+Result: **no matches**. API consumers without literal emoji (poster/marker/enum calls) are additionally listed
+at the end of the inventory. `tools/icons/create_icons.py` is reusable; completed one-time migration scripts
+were removed so they cannot accidentally reapply old substitutions.
+
+1. `app/src/main/java/com/catmap/dubai/data/ChatRepository.kt:63` - 📷 -> Plain localized photo/post/location/reward text; no emoji sent in notifications or sharing.
+2. `app/src/main/java/com/catmap/dubai/data/ChatRepository.kt:64` - 🐾 -> Plain localized photo/post/location/reward text; no emoji sent in notifications or sharing.
+3. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:29` - 🐾 -> ic_cm_badge_paw
+4. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:30` - 🏺 -> ic_cm_badge_souq
+5. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:31` - ⛵ -> ic_cm_badge_abra
+6. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:32` - 🛥️ -> ic_cm_badge_boat
+7. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:33` - ☕ -> ic_cm_badge_cup
+8. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:34` - 🤲 -> ic_cm_badge_hands
+9. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:35` - 🌙 -> ic_cm_badge_moon
+10. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:36` - 🌃 -> ic_cm_badge_night
+11. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:37` - 🌳 -> ic_cm_badge_tree
+12. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:38` - 💧 -> ic_cm_badge_water
+13. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:39` - ✂️ -> ic_cm_badge_scissors
+14. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:40` - 🦪 -> ic_cm_badge_pearl
+15. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:41` - 📸 -> ic_cm_badge_camera
+16. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:42` - 🔍 -> ic_cm_badge_lost
+17. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:43` - ❤️ -> ic_cm_badge_adoption
+18. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:44` - 🦅 -> ic_cm_badge_falcon
+19. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:45` - 🏙️ -> ic_cm_badge_street
+20. `app/src/main/java/com/catmap/dubai/gamification/Badges.kt:46` - 🐪 -> ic_cm_badge_camel
+21. `app/src/main/java/com/catmap/dubai/update/UpdateUi.kt:71` - 🚀 -> ic_cm_update
+22. `app/src/main/java/com/catmap/dubai/util/Share.kt:40` - 📍 -> Plain localized photo/post/location/reward text; no emoji sent in notifications or sharing.
+23. `app/src/main/java/com/catmap/dubai/util/Share.kt:42` - 💰 -> Plain localized photo/post/location/reward text; no emoji sent in notifications or sharing.
+24. `app/src/main/java/com/catmap/dubai/data/model/Community.kt:11` - 🐱 -> ic_cm_cat
+25. `app/src/main/java/com/catmap/dubai/data/model/Community.kt:12` - 🐶 -> ic_cm_dog
+26. `app/src/main/java/com/catmap/dubai/data/model/Community.kt:13` - 🐦 -> ic_cm_bird
+27. `app/src/main/java/com/catmap/dubai/data/model/Community.kt:14` - 🐰 -> ic_cm_rabbit
+28. `app/src/main/java/com/catmap/dubai/data/model/Community.kt:15` - 🐾 -> ic_cm_paw
+29. `app/src/main/java/com/catmap/dubai/ui/explore/ExploreScreen.kt:82` - 💜 -> ic_cm_adoption
+30. `app/src/main/java/com/catmap/dubai/ui/explore/ExploreScreen.kt:83` - 🏠 -> ic_cm_sitter
+31. `app/src/main/java/com/catmap/dubai/ui/explore/ExploreScreen.kt:84` - 🐈 -> ic_cm_cat
+32. `app/src/main/java/com/catmap/dubai/ui/explore/ExploreScreen.kt:85` - 🚑 -> ic_cm_rescue
+33. `app/src/main/java/com/catmap/dubai/ui/explore/ExploreScreen.kt:86` - 🥣 -> ic_cm_station
+34. `app/src/main/java/com/catmap/dubai/ui/explore/ExploreScreen.kt:87` - 🔔 -> ic_cm_bell
+35. `app/src/main/java/com/catmap/dubai/ui/explore/Filtering.kt:51` - 🔴 -> ic_cm_lost
+36. `app/src/main/java/com/catmap/dubai/ui/explore/Filtering.kt:52` - 🟢 -> ic_cm_found
+37. `app/src/main/java/com/catmap/dubai/ui/explore/Filtering.kt:53` - 👀 -> ic_cm_spotted
+38. `app/src/main/java/com/catmap/dubai/ui/explore/Filtering.kt:54` - 🆘 -> ic_cm_help
+39. `app/src/main/java/com/catmap/dubai/ui/explore/Filtering.kt:55` - 🐈 -> ic_cm_cat
+40. `app/src/main/java/com/catmap/dubai/ui/explore/Filtering.kt:56` - 💜 -> ic_cm_adoption
+41. `app/src/main/java/com/catmap/dubai/ui/explore/Filtering.kt:57` - 🏠 -> ic_cm_sitter
+42. `app/src/main/java/com/catmap/dubai/ui/explore/SearchScreen.kt:143` - 📍 -> ic_cm_pin
+43. `app/src/main/java/com/catmap/dubai/ui/map/MapMarkers.kt:57` - 🥣 -> ic_cm_station
+44. `app/src/main/java/com/catmap/dubai/ui/map/MapMarkers.kt:58` - 🏠 -> ic_cm_sitter
+45. `app/src/main/java/com/catmap/dubai/ui/map/MapMarkers.kt:59` - 🚑 -> ic_cm_rescue
+46. `app/src/main/java/com/catmap/dubai/ui/map/MapMarkers.kt:60` - 🐾 -> ic_cm_paw
+47. `app/src/main/java/com/catmap/dubai/ui/map/MapScreen.kt:370` - 🐾 -> ic_cm_paw
+48. `app/src/main/java/com/catmap/dubai/ui/map/MapScreen.kt:452` - 📍 -> ic_cm_pin
+49. `app/src/main/java/com/catmap/dubai/ui/map/MapScreen.kt:559` - 🏠 -> ic_cm_sitter
+50. `app/src/main/java/com/catmap/dubai/ui/messages/MessagesScreens.kt:378` - 🐾 -> ic_cm_paw
+51. `app/src/main/java/com/catmap/dubai/ui/posts/PostDetailScreen.kt:250` - ♂♀ -> ic_cm_sex
+52. `app/src/main/java/com/catmap/dubai/ui/posts/PostDetailScreen.kt:251` - 🎂 -> ic_cm_age
+53. `app/src/main/java/com/catmap/dubai/ui/posts/PostDetailScreen.kt:252` - 🎨 -> ic_cm_colour
+54. `app/src/main/java/com/catmap/dubai/ui/posts/PostDetailScreen.kt:253` - 🧬 -> ic_cm_breed
+55. `app/src/main/java/com/catmap/dubai/ui/posts/PostDetailScreen.kt:508` - 👀🎉📝 -> ic_cm_spotted / ic_cm_found / ic_cm_note according to update kind
+56. `app/src/main/java/com/catmap/dubai/ui/posts/PostEditorScreen.kt:292` - 🔍 -> ic_cm_lost
+57. `app/src/main/java/com/catmap/dubai/ui/posts/PostEditorScreen.kt:293` - 🤲 -> ic_cm_found
+58. `app/src/main/java/com/catmap/dubai/ui/posts/PostEditorScreen.kt:294` - 👀 -> ic_cm_spotted
+59. `app/src/main/java/com/catmap/dubai/ui/posts/PostEditorScreen.kt:295` - 🆘 -> ic_cm_help
+60. `app/src/main/java/com/catmap/dubai/ui/posts/PostEditorScreen.kt:296` - 🏙️ -> ic_cm_street
+61. `app/src/main/java/com/catmap/dubai/ui/posts/PostEditorScreen.kt:297` - 💜 -> ic_cm_adoption
+62. `app/src/main/java/com/catmap/dubai/ui/posts/PostEditorScreen.kt:298` - 📝 -> ic_cm_note
+63. `app/src/main/java/com/catmap/dubai/ui/posts/PostLists.kt:92` - 📸 -> ic_cm_camera
+64. `app/src/main/java/com/catmap/dubai/ui/posts/PostLists.kt:93` - 🚑 -> ic_cm_rescue
+65. `app/src/main/java/com/catmap/dubai/ui/posts/PostLists.kt:94` - 🏠 -> ic_cm_sitter
+66. `app/src/main/java/com/catmap/dubai/ui/profile/ProfileScreens.kt:226` - 📝 -> ic_cm_note
+67. `app/src/main/java/com/catmap/dubai/ui/profile/ProfileScreens.kt:227` - ❤️ -> ic_cm_adoption
+68. `app/src/main/java/com/catmap/dubai/ui/profile/ProfileScreens.kt:228` - 💜 -> ic_cm_adoption
+69. `app/src/main/java/com/catmap/dubai/ui/profile/ProfileScreens.kt:229` - 📅 -> ic_cm_calendar
+70. `app/src/main/java/com/catmap/dubai/ui/profile/ProfileScreens.kt:230` - 🏠 -> ic_cm_sitter
+71. `app/src/main/java/com/catmap/dubai/ui/profile/ProfileScreens.kt:231` - 🔔 -> ic_cm_bell
+72. `app/src/main/java/com/catmap/dubai/ui/profile/ProfileScreens.kt:507` - 🔒 -> ic_cm_lock
+73. `app/src/main/java/com/catmap/dubai/ui/sitting/SittingScreens.kt:117` - 🏠 -> ic_cm_sitter
+74. `app/src/main/res/values/strings.xml:349` - 🐾 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+75. `app/src/main/res/values/strings.xml:425` - 🔒 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+76. `app/src/main/res/values/strings.xml:463` - 🔒 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+77. `app/src/main/res/values/strings.xml:691` - 👋 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+78. `app/src/main/res/values/strings.xml:847` - 🐾 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+79. `app/src/main/res/values/strings.xml:866` - 🎉 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+80. `app/src/main/res/values/strings.xml:919` - 💜 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+81. `app/src/main/res/values/strings.xml:983` - 👋 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+82. `app/src/main/res/values/strings.xml:1020` - ★ -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+83. `app/src/main/res/values-ar/strings.xml:349` - 🐾 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+84. `app/src/main/res/values-ar/strings.xml:425` - 🔒 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+85. `app/src/main/res/values-ar/strings.xml:463` - 🔒 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+86. `app/src/main/res/values-ar/strings.xml:691` - 👋 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+87. `app/src/main/res/values-ar/strings.xml:847` - 🐾 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+88. `app/src/main/res/values-ar/strings.xml:866` - 🎉 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+89. `app/src/main/res/values-ar/strings.xml:919` - 💜 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+90. `app/src/main/res/values-ar/strings.xml:983` - 👋 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+91. `app/src/main/res/values-ar/strings.xml:1020` - ★ -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+92. `tools/strings/strings_d.py:19` - 🐾 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+93. `tools/strings/strings_e.py:8` - 🔒 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+94. `tools/strings/strings_e.py:30` - 🔒 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+95. `tools/strings/strings_g.py:14` - 👋 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+96. `tools/strings/strings_g.py:92` - 🐾 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+97. `tools/strings/strings_h.py:11` - 🎉 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+98. `tools/strings/strings_h.py:51` - 💜 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+99. `tools/strings/strings_h.py:86` - 👋 -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+100. `tools/strings/strings_h.py:111` - ★ -> Emoji removed; original wording retained (English lint/tagline changes separately listed).
+
+Indirect consumers also migrated: PosterMaker animal placeholder, map animal bubbles and AnimalType/Badge/MapLayer emoji callers. They now use drawable IDs and bitmap/vector rendering. Seed source contained no emoji literals.
+
+---
 
 ## What this is
 

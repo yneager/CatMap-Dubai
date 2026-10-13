@@ -25,7 +25,10 @@ jobs:
         with:
           packages: 'platforms;android-37.0 build-tools;36.0.0'
       - uses: gradle/actions/setup-gradle@v6
-      - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      # The screenshot tests still run here (rendering, poster QR decode), but pixel comparison
+      # (:app:verifyRoborazziDebug) is a local check: the reference images were recorded on Windows, and
+      # Linux renders text slightly differently, so a pixel compare on this runner would fail on every run.
+      - run: ./gradlew --no-daemon --no-parallel --max-workers=1 :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug
 
   rules:
     runs-on: ubuntu-latest
