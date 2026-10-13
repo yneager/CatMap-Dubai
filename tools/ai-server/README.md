@@ -14,11 +14,13 @@ Firestore is the mailbox:
 
 1. The phone writes a job to `aiJobs/{its uid}`. It contains small JPEG crops: the new animal plus up to 8 nearby
    posts.
-2. This app checks for pending jobs every 2 s over outgoing HTTPS, embeds the crops, and writes the answer into the
-   same document. The answer is tagged with the request it answers.
-3. The phone listens to that document and shows the answer, usually within 2–5 s.
-4. Every 30 s the app updates `config/aiWorker` (a heartbeat). When the PC is off, phones skip the check at once and
-   use their own on-device matching.
+2. Firestore **pushes** the job to this app over a live listener: one outgoing streaming connection, through Google's
+   Firestore client. Nothing is polled. This app embeds the crops and writes the answer into the same document,
+   tagged with the request it answers.
+3. The phone listens to that document the same way and shows the answer, about 2–3 s after asking.
+4. `config/aiWorker` says whether the PC is online. It's set when the app opens and closes, and refreshed every 5
+   minutes in case the PC crashes. When the PC is off, phones skip the check at once and use their own on-device
+   matching.
 
 Nothing connects *into* the PC. It works on any network, behind any router, with the phone on mobile data.
 
@@ -61,8 +63,9 @@ Options:
   * no result fields may be set by the phone.
 * The server never decides anything. The user confirms in the app, and the app writes through the normal rules.
 * Images stay in Firestore, like every other CatMap photo. Each job overwrites the previous one, so nothing piles up.
-* Firestore cost: one read per poll while the app runs (about 1,800 an hour), within the free Spark quota of
-  50,000 reads a day for a demo. Close the app when you don't need it.
+* Firestore cost: an idle listener costs nothing. Each photo costs about one read (the job pushed to the PC) and one
+  write (the answer), plus one tiny status write every 5 minutes while the app is open. That's well within the free
+  Spark quota.
 
 ## Thresholds
 

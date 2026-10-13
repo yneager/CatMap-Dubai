@@ -3,10 +3,12 @@
 How it works (no open ports, no cable, works on any network):
   1. When someone posts a street animal, the phone writes a job to Firestore `aiJobs/{uid}`: a crop of the new animal
      and crops of nearby street-animal posts (small JPEGs, kept in Firestore like every other CatMap image).
-  2. This app polls for pending jobs (outgoing HTTPS only), embeds the crops with pet-recognition-base (open-noodle,
-     Apache-2.0: DINOv2-base + 512-d projection, ONNX, GPU through DirectML when available) and writes back the cosine
-     similarity of each candidate with a verdict. The phone is listening to that document and shows the answer.
-  3. Every 30 s it updates `config/aiWorker` (a heartbeat), so phones skip the check instantly when the PC is off.
+  2. Firestore pushes the new job to this app over a live listener (one outgoing streaming connection; nothing is
+     polled). The app embeds the crops with pet-recognition-base (open-noodle, Apache-2.0: DINOv2-base + 512-d
+     projection, ONNX, GPU through DirectML when available) and writes back the cosine similarity of each candidate
+     with a verdict. The phone is listening to that document too and shows the answer.
+  3. `config/aiWorker` says whether the PC is online: set when the app opens and closes, refreshed every 5 minutes in
+     case the PC crashes, so phones skip the check at once when the PC is off.
 
 It signs in as the AI worker account (custom claim catmapAiWorker, created by tools/demo/create-demo-accounts.mjs,
 password in worker.local.json). The security rules let that account read jobs and write only results; it can't touch
@@ -18,7 +20,6 @@ posts or users. The window pops to the front whenever an image arrives, showing 
 from __future__ import annotations
 
 import argparse
-import base64
 import io
 import json
 import os
@@ -27,7 +28,7 @@ import sys
 import threading
 import time
 import tkinter as tk
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tkinter import ttk
 
@@ -47,8 +48,8 @@ MODEL_NAME = "pet-recognition-base"
 # Admin > Recognition test in the app and set SAME_THRESHOLD / MAYBE_THRESHOLD before starting.
 SAME = float(os.environ.get("SAME_THRESHOLD", "0.75"))
 MAYBE = float(os.environ.get("MAYBE_THRESHOLD", "0.60"))
-POLL_SECONDS = 2.0
-HEARTBEAT_SECONDS = 30.0
+HEARTBEAT_SECONDS = 300.0  # crash safeguard only; the app also reports online/offline when it opens and closes
+RELISTEN_SECONDS = 50 * 60
 MAX_IMAGES = 16
 Image.MAX_IMAGE_PIXELS = 4096 * 4096
 MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
@@ -80,55 +81,30 @@ class Model:
         return out / np.linalg.norm(out, axis=1, keepdims=True).clip(1e-9)
 
 
-# ---------- Firestore over REST ----------
-
-def to_value(v):
-    if isinstance(v, bool):
-        return {"booleanValue": v}
-    if isinstance(v, int):
-        return {"integerValue": str(v)}
-    if isinstance(v, float):
-        return {"doubleValue": v}
-    if isinstance(v, str):
-        return {"stringValue": v}
-    if isinstance(v, datetime):
-        return {"timestampValue": v.isoformat().replace("+00:00", "Z")}
-    if isinstance(v, list):
-        return {"arrayValue": {"values": [to_value(x) for x in v]}}
-    if isinstance(v, dict):
-        return {"mapValue": {"fields": {k: to_value(x) for k, x in v.items()}}}
-    raise TypeError(type(v))
-
-
-def from_value(v):
-    if "bytesValue" in v:
-        return base64.b64decode(v["bytesValue"])
-    if "arrayValue" in v:
-        return [from_value(x) for x in v["arrayValue"].get("values", [])]
-    if "mapValue" in v:
-        return {k: from_value(x) for k, x in v["mapValue"].get("fields", {}).items()}
-    for key in ("stringValue", "booleanValue", "doubleValue", "timestampValue"):
-        if key in v:
-            return v[key]
-    if "integerValue" in v:
-        return int(v["integerValue"])
-    return None
-
+# ---------- Firestore (live listener) ----------
 
 class Firestore:
-    """Signed in as the AI worker (rules apply), or as the emulator owner with --emulator."""
+    """A Firestore client signed in as the AI worker (rules apply), or the emulator owner with --emulator.
+
+    Uses Google's Firestore client library, whose `on_snapshot` keeps one streaming connection open: Firestore pushes
+    a message the moment a job arrives. Nothing is polled, and an idle listener costs no reads.
+    """
 
     def __init__(self, emulator: bool):
+        from google.auth.credentials import AnonymousCredentials
+        from google.cloud import firestore
+        from google.oauth2.credentials import Credentials
+
         self.emulator = emulator
         if emulator:
-            self.project = "demo-catmap"
-            self.base = f"http://127.0.0.1:8080/v1/projects/{self.project}/databases/(default)/documents"
+            os.environ["FIRESTORE_EMULATOR_HOST"] = "127.0.0.1:8080"
             self.who = "emulator owner"
+            self.client = firestore.Client(project="demo-catmap", credentials=AnonymousCredentials())
             return
         try:
             gs = json.loads((ROOT / "app" / "google-services.json").read_text(encoding="utf-8"))
             self.api_key = gs["client"][0]["api_key"][0]["current_key"]
-            self.project = gs["project_info"]["project_id"]
+            project = gs["project_info"]["project_id"]
         except Exception:
             raise SystemExit("app/google-services.json is missing (it holds the Firebase project settings).")
         cred_file = HERE / "worker.local.json"
@@ -139,98 +115,108 @@ class Firestore:
                           json={"email": creds["email"], "password": creds["password"], "returnSecureToken": True}, timeout=20)
         if not r.ok:
             raise SystemExit(f"AI worker sign-in failed: {r.json().get('error', {}).get('message', r.status_code)}")
-        j = r.json()
         self.who = creds["email"]
-        self.id_token, self.refresh_token = j["idToken"], j["refreshToken"]
-        self.expires = time.time() + int(j.get("expiresIn", 3600)) - 120
-        self.base = f"https://firestore.googleapis.com/v1/projects/{self.project}/databases/(default)/documents"
+        self.refresh_token = r.json()["refreshToken"]
+        # Firestore accepts the worker's Firebase ID token as a bearer token, so the security rules apply to it.
+        # google-auth calls refresh_handler whenever the token is about to expire (hourly).
+        self.client = firestore.Client(project=project, credentials=Credentials(token=None, refresh_handler=self.refresh))
 
-    def headers(self) -> dict:
-        if self.emulator:
-            return {"Authorization": "Bearer owner"}
-        if time.time() > self.expires:
-            r = requests.post(f"https://securetoken.googleapis.com/v1/token?key={self.api_key}",
-                              data={"grant_type": "refresh_token", "refresh_token": self.refresh_token}, timeout=20)
-            r.raise_for_status()
-            j = r.json()
-            self.id_token, self.refresh_token = j["id_token"], j["refresh_token"]
-            self.expires = time.time() + int(j.get("expires_in", 3600)) - 120
-        return {"Authorization": f"Bearer {self.id_token}"}
-
-    def pending_jobs(self) -> list[dict]:
-        query = {"structuredQuery": {
-            "from": [{"collectionId": "aiJobs"}],
-            "where": {"fieldFilter": {"field": {"fieldPath": "status"}, "op": "EQUAL", "value": {"stringValue": "pending"}}},
-            "limit": 5,
-        }}
-        r = requests.post(f"{self.base}:runQuery", headers=self.headers(), json=query, timeout=20)
+    def refresh(self, request, scopes):
+        r = requests.post(f"https://securetoken.googleapis.com/v1/token?key={self.api_key}",
+                          data={"grant_type": "refresh_token", "refresh_token": self.refresh_token}, timeout=20)
         r.raise_for_status()
-        return [x["document"] for x in r.json() if "document" in x]
-
-    def get(self, path: str) -> dict | None:
-        r = requests.get(f"{self.base}/{path}", headers=self.headers(), timeout=20)
-        return {k: from_value(v) for k, v in r.json().get("fields", {}).items()} if r.ok else None
-
-    def patch(self, name_or_path: str, fields: dict, update_time: str | None = None) -> bool:
-        url = name_or_path if name_or_path.startswith("projects/") else None
-        url = (f"{self.base.split('/v1/')[0]}/v1/{url}" if url else f"{self.base}/{name_or_path}")
-        params = [("updateMask.fieldPaths", k) for k in fields]
-        if update_time:
-            params.append(("currentDocument.updateTime", update_time))
-        r = requests.patch(url, headers=self.headers(), params=params,
-                           json={"fields": {k: to_value(v) for k, v in fields.items()}}, timeout=30)
-        return r.ok
+        j = r.json()
+        self.refresh_token = j["refresh_token"]
+        expiry = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=int(j.get("expires_in", 3600)) - 120)
+        return j["id_token"], expiry
 
 
 # ---------- worker ----------
 
-class Worker(threading.Thread):
+class Worker:
+    """Listens for pending jobs and answers them one at a time on its own thread."""
+
     def __init__(self, model: Model, fs: Firestore, events: queue.Queue):
-        super().__init__(daemon=True)
         self.model, self.fs, self.events = model, fs, events
+        self.jobs: queue.Queue = queue.Queue()
         self.running = True
         self.handled = 0
         self.names: dict[str, str] = {}
-        self.given_up: set[str] = set()  # requests whose answer couldn't be saved; not retried every poll
+        self.answered: set[str] = set()
+        self.watch = None
+        self.listening_since = 0.0
 
+    # Heartbeat: written when the app starts and stops, and every few minutes in case the PC crashes.
     def heartbeat(self, online: bool):
-        self.fs.patch("config/aiWorker", {
-            "online": online, "lastSeen": datetime.now(timezone.utc), "model": MODEL_NAME,
+        from google.cloud import firestore
+        self.fs.client.document("config/aiWorker").set({
+            "online": online, "lastSeen": firestore.SERVER_TIMESTAMP, "model": MODEL_NAME,
             "provider": self.model.provider, "same": SAME, "maybe": MAYBE,
         })
 
-    def username(self, uid: str) -> str:
-        if uid not in self.names:
-            profile = self.fs.get(f"users/{uid}") or {}
-            self.names[uid] = profile.get("username") or uid[:8]
-        return self.names[uid]
+    def listen(self):
+        from google.cloud.firestore_v1.base_query import FieldFilter
+        if self.watch is not None:
+            self.watch.unsubscribe()
+        query = self.fs.client.collection("aiJobs").where(filter=FieldFilter("status", "==", "pending"))
+        self.watch = query.on_snapshot(self.on_snapshot)
+        self.listening_since = time.time()
 
-    def run(self):
-        last_beat = 0.0
+    def on_snapshot(self, docs, changes, read_time):
+        # Called by Firestore's push stream; just queue the work so the stream isn't blocked.
+        for change in changes:
+            if change.type.name in ("ADDED", "MODIFIED"):
+                self.jobs.put(change.document)
+
+    def start(self):
+        self.heartbeat(True)
+        self.listen()
+        threading.Thread(target=self.loop, daemon=True).start()
+
+    def loop(self):
+        last_beat = time.time()
         while self.running:
+            try:
+                doc = self.jobs.get(timeout=5)
+                self.handle(doc)
+            except queue.Empty:
+                pass
+            except Exception as e:
+                self.events.put(("log", f"Problem: {e}"))
             try:
                 if time.time() - last_beat > HEARTBEAT_SECONDS:
                     self.heartbeat(True)
                     last_beat = time.time()
-                for doc in self.fs.pending_jobs():
-                    self.handle(doc)
-            except Exception as e:  # network hiccups: keep going
+                # Re-open the stream now and then so it always runs on a fresh sign-in token.
+                if time.time() - self.listening_since > RELISTEN_SECONDS:
+                    self.listen()
+            except Exception as e:
                 self.events.put(("log", f"Problem: {e}"))
-            time.sleep(POLL_SECONDS)
+
+    def stop(self):
+        self.running = False
         try:
+            if self.watch is not None:
+                self.watch.unsubscribe()
             self.heartbeat(False)
         except Exception:
             pass
 
-    def handle(self, doc: dict):
-        f = {k: from_value(v) for k, v in doc.get("fields", {}).items()}
-        name = doc["name"]
+    def username(self, uid: str) -> str:
+        if uid not in self.names:
+            snap = self.fs.client.document(f"users/{uid}").get()
+            self.names[uid] = (snap.to_dict() or {}).get("username") or uid[:8]
+        return self.names[uid]
+
+    def handle(self, doc):
+        from google.cloud import firestore
+        f = doc.to_dict() or {}
         request_id = str(f.get("requestId", ""))
-        if request_id in self.given_up:
+        if f.get("status") != "pending" or request_id in self.answered:
             return
         kind = f.get("kind", "compare")
-        images = [b for b in f.get("images", []) if isinstance(b, bytes)][:MAX_IMAGES]
-        query = f.get("query") if isinstance(f.get("query"), bytes) else None
+        images = [bytes(b) for b in f.get("images", []) if isinstance(b, (bytes, bytearray))][:MAX_IMAGES]
+        query = bytes(f["query"]) if isinstance(f.get("query"), (bytes, bytearray)) else None
         ids = [str(i) for i in f.get("ids", [])]
         labels = [str(i) for i in f.get("labels", [])]
         who = self.username(str(f.get("uid", "")))
@@ -254,13 +240,15 @@ class Worker(threading.Thread):
             out = {"status": "error", "error": str(e)[:200]}
             self.events.put(("log", f"Job from {who} failed: {e}"))
         out.update({"model": MODEL_NAME, "provider": self.model.provider, "ms": int((time.time() - started) * 1000),
-                    "doneAt": datetime.now(timezone.utc), "answeredRequestId": request_id})
-        # The answer names the request it answers; if the phone replaced the job meanwhile, the phone ignores it.
-        if self.fs.patch(name, out):
+                    "doneAt": firestore.SERVER_TIMESTAMP, "answeredRequestId": request_id})
+        # Each request is answered once. The answer names the request it answers; if the phone replaced the job in
+        # the meantime, the phone ignores this answer and the new job arrives as its own message.
+        self.answered.add(request_id)
+        try:
+            doc.reference.update(out)
             self.handled += 1
-        else:
-            self.given_up.add(request_id)
-            self.events.put(("log", f"Couldn't save the answer for @{who}"))
+        except Exception as e:
+            self.events.put(("log", f"Couldn't save the answer for @{who}: {e}"))
 
 
 # ---------- window ----------
@@ -287,7 +275,7 @@ class App:
         self.log = tk.Listbox(root, height=10, font=("Consolas", 9), bd=0, highlightthickness=0)
         self.log.pack(fill="both", expand=True, padx=16, pady=(0, 14))
         self.add_log(f"Signed in as {worker.fs.who}. Model {MODEL_NAME} on {worker.model.provider}.")
-        self.add_log(f"Thresholds: same >= {SAME}, maybe >= {MAYBE}. Checking for jobs every {POLL_SECONDS:g} s.")
+        self.add_log(f"Thresholds: same >= {SAME}, maybe >= {MAYBE}. Listening for photos (Firestore pushes them here).")
         root.protocol("WM_DELETE_WINDOW", self.close)
         self.tick()
 
@@ -343,12 +331,12 @@ class App:
                     self.add_log(e)
         except queue.Empty:
             pass
-        self.status.config(text=f"Online  |  {MODEL_NAME} on {self.worker.model.provider}  |  photos checked: {self.worker.handled}")
+        self.status.config(text=f"Online, listening  |  {MODEL_NAME} on {self.worker.model.provider}  |  photos checked: {self.worker.handled}")
         self.root.after(250, self.tick)
 
     def close(self):
-        self.worker.running = False
         self.add_log("Going offline...")
+        threading.Thread(target=self.worker.stop, daemon=True).start()
         self.root.after(300, self.root.destroy)
 
 
@@ -372,8 +360,7 @@ def main():
     root.deiconify()
     worker.start()
     root.mainloop()
-    worker.running = False
-    worker.join(timeout=POLL_SECONDS + 5)
+    worker.stop()
 
 
 if __name__ == "__main__":

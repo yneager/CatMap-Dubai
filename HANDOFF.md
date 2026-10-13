@@ -3,6 +3,26 @@
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
 and what's left. **Last updated: 13 Oct 2026 (v0.0.6: online AI check through Firestore plus the PC desktop app; the owner still has to deploy the rules and create the demo and worker accounts).**
 
+## 13 October 2026 - live listener instead of polling (Claude)
+
+The owner asked why the PC checked every 2 s. `tools/ai-server/server.py` now uses Google's Firestore client
+(`google-cloud-firestore==2.20.1`) with `on_snapshot` on `aiJobs where status == pending`. Firestore pushes each
+job over one streaming connection; an idle listener costs nothing.
+* **Auth:** the worker's Firebase ID token is the bearer token, through `google.oauth2.credentials.Credentials`
+  with a `refresh_handler` that uses the refresh token. The rules apply. The stream is reopened every 50 minutes.
+  This was verified only against the emulator, which doesn't check tokens. The first production run will show any
+  auth problem in the window's activity log.
+* **Heartbeat:** `config/aiWorker` is written on open and close, and every 5 minutes as a crash safeguard (it was
+  every 30 s). On the phone, `AiServer.ONLINE_WINDOW_MS` is 6.5 min and the answer timeout is 15 s.
+  * **v0.0.6 phones** still use a 90 s window, so they'd treat the PC as offline between status writes. Phones need
+    v0.0.7.
+* **Verified on the emulator:**
+  * status online on start;
+  * the review card "Likely the same" about 3 s after reaching Review;
+  * the window showing "Online, listening", SAME 94%, 121 ms;
+  * closing the window wrote `online: false`.
+* The model is the owner's `open-noodle/pet-recognition-base` (`recognition/model.onnx`), unchanged.
+
 ## 13 October 2026 - v0.0.6: AI check online through Firestore, desktop app (Claude)
 
 The owner wanted the AI check to work online without a cable, with a window on the PC showing what's happening.

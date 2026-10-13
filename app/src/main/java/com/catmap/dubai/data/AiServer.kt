@@ -17,10 +17,11 @@ import java.util.UUID
 
 /**
  * Client for the CatMap AI Server (tools/ai-server), a desktop app on the owner's PC running pet-recognition-base.
- * Nothing connects to the PC: the phone writes a job to Firestore `aiJobs/{uid}` (small JPEG crops), the PC polls for
- * pending jobs over outgoing HTTPS and writes the answer back, and the phone listens to that document. The PC's
- * heartbeat (`config/aiWorker`) lets the app skip the check at once when the PC is off. Every failure returns null so
- * the caller falls back to on-device matching.
+ * Nothing connects to the PC and nothing polls: the phone writes a job to Firestore `aiJobs/{uid}` (small JPEG crops),
+ * Firestore pushes it to the PC's live listener, the PC writes the answer back, and the phone's own listener on that
+ * document receives it. `config/aiWorker` (set when the PC app opens and closes, refreshed every 5 minutes) lets the
+ * app skip the check at once when the PC is off. Every failure returns null so the caller falls back to on-device
+ * matching.
  */
 class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth) {
     data class Match(val id: String, val similarity: Double, val verdict: String)
@@ -28,7 +29,7 @@ class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth
         override fun toString() = "$model · $provider"
     }
 
-    /** The PC's status when it has checked in within the last 90 seconds, otherwise null (offline). */
+    /** The PC's status when it is online and has checked in recently, otherwise null (offline). */
     suspend fun health(): Health? = runCatching {
         val d = db.collection(Col.CONFIG).document("aiWorker").get().await()
         val seen = d.getTimestamp("lastSeen")?.toDate()?.time ?: return null
@@ -98,7 +99,8 @@ class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth
 
     companion object {
         const val MAX_CANDIDATES = 8
-        const val ONLINE_WINDOW_MS = 90_000L
-        const val TIMEOUT_MS = 30_000L
+        /** The PC refreshes its status every 5 minutes; a little longer than that means it crashed. */
+        const val ONLINE_WINDOW_MS = 390_000L
+        const val TIMEOUT_MS = 15_000L
     }
 }
