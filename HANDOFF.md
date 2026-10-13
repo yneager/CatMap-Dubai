@@ -1,7 +1,7 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 13 Oct 2026 (AI server moved to `Desktop\cat-server`, outside the repo; the owner still has to deploy the rules and create the demo and worker accounts).**
+and what's left. **Last updated: 13 Oct 2026 (v0.0.7 released at `356e18d`: live listener, AI server moved to `Desktop\cat-server`, demo-script fix. CI and the release passed. The owner still has to run `cat-server\setup.cmd`).**
 
 ## 13 October 2026 - AI server moved out of the repo (Claude)
 
