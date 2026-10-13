@@ -92,5 +92,5 @@ S = [
 ('ai_server_test','Check again','Check again'), # TODO-AR
 ('ai_server_ok','Online: %1$s','Online: %1$s'), # TODO-AR
 ('ai_server_down','Offline: start the CatMap AI Server on the PC','Offline: start the CatMap AI Server on the PC'), # TODO-AR
-('ai_server_never','The CatMap AI Server has never connected. Run tools/demo/create-demo-accounts.mjs, then tools/ai-server/start.cmd on the PC.','The CatMap AI Server has never connected. Run tools/demo/create-demo-accounts.mjs, then tools/ai-server/start.cmd on the PC.'), # TODO-AR
+('ai_server_never','The CatMap AI Server has never connected. Run tools/demo/create-demo-accounts.mjs, then start.cmd in the cat-server folder on the PC.','The CatMap AI Server has never connected. Run tools/demo/create-demo-accounts.mjs, then start.cmd in the cat-server folder on the PC.'), # TODO-AR
 ]

@@ -1,7 +1,21 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 13 Oct 2026 (v0.0.6: online AI check through Firestore plus the PC desktop app; the owner still has to deploy the rules and create the demo and worker accounts).**
+and what's left. **Last updated: 13 Oct 2026 (AI server moved to `Desktop\cat-server`, outside the repo; the owner still has to deploy the rules and create the demo and worker accounts).**
+
+## 13 October 2026 - AI server moved out of the repo (Claude)
+
+At the owner's request, the PC app now lives in its own folder, **`C:\Users\mohammad\Desktop\cat-server`**, outside
+this repository; `tools/ai-server` is gone. That folder holds `start.cmd`, `server.py`, `requirements.txt`, its
+README, the model (`models\`), its own Python (`.venv\`) and `worker.local.json`. It is not under version control.
+* `create-demo-accounts.mjs` writes `worker.local.json` to `../cat-server` next to the repo, or to
+  `CATMAP_SERVER_DIR`.
+* The server reads `google-services.json` from its own folder first, then from `..\cat\app\`. Copying the file
+  there was blocked as credential handling, so by default it uses the project's copy.
+* Older sections below that mention `tools/ai-server` now mean the `cat-server` folder.
+
+**Owner steps:** deploy the rules, run `node tools/demo/create-demo-accounts.mjs`, then double-click
+`Desktop\cat-server\start.cmd`.
 
 ## 13 October 2026 - live listener instead of polling (Claude)
 

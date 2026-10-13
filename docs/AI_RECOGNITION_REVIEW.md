@@ -3,7 +3,7 @@
 > **Update, 13 Oct 2026:** the owner decided to use the PC (proposal B) for the demo, scoped to **street-animal
 > posts**. It runs pet-recognition-base on the RX 9070 XT. Since v0.0.6, phone and PC exchange jobs through
 > **Firestore** (outgoing connections only; no tunnel or open port), with a desktop window on the PC. Details are in
-> `tools/ai-server/README.md`. The availability and calibration concerns below still apply. The app falls back to
+> `README.md` in the cat-server folder on the owner's PC. The availability and calibration concerns below still apply. The app falls back to
 > on-device matching whenever the PC is off.
 
 Answer to `prompt.txt` (13 Oct 2026, Claude). The owner then asked for the review to be implemented. This

@@ -408,7 +408,7 @@ service cloud.firestore {
       }
     }
 
-    // ---------- CatMap AI server (tools/ai-server, on the owner's PC) ----------
+    // ---------- CatMap AI server (the cat-server folder on the owner's PC) ----------
     // The PC signs in as the AI worker account (custom claim catmapAiWorker, set only by auth:import).
     function aiWorker() { return signedIn() && request.auth.token.get('catmapAiWorker', false) == true; }
 

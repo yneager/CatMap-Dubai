@@ -13,14 +13,16 @@
 //
 // It also creates the AI worker account the PC's CatMap AI Server signs in with (claim catmapAiWorker: it may only
 // read AI jobs and write their results). Its password is random, never shown, and saved only on this PC in
-// tools/ai-server/worker.local.json (git-ignored).
+// worker.local.json in the AI server's folder: cat-server next to this project (Desktop\cat-server), or the folder
+// in the CATMAP_SERVER_DIR environment variable.
 //
 // Options: --project <id> (default: catmap-dubai). Needs `firebase login` (already done on this PC).
 
 import { createHash, pbkdf2Sync, randomBytes, scryptSync } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync, rmSync, mkdtempSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, rmSync, mkdtempSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline";
 
@@ -33,7 +35,8 @@ const ACCOUNTS = [
   { uid: "catmap-demo-hassan", username: "demo_hassan", name: "Hassan", claims: { catmapDemo: true } },
 ];
 const WORKER = { uid: "catmap-ai-worker", username: "ai-worker", name: "CatMap AI Server", claims: { catmapAiWorker: true } };
-const workerFile = new URL("../ai-server/worker.local.json", import.meta.url);
+const serverDir = process.env.CATMAP_SERVER_DIR || resolve(fileURLToPath(new URL("../../../cat-server", import.meta.url)));
+const workerFile = join(serverDir, "worker.local.json");
 // Keep the worker's existing password on a re-run, so a running AI server keeps working.
 const workerPassword = (() => {
   try { return JSON.parse(readFileSync(workerFile, "utf8")).password; } catch { return randomBytes(24).toString("base64url"); }
@@ -117,7 +120,8 @@ for (const format of FORMATS) {
   console.log("Firebase didn't accept that hash format; trying the next one...");
 }
 if (!ok) { console.error("None of the hash formats worked. Nothing else was changed; tell Claude."); process.exit(1); }
+mkdirSync(serverDir, { recursive: true });
 writeFileSync(workerFile, JSON.stringify({ email: `${WORKER.username}@${DOMAIN}`, password: workerPassword }, null, 2), { mode: 0o600 });
-console.log("Saved the AI worker sign-in for the PC in tools/ai-server/worker.local.json (git-ignored).");
+console.log(`Saved the AI worker sign-in for the PC in ${workerFile}.`);
 console.log(`\nDone. Sign in to the app with username "admin" and the password you typed.`);
 console.log(`Then open Settings > Demo accounts to switch between the four demo users.`);

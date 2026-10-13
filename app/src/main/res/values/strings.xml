@@ -1157,7 +1157,7 @@
     <string name="ai_server_test">Check again</string>
     <string name="ai_server_ok">Online: %1$s</string>
     <string name="ai_server_down">Offline: start the CatMap AI Server on the PC</string>
-    <string name="ai_server_never">The CatMap AI Server has never connected. Run tools/demo/create-demo-accounts.mjs, then tools/ai-server/start.cmd on the PC.</string>
+    <string name="ai_server_never">The CatMap AI Server has never connected. Run tools/demo/create-demo-accounts.mjs, then start.cmd in the cat-server folder on the PC.</string>
     <plurals name="unread_notifications">
         <item quantity="one">%d unread notification</item>
         <item quantity="other">%d unread notifications</item>

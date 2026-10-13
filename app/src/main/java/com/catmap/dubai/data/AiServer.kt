@@ -16,7 +16,7 @@ import java.io.ByteArrayOutputStream
 import java.util.UUID
 
 /**
- * Client for the CatMap AI Server (tools/ai-server), a desktop app on the owner's PC running pet-recognition-base.
+ * Client for the CatMap AI Server (Desktop\cat-server, kept outside this repo), a desktop app on the owner's PC running pet-recognition-base.
  * Nothing connects to the PC and nothing polls: the phone writes a job to Firestore `aiJobs/{uid}` (small JPEG crops),
  * Firestore pushes it to the PC's live listener, the PC writes the answer back, and the phone's own listener on that
  * document receives it. `config/aiWorker` (set when the PC app opens and closes, refreshed every 5 minutes) lets the
