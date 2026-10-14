@@ -7,3 +7,8 @@ gradlew text eol=lf
 *.png binary
 *.jpg binary
 *.webp binary
+# Generated for the web app and byte-compared by the --check scripts and CI.
+web/src/icons/generated/** text eol=lf
+web/src/icons/CatMapIcons.ts text eol=lf
+web/src/i18n/*.json text eol=lf
+web/tests/fixtures/*.json text eol=lf

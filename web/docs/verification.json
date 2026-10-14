@@ -1,0 +1,111 @@
+{
+  "date": "2026-10-14",
+  "status": "Local implementation ready for owner review; not deployed",
+  "browser": {
+    "passed": 22,
+    "failed": 0,
+    "chromium": 11,
+    "webkit": 11,
+    "duration": "6.2 minutes",
+    "includes": "Delayed start-chat success/failure after navigation; schema and JPEG parity; shared GPS"
+  },
+  "unit": {
+    "passed": 34,
+    "files": 3
+  },
+  "rules": {
+    "quickPassed": 270,
+    "fullPassed": 270,
+    "rulesUnchanged": true
+  },
+  "screens": {
+    "testsPassed": 3,
+    "duration": "4.7 minutes",
+    "pngs": {
+      "light": 72,
+      "dark": 71,
+      "arabic": 71
+    },
+    "total": 214,
+    "routesPerVariant": 54,
+    "viewport": [
+      393,
+      852
+    ]
+  },
+  "pwa": {
+    "passed": 2,
+    "duration": "12.6 seconds",
+    "cachedAssets": 70,
+    "precacheEntries": 75,
+    "offlineMethod": "Test-owned origin stopped; Chromium also context offline"
+  },
+  "lighthouse": {
+    "version": "13.5.0",
+    "url": "http://127.0.0.1:4173/login",
+    "scores": {
+      "performance": 82,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 92
+    },
+    "pwaScore": null,
+    "scope": "Login-page mobile simulation"
+  },
+  "bundle": {
+    "initialGzipBytes": 349201,
+    "initialGzipKiB": 341.02,
+    "lazyMap": [
+      {
+        "name": "CommunityMap-B8-mEBLf.css",
+        "bytes": 82962,
+        "gzipBytes": 10471
+      },
+      {
+        "name": "CommunityMap-CtfV7NFX.js",
+        "bytes": 1026030,
+        "gzipBytes": 276113
+      },
+      {
+        "name": "mapbox-gl-rtl-text-DosxTATq.js",
+        "bytes": 147947,
+        "gzipBytes": 43529
+      },
+      {
+        "name": "maplibre-gl-worker-v2kpBMIs.js",
+        "bytes": 509448,
+        "gzipBytes": 145197
+      }
+    ],
+    "lazyAdmin": [
+      {
+        "name": "AdminScreens-CU1BCZhp.js",
+        "bytes": 26336,
+        "gzipBytes": 7886
+      }
+    ],
+    "exclusions": "HTML, fonts and lazy route chunks"
+  },
+  "audit": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "builds": {
+    "production": "passed",
+    "productionEmulators": "passed",
+    "defaultMissingConfigPreview": "Setup screen passed; zero external requests"
+  },
+  "limitations": [
+    "Real iPhone install/camera/share/location/storage behavior",
+    "Android reading web data: no running device/emulator",
+    "Real PC AI worker integration",
+    "Optional satellite and Blaze video",
+    "Production Hosting/CSP and hosted CI",
+    "Exact visual parity: differences documented in parity.md"
+  ],
+  "cleanup": "Stopped verified task-owned Vite dev/preview and isolated demo suite; no test listeners remain on 5173/4173/4317/8180/9098/9198/4402/4502/9150. Unrelated services were not stopped."
+}

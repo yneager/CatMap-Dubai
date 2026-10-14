@@ -10,6 +10,30 @@ step 7). The map uses **OpenFreeMap** vector tiles (no key). All AI runs on the 
 
 ---
 
+## Web app (iPhone)
+
+The browser app is in `web/`. Its [README](web/README.md) covers emulators and checks. These production steps are for the owner after reviewing `work done.txt`; the implementation agent made no deployment.
+
+1. In the existing `catmap-dubai` Firebase console, choose **Add app → Web**, register CatMap Web, and copy its Web config into a new `web/.env.local` using `.env.example` as a guide. Set **`VITE_USE_EMULATORS=false`**. Do not copy Android's configuration or signing files.
+2. Open **Authentication → Settings → Authorized domains**. Confirm `catmap-dubai.web.app` and `catmap-dubai.firebaseapp.com`; add any custom domain.
+3. In PowerShell, build the web app, then publish Hosting only from the repository root after review:
+
+   ```powershell
+   Set-Location C:\Users\mohammad\Desktop\cat\web
+   npm.cmd ci
+   npm.cmd run build
+   Set-Location ..
+   npx.cmd -y firebase-tools@latest deploy --only hosting
+   ```
+
+   Confirm the intended Firebase project before publishing. Do not publish emulator builds, rules, indexes or functions as part of this web step.
+4. Optionally add `VITE_MAPTILER_KEY` and `VITE_PUBLIC_URL=https://catmap-dubai.web.app` (or your custom HTTPS origin), then rebuild. Leave `VITE_BLAZE=false` on Spark.
+5. Open the address in **Safari on an iPhone**, tap **Share → Add to Home Screen**, and launch its icon. Check login, camera/library, location, Arabic, posters and sharing on the real phone. WebKit is a desktop stand-in and does not verify real iOS integrations.
+
+The existing Android app and security rules are shared and unchanged. Web alerts appear in the inbox and as toasts while open; browsers do not run Android's background polling or FCM notifications.
+
+---
+
 ## 1. Create the Firebase project
 
 1. Go to <https://console.firebase.google.com> and sign in with a Google account.

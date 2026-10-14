@@ -1,7 +1,23 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 13 Oct 2026 (v0.0.7 released at `356e18d`: live listener, AI server moved to `Desktop\cat-server`, demo-script fix. CI and the release passed. The owner still has to run `cat-server\setup.cmd`).**
+and what's left. **Last updated: 14 Oct 2026 (CatMap Web 0.0.8 local implementation; owner/Claude review pending. Android remains the released v0.0.7 at `356e18d`).**
+
+## 14 October 2026 - CatMap Web local implementation (Codex)
+
+`web/` now contains the React/strict TypeScript/Vite PWA, Firebase modular repositories, persistent Auth/Firestore/IndexedDB storage, shared feed, route guards, phone layout and self-hosted fonts. Map and admin are lazy chunks. Android models/enums/neighbourhoods are generated from Kotlin; strings and VectorDrawables share generators. Web-only Arabic text remains English with TODO-AR as requested.
+
+Accounts, six-step posting, matching/drafts/photos, details/updates/posters, messages, adoption/sitting, profile/settings/export/deletion, community cats/sightings/rescue/stations/help and administration are implemented. The existing PC AI job protocol and descriptor math are ported; the real PC worker was not touched or exercised. Browser-specific behavior follows the brief: install hint, service-worker reload prompt, downloads/Web Share, inbox/toasts, and no push/background poll/ML Kit.
+
+Local verification includes 22 passing browser scenarios (11 Chromium, 11 WebKit), 34 unit tests, unchanged quick/full security rules suites at 270/270 each, the Kotlin fingerprint fixture test and browser image/schema checks. Four fixtures stay within delta 0.03 and cosine 0.98: native RGBA analysis is exact; worst WebKit JPEG post delta 0.0247 and cosine 0.99986072. Production offline startup passed in Chromium and WebKit with the test-owned origin stopped. Lighthouse login audit measured performance 82, accessibility 100, best practices 100 and SEO 92; Lighthouse 13.5 has no PWA score. npm audit reported zero vulnerabilities. See `work done.txt` for the final browser/screenshot results and bundle measurement.
+
+Final captures passed all three variants (214 PNGs); production offline checks passed both engines. The final initial JS/CSS gzip size is 341.02 KiB, excluding HTML/fonts/lazy routes. A default build without owner configuration showed setup instructions with zero external requests. Task-owned test services were stopped afterwards.
+
+Final browser checks use the SDK's normal transport detection. Firebase clients are retained as a shared singleton across development module re-evaluation, and generated browser artifacts are excluded from reload/lint. Auth verification and start-chat callbacks ignore results after leaving their screen, avoiding delayed redirects; the browser suite covers delayed chat success and failure. A complete isolated demo suite avoids interfering with shared emulator services. The map worker is bundled explicitly, including its shared module. Safari poster font waits are bounded with a system-font fallback.
+
+Visual comparisons and remaining differences are in `web/docs/parity.md`. This is a close CSS implementation, not a claim of pixel-identical Compose rendering: browser input/dialog/font behavior, some spacing and map tiles differ. No real iPhone or running Android emulator was available, so real install/share/camera/location and Android reading web records remain unverified. Optional video/satellite, production hosting, real PC worker and deployment CSP need owner testing.
+
+Read `work done.txt` first, then the parity report and changed repositories, before publishing. `web/README.md` and SETUP contain owner-only configuration/deployment steps. No commits, pushes, tags, releases, Firebase console changes or deployments were made. Rules, indexes, Android build/source and release workflow are unchanged; the single added Android file is a JVM fixture test.
 
 ## 13 October 2026 - web app (iPhone) planned (Claude)
 

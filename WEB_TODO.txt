@@ -1,0 +1,15 @@
+CatMap: changes to bring to the web app (web/)
+================================================
+
+Every change made to the Android app (or to shared things the web app uses: Firestore rules, data fields, strings,
+icons, the AI server protocol) gets a line here, so the web app can be brought level later.
+
+When the web app is updated with an item, delete that item from this list. An empty list means the web app matches
+the Android app.
+
+Format for each item:
+- [date] What changed, in a sentence. Where: Android file(s) / screen. Web notes: anything the web side needs to know.
+
+Pending
+-------
+(nothing yet: the web app was built from the Android app as of 14 Oct 2026, v0.0.7)

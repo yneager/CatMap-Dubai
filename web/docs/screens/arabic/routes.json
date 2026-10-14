@@ -1,0 +1,218 @@
+[
+  {
+    "name": "map",
+    "route": "/map"
+  },
+  {
+    "name": "explore",
+    "route": "/explore"
+  },
+  {
+    "name": "search",
+    "route": "/search"
+  },
+  {
+    "name": "pick-location",
+    "route": "/pick-location"
+  },
+  {
+    "name": "post-detail",
+    "route": "/post/screens-post-0c61fae6"
+  },
+  {
+    "name": "post-edit",
+    "route": "/post-edit/screens-post-0c61fae6"
+  },
+  {
+    "name": "poster",
+    "route": "/poster/screens-post-0c61fae6"
+  },
+  {
+    "name": "my-posts",
+    "route": "/my-posts"
+  },
+  {
+    "name": "favorites",
+    "route": "/favorites"
+  },
+  {
+    "name": "area-alerts",
+    "route": "/area-alerts"
+  },
+  {
+    "name": "messages",
+    "route": "/messages"
+  },
+  {
+    "name": "adoption",
+    "route": "/adoption"
+  },
+  {
+    "name": "adoption-requests",
+    "route": "/adoption-requests"
+  },
+  {
+    "name": "sitters",
+    "route": "/sitters"
+  },
+  {
+    "name": "sitter-edit",
+    "route": "/sitter-edit"
+  },
+  {
+    "name": "bookings",
+    "route": "/bookings"
+  },
+  {
+    "name": "profile",
+    "route": "/profile"
+  },
+  {
+    "name": "profile-edit",
+    "route": "/profile-edit"
+  },
+  {
+    "name": "achievements",
+    "route": "/achievements"
+  },
+  {
+    "name": "settings",
+    "route": "/settings"
+  },
+  {
+    "name": "notifications",
+    "route": "/notifications"
+  },
+  {
+    "name": "cats",
+    "route": "/cats"
+  },
+  {
+    "name": "sighting-new",
+    "route": "/sighting-new"
+  },
+  {
+    "name": "rescue",
+    "route": "/rescue"
+  },
+  {
+    "name": "rescue-new",
+    "route": "/rescue-new"
+  },
+  {
+    "name": "stations",
+    "route": "/stations"
+  },
+  {
+    "name": "station-edit",
+    "route": "/station-edit"
+  },
+  {
+    "name": "help-directory",
+    "route": "/help-directory"
+  },
+  {
+    "name": "admin",
+    "route": "/admin"
+  },
+  {
+    "name": "admin-posts",
+    "route": "/admin-posts"
+  },
+  {
+    "name": "admin-users",
+    "route": "/admin-users"
+  },
+  {
+    "name": "admin-sitters",
+    "route": "/admin-sitters"
+  },
+  {
+    "name": "admin-reports",
+    "route": "/admin-reports"
+  },
+  {
+    "name": "admin-rescues",
+    "route": "/admin-rescues"
+  },
+  {
+    "name": "admin-merges",
+    "route": "/admin-merges"
+  },
+  {
+    "name": "admin-volunteers",
+    "route": "/admin-volunteers"
+  },
+  {
+    "name": "admin-maintenance",
+    "route": "/admin-maintenance"
+  },
+  {
+    "name": "admin-submissions",
+    "route": "/admin-submissions"
+  },
+  {
+    "name": "admin-log",
+    "route": "/admin-log"
+  },
+  {
+    "name": "admin-recognition",
+    "route": "/admin-recognition"
+  },
+  {
+    "name": "admin-ai-server",
+    "route": "/admin-ai-server"
+  },
+  {
+    "name": "cat-detail",
+    "route": "/cat/screens-cat-0c61fae6"
+  },
+  {
+    "name": "cat-edit",
+    "route": "/cat-edit/screens-cat-0c61fae6"
+  },
+  {
+    "name": "cat-merge",
+    "route": "/cat-merge/screens-cat-0c61fae6"
+  },
+  {
+    "name": "photo",
+    "route": "/photo/mdKEohMrGSvfkj1x78qJ?catId=screens-cat-0c61fae6"
+  },
+  {
+    "name": "sighting-detail",
+    "route": "/sighting/screens-sighting-0c61fae6"
+  },
+  {
+    "name": "sighting-edit",
+    "route": "/sighting-edit/screens-sighting-0c61fae6"
+  },
+  {
+    "name": "rescue-detail",
+    "route": "/rescue/screens-rescue-0c61fae6"
+  },
+  {
+    "name": "station-detail",
+    "route": "/station/screens-station-0c61fae6"
+  },
+  {
+    "name": "sitter-detail",
+    "route": "/sitter/GnXh8zCuRuRTA84SbX8tQsDcRuQx"
+  },
+  {
+    "name": "book",
+    "route": "/book/GnXh8zCuRuRTA84SbX8tQsDcRuQx"
+  },
+  {
+    "name": "user",
+    "route": "/user/GnXh8zCuRuRTA84SbX8tQsDcRuQx"
+  },
+  {
+    "name": "chat",
+    "route": "/chat/GnXh8zCuRuRTA84SbX8tQsDcRuQx_xlFCW9kuo7xIxoE1qif9wgp7Gxn3"
+  },
+  {
+    "name": "chat-with",
+    "route": "/chat-with/GnXh8zCuRuRTA84SbX8tQsDcRuQx"
+  }
+]

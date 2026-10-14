@@ -1,0 +1,14 @@
+node_modules
+dist
+dev-dist
+playwright-report
+test-results
+src/icons
+src/i18n/*.json
+src/data/model/index.ts
+src/data/model/Enums.ts
+src/data/model/kotlin-schema.json
+src/data/neighborhoods.json
+tests/fixtures
+docs
+public

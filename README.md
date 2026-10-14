@@ -39,6 +39,7 @@ use the local emulators and the demo accounts ([SETUP.md → Local demo](SETUP.m
 
 | Area | In the app | Code |
 | --- | --- | --- |
+| Web app | iPhone Safari/Home Screen and browser PWA with shared Firebase data, rules, strings and icons. Local implementation and owner publishing instructions | [`web/README.md`](web/README.md), [`web/docs/parity.md`](web/docs/parity.md) |
 | Map | Map tab with **Modern** (tilted 3D buildings, recoloured streets) and **Classic** styles, light/dark, optional satellite. Shows clustered status markers (pulsing for urgent posts), a tap preview card, recenter, and filter chips (multi-select + Clear). The chosen style is remembered | `ui/map` (MapLibre + OpenFreeMap) |
 | Posts | **+ Post**: Lost / Found / Spotted / Needs help / Street animal / Adoption / Other, for any animal. A 6-step guided form takes up to 6 photos plus an optional video, a pin and search-area radius, last seen time, reward, and a contact method. It warns about likely duplicates. Posts can be edited, deleted, or marked reunited/resolved. "I saw this animal" sends updates with a photo and location | `ui/posts`, `data/PostRepository.kt` |
 | Explore & search | Nearby feed (newest/closest), filters for type, distance, date and reward (remembered), and search across names, breeds, colours and areas in both languages | `ui/explore` |

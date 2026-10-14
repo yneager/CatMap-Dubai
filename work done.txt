@@ -1,0 +1,172 @@
+CATMAP WEB IMPLEMENTATION / REVIEW REPORT
+14 October 2026. Local candidate: web 0.0.8. Android remains 0.0.7.
+
+The task brief was CLAUDE_TO_CODEX.txt. Android Kotlin was treated as the functional specification. No commit, push, tag, release, deployment or Firebase console change was made. Forbidden signing/configuration files, saved demo passwords, and Desktop/cat-server were not opened or modified. No production Firebase requests were intentionally made; development was forced to local demo emulators.
+
+MILESTONES (brief section 13)
+1. DONE: Vite/React/strict TypeScript scaffold, self-hosted fonts, tokens, CSS components, generated strings/icons, Firebase wiring. web/package.json; vite.config.ts; src/ui/theme; src/ui/components; src/firebase.ts; src/icons; src/i18n.
+2. DONE: Registration, verification/polling, email/eligible username login, reset, gates, profiles, encrypted demo vault. src/ui/auth; src/data/AuthRepository.ts; UserRepository.ts; DemoAccounts.ts; App.tsx.
+3. DONE: Kotlin-generated models/defaults/integer writes, shared feed/listeners, images/cache, inbox/delivery, settings. src/data/model; src/state.tsx; src/data/ImageRepository.ts; NotificationRepository.ts; SettingsRepository.ts; src/notifications.
+4. DONE locally: MapLibre styles, clusters/markers, coat pins, urgent pulse, remembered camera, shared filters/GPS, map/list, picker, previews/mini maps. src/ui/map; src/data/LocationRepository.ts. Geographic pixel parity and real iOS location remain unverified.
+5. DONE: Explore shortcuts/feed/newest/nearest, search, filters, old-post/microchip policy. src/ui/explore; src/data/PostStaleness.ts.
+6. DONE: Six-step editor, limits, JPEG pipeline, per-account blob drafts, duplicates, descriptor matching, AI job client and same-animal add-to-existing flow. src/ui/posts/PostEditorScreen.tsx; src/util/images.ts; src/data/PostDraftStore.ts; src/ai; src/data/AiServer.ts.
+7. DONE: Detail/photo pager, updates, adoption/owner status/actions, favorites, report/share/poster, lists/alerts and stale reminders. src/ui/posts; src/util/poster.ts; share.ts; links.ts; src/data/PostRepository.ts; FavoritesRepository.ts.
+8. DONE: Chat list/text/photo/shared-post, unread/read alerts, block/unblock/report and starting chats. src/ui/messages; src/data/ChatRepository.ts.
+9. DONE: Adoption listing/request/withdraw/approval/decline; sitter directory/profile/pet filters, booking states and transactional review totals. src/ui/adoption; src/ui/sitting; src/data/AdoptionRepository.ts; SittingRepository.ts.
+10. DONE: My/other profile, editing, stats/badges, settings, quiet hours/categories, demo vault/switcher, JSON export, cleanup/deletion and release notes. src/ui/profile; src/ui/settings; src/gamification; src/data/UserDataExport.ts; CommunityAccountCleanup.ts; AccountDeletion.ts; src/util/whatsNew.ts.
+11. DONE: Cats/filter/profile/edit/merge/photo viewer, sightings/edit/privacy/matching, rescue, feeding stations/check-ins/maintenance and public help/editor. src/ui/cats; sighting; rescue; stations; help; src/data/CatRepository.ts; RescueRepository.ts; StationRepository.ts; HelpDirectoryRepository.ts.
+12. DONE locally: Dashboard/counts/eight-week charts, posts/users/sitters, reports/rescue/merges/volunteers/maintenance/submissions/log, recognition folder evaluation and AI heartbeat. src/ui/admin; src/data/AdminRepository.ts; AdminAnalyticsRepository.ts; ModerationRepository.ts; src/ai/RecognitionEvaluation.ts. Actual PC worker/model evaluation was not run.
+13. DONE locally: Manifest/icons/SW/update prompt, Safari install hint, safe areas/offline cache, SPA Hosting/cache/CSP configuration. vite.config.ts; src/App.tsx; public; root firebase.json. Hosting is not deployed.
+14. DONE local tooling, with platform/visual limitations below: static/unit/rules/shape/image/browser/PWA checks, screenshots, CI and documentation. web/tests; e2e; docs; tools; root .github/workflows/ci.yml; README.md; SETUP.md; HANDOFF.md. Exact Compose pixel parity is partial, not claimed.
+
+SCREENS (brief section 9, all implemented)
+Auth: login, register, forgot, verify - src/ui/auth/AuthScreens.tsx.
+Map and picker - src/ui/map/MapScreen.tsx, CommunityMap.tsx, MapStyles.ts, LocationPickerScreen.tsx.
+Explore/search/filter sheet - src/ui/explore/ExploreScreen.tsx, Filtering.tsx.
+Chooser/editor steps/edit - src/ui/posts/PostChooser.tsx, PostEditorScreen.tsx.
+Post detail/poster/my posts/favorites/area alerts - src/ui/posts/PostDetailScreen.tsx, PosterScreen.tsx, PostLists.tsx.
+Messages/chat/chat-with - src/ui/messages/MessagesScreens.tsx.
+Adoption/list/request management - src/ui/adoption/AdoptionScreens.tsx, detail dialogs.
+Sitter directory/detail/editor/book/bookings/reviews - src/ui/sitting/SittingScreens.tsx.
+Profile/edit/public profile/achievements - src/ui/profile/ProfileScreens.tsx.
+Settings/inbox/export/delete/switcher/what's-new - src/ui/settings/SettingsAndNotifications.tsx.
+Cats/list/profile/edit/merge/photo viewer - src/ui/cats/CatScreens.tsx, PhotoViewer.tsx.
+Sightings/new/detail/edit - src/ui/sighting/SightingScreens.tsx, EditSighting.tsx.
+Rescue/list/new/detail - src/ui/rescue/RescueScreens.tsx.
+Stations/list/detail/edit/check-ins/maintenance - src/ui/stations/StationScreens.tsx.
+Help directory, available signed out, and admin editor - src/ui/help/HelpDirectoryScreen.tsx.
+Admin/dashboard/posts/users/sitters/reports/rescues/merges/volunteers/maintenance/submissions/log/recognition/AI status - src/ui/admin/AdminScreens.tsx, AdminVolunteers.tsx.
+54 concrete routes have captures in each visual variant; six editor steps, chooser/filter, four auth screens and pure component fixtures extend the set.
+
+VERIFICATION / COMMANDS
+Final measured counts, scores and exact dependency versions are appended below from saved results.
+
+Static checks: npm.cmd run lint; npm.cmd run typecheck; npm.cmd run strings:check; npm.cmd run test; npm.cmd run build. Final static runs pass. Vitest: 3 files, 34 tests passed. Strings: 85 source files, 1182 JSON keys per language (1181 strings plus the plural); Android retains its 1157 strings.
+python tools/strings/build_strings.py . --check: missing=[], unused=[], checked strings. Generation and git diff checks leave both Android XML files byte-identical. Web-only Arabic entries equal English with TODO-AR, as required.
+python tools/icons/vector_to_svg.py . --check: 64 vectors, theme/original variants and registry checked. 129 SVGs including launcher; generated opaque RGB PNG/ICO app icons. Maskable foreground radius 161.5px <= 204.8px safe zone.
+node test.mjs ../../firestore.rules (tools/rulestest): 270 passed, 0 failed, unchanged suite.
+npx.cmd -y firebase-tools@latest emulators:exec --config firebase.rules-test.json --only firestore --project demo-catmap-rules-test "npm --prefix tools/rulestest test": 270 passed, 0 failed; isolated suite exited successfully. Log: web/docs/rules-full-run.log.
+.\gradlew.bat --no-parallel --max-workers=1 :app:testDebugUnitTest --tests com.catmap.dubai.ai.WebFingerprintFixtureTest: BUILD SUCCESSFUL, run twice while deriving/refining the fixtures. Afterwards .\gradlew.bat --stop stopped the owned daemon each time. No Android source/build change. adb devices showed no available Android device/emulator; installStaging was therefore skipped.
+Fingerprint fixture: tests/fixtures/android-fingerprints.json exports the actual Kotlin descriptors and decoded RGBA for orange_tabby_1/2, tuxedo_1 and seed cat_orange. Native RGBA web analysis maximum delta 0 and cosine 1. Browser JPEG comparison passed both engines: worst Chromium post delta 0.0188/cosine 0.99991791; worst WebKit post delta 0.0247/cosine 0.99986072. WebKit analysis worst delta 0.0020/cosine 0.99999944. Thresholds: every value <=0.03; cosine >=0.98. JPEG size/dimensions/EXIF checks ran in the browsers.
+Browser command: npm.cmd run test:e2e -- --grep-invert "visual screenshots|production manifest". Final isolation uses demo-catmap-web-test, Auth 9098, Firestore 8180, Storage 9198. The helpers create disposable accounts with random passwords and compare web-written shapes/types against a parser over Kotlin declarations. A fake local worker covers the AI answeredRequestId protocol. GPS is simulated, not a real device measurement. The extra cross-screen test confirms a Map distance filter remains active in Explore; the same session fix also sorts sitters by distance. Final results are appended below.
+npm.cmd run screens: WebKit at 393x852 light/dark/Arabic; additional 360px native-data component fixtures and a 1080x1350 poster. 3 tests passed; 214 PNG captures (72 light including fixture poster, 71 dark, 71 Arabic). Logs and per-variant routes.json in web/docs/screens. Final capture waits for route content rather than an old suspended screen.
+Production PWA: build --mode emulators, then CATMAP_PWA=true playwright test e2e/pwa.spec.ts. Both engines passed manifest, service worker, persistent login and cached Explore reload with the test-owned preview origin stopped. 70 unique cached assets; Workbox build lists 75 entries. Regular browser flows also test context.setOffline(true) and the banner. WebKit's setOffline+SW navigation defect is documented at https://github.com/microsoft/playwright/issues/42775; stopping the test-owned origin is the independent offline check. No owner emulator is stopped by that test.
+Lighthouse 13.5.0 against vite preview /login: performance/accessibility/best-practices/SEO are recorded in web/docs/lighthouse.report.json/.html. Lighthouse 13.5 supplies no PWA category; PWA score N/A, with actual manifest/SW/offline checks above. The audit is a login-page mobile simulation, not a performance claim for every map/admin view or a real iPhone.
+npm.cmd audit --json: 0 total vulnerabilities. docs/dependency-versions.json records publication dates; all direct pins/overrides meet the >=14-day age rule.
+node tools/bundle-report.mjs: measures gzip of initial HTML-linked JS/CSS plus recursive static imports, and separate map/admin/worker chunks. It excludes fonts, HTML and lazily loaded Auth from the initial subtotal. Both the default production build and emulator production build succeeded; final values are appended below. Vite warns about large Firebase/MapLibre chunks; map and admin are lazy, while SW precaches the complete shell/assets for offline use.
+git diff/status checks: protected rules/indexes/release workflow/Android strings and build/source unchanged. Existing CI jobs preserved; only a web job appended. Existing firebase.json sections retained; only Hosting appended. The required report itself is the brief's additional root-file exception.
+
+INTERMEDIATE FAILURES AND CORRECTIONS (not presented as successes)
+Initial dependency set had audit findings; updated mature exact pins and two overrides bring the final audit to zero.
+Initial native orientation descriptor differed; corrected Float32 arithmetic/atan2 behavior. The actual exported RGBA fixtures now match exactly.
+Several initial harness assertions used old labels, ambiguous controls, or corrupted Unicode from Windows text decoding. Fixed UTF-8 selectors, document polling, the profile-creation race in fixtures, route readiness and artifact watch/lint exclusions. The early photo-reunion denial was a faulty test helper, not a confirmed rules blocker; the unchanged rules later allowed the flow.
+Vite 8 rejected a non-exported RTL bundle path and lost MapLibre's worker dependency. The correct self-hosted RTL asset and bundled worker/shared module are now explicit.
+Fixed a real late auth/verification callback that could return a user to Map after moving elsewhere; verification polling stops and ignores in-flight results after unmount/account change. Firebase initialization now reuses clients across development module re-evaluation.
+The final screenshot refresh exposed a second delayed redirect: repeated start-chat requests could resolve after leaving that route and return to a chat. MessagesScreens now cancels both success and failure navigation on effect cleanup. The two-browser chat flow explicitly delays each outcome, leaves for Explore, releases the response and verifies that Explore stays open. The interrupted screenshot attempt is not the final capture result.
+Safari poster font readiness could remain pending; wait for the required faces with a bounded fallback. Poster errors no longer silently keep the spinner forever.
+Long repeated runs found the shared Firestore service unresponsive, and later shared Auth unavailable. Final tests use a fresh complete demo suite, separate ports/project and byte-identical rule fixtures. Startup attempts with invalid rule-relative paths failed and are not validation evidence; the preparation script verifies the copies before the final suite starts. Saved .emulator-data was neither exported nor changed.
+Some intermediate browser runs failed due to live source edits/automatic reloads, stalled shared services, experimental polling or stale harness labels. The final code uses normal SDK transport detection and one auth navigation effect; focused registration/verification checks passed both engines after this correction. Final results, not intermediate counts, are the acceptance evidence.
+
+NOT DONE / NOT VERIFIED
+Real iPhone installation, actual safe areas/status bar, camera capture, share sheet/files, real geolocation and Safari storage eviction behavior. WebKit is a stand-in.
+Android staging reading web records: no running Android emulator/device. Document schema/integer/default parity and native image fixtures were tested instead.
+Real PC AI model/embeddings/heartbeat integration: no reads or changes to cat-server. Mocked/fake-worker protocol and local descriptor tests were run.
+Optional Blaze Storage video upload/playback and a real MapTiler satellite key. These paths stay hidden/off by default and need owner validation.
+Production deployment/console config/authorized domains/hosting CSP delivery and browser integrations on the actual host. Deploy was forbidden. No web Firebase config or real keys were created/copied.
+GitHub-hosted CI execution: the job was added but not pushed, so no hosted run is claimed.
+No claim of pixel-exact Android parity; some visible CSS/browser differences remain. No known security-rule blocker remains from the successfully verified local flows.
+
+REMAINING VISIBLE DIFFERENCES
+See web/docs/parity.md and its actual side-by-side images. Font shaping/metrics/anti-aliasing and canvas wrapping differ; generic SVG control strokes/state layers are approximate; fields/selects/date/time/sliders use browser rendering; dialogs do not implement Compose's exact draggable-sheet behavior. Chip heights, spacing/elevation, empty states/chart labels and viewport/status-bar presentation differ. Map tiles/glyphs require a network and snapshots can precede tile completion. Poster text baselines/QR rasterization differ. Real Safari install/share/camera/permission UI is not represented by desktop WebKit. New web-only Arabic strings intentionally remain English TODO-AR.
+
+FILES OUTSIDE web/ CHANGED
+tools/strings/build_strings.py - generate web JSON/check drift while preserving Android XML bytes.
+tools/strings/strings_web.py - web-only English/English-TODO-AR strings, excluded from Android.
+tools/icons/vector_to_svg.py - native VectorDrawable conversion/registry/PWA raster generation/checks.
+app/src/test/java/com/catmap/dubai/ai/WebFingerprintFixtureTest.kt - the sole allowed new Android JVM fixture exporter/test.
+firebase.json - Hosting config/cache/SPA/CSP only; pre-existing sections unchanged.
+.github/workflows/ci.yml - appended secret-free web job; original jobs and release.yml unchanged.
+README.md - short web entry in feature map.
+SETUP.md - owner-only Web/iPhone setup steps.
+HANDOFF.md - dated local architecture/evidence/limits section at the top.
+work done.txt - this explicitly required review report.
+
+OWNER STEPS (after Claude/owner review)
+1. Review this report, web/docs/parity.md and the screenshots. Use the emulator instructions in web/README.md for a local preview; stop the test-owned suite after use. The normal demo defaults are still demo-catmap at 9099/8080/9199.
+2. Register a Web app in the existing Firebase project yourself. Copy only its public Web config into web/.env.local using .env.example; keep it out of Git. Set VITE_USE_EMULATORS=false. Do not use Android's config/signing files.
+3. In Authentication -> Settings -> Authorized domains, confirm catmap-dubai.web.app and catmap-dubai.firebaseapp.com and add any custom domain.
+4. Optionally set VITE_PUBLIC_URL to the HTTPS address and VITE_MAPTILER_KEY. Keep VITE_BLAZE=false on Spark. Remove isolated test overrides from the build environment.
+5. PowerShell build commands:
+   Set-Location C:\Users\mohammad\Desktop\cat\web
+   npm.cmd ci
+   npm.cmd run lint
+   npm.cmd run typecheck
+   npm.cmd run test
+   npm.cmd run build
+6. Only the owner, after review, publishes Hosting from the repository root after checking the intended Firebase project:
+   Set-Location C:\Users\mohammad\Desktop\cat
+   npx.cmd -y firebase-tools@latest deploy --only hosting
+   Do not deploy rules, indexes or functions as part of this web handoff.
+7. Open the HTTPS address in Safari on an iPhone. Share -> Add to Home Screen. Test login, posting/photos, location, Arabic/large text, chat/adoption/booking, poster/share/download, offline and updates on the real device before distributing it.
+
+WHAT CLAUDE SHOULD REVIEW FIRST
+1. Data/write/rule parity and destructive cleanup: src/data/PostRepository.ts, CatRepository.ts, SittingRepository.ts, CommunityAccountCleanup.ts, AccountDeletion.ts; e2e/shape-parity.spec.ts and care-and-privacy.spec.ts.
+2. Auth/UID lifecycle, verification callback guards, role gates and encrypted demo vault.
+3. Fingerprint native/browser evidence, AI request matching/throttle/timeout and the clearly labelled ML Kit adaptation.
+4. Actual light/dark/Arabic visuals, route readiness, map network behavior, fields/sheets and poster comparison. Do not approve a pixel-identical claim.
+5. Owner production configuration, CSP with worker/wasm needs, deployment guardrails and real iPhone integration boundaries.
+
+
+EXACT DEPENDENCIES (no ranges; release-date evidence in web/docs/dependency-versions.json)
+dependencies:
+  @fontsource/noto-sans-arabic 5.3.0 - self-hosted Arabic fonts/offline RTL
+  @fontsource/roboto 5.3.0 - self-hosted native font family/offline
+  @mapbox/mapbox-gl-rtl-text 0.3.0 - self-hosted Arabic map shaping worker
+  firebase 12.19.0 - modular Auth/Firestore and optional lazy Storage
+  maplibre-gl 6.11.2 - native-compatible vector maps/clustering
+  qrcode 1.5.4 - poster QR generation
+  react 19.3.0 - UI/hooks
+  react-dom 19.3.0 - browser rendering
+  react-router-dom 7.18.4 - history routing/deep links
+devDependencies:
+  @eslint/js 10.0.1 - base lint rules
+  @playwright/test 1.63.0 - Chromium/WebKit E2E/screens
+  @types/node 24.19.0 - Node test/tool types
+  @types/qrcode 1.5.6 - QR types
+  @types/react 19.3.0 - React types
+  @types/react-dom 19.3.0 - DOM React types
+  @vitejs/plugin-react 6.1.1 - Vite JSX/React integration
+  eslint 10.11.0 - static lint
+  eslint-plugin-react-hooks 7.1.1 - hook correctness/dependencies
+  globals 17.12.0 - browser/Node lint globals
+  prettier 3.6.2 - handwritten source formatting
+  typescript 5.9.3 - strict compile/typecheck and test parsing
+  typescript-eslint 8.71.0 - typed lint configuration
+  vite 8.3.1 - build/dev/preview
+  vite-plugin-pwa 1.3.0 - manifest/Workbox/update registration
+  vitest 5.0.2 - unit tests
+overrides:
+  @grpc/grpc-js 1.14.5 - transitive Firebase security fix override
+  tinypool 2.2.0 - transitive test runner security fix override
+
+
+FINAL ACCEPTANCE RESULTS - 14 OCTOBER 2026
+Final source includes the stale start-chat callback fix and its delayed-success/failure regression check. No frontend changes followed these accepted runs.
+Browser suite: 22 passed, 0 failed (11 Chromium + 11 WebKit), 6.2 minutes. Log: web/docs/e2e-final-accepted.log.
+Screenshots: 3 passed, 0 failed, 4.7 minutes. 214 PNGs: light 72, dark 71, Arabic 71; 54 concrete routes per variant plus editor/sheet/auth/component captures. Log: web/docs/screens-final-accepted.log. The 360px web component fixtures and 320px native post-card bitmaps are not pixel-aligned comparisons.
+PWA: 2 passed, 0 failed, 12.6 seconds. Both engines restored login and Explore with their test-owned origin stopped; 70 cached assets. Log: web/docs/pwa-final-accepted.log.
+Final lint/typecheck passed after the chat fix. Final unit run: 34/34 in 3 files. Shared generator checks passed (1157 Android strings; 1181 web strings plus plural; 64 vectors). Protected rules/indexes/release workflow/Android strings still have no diff.
+Final npm audit: 0 vulnerabilities in every severity. web/docs/audit-final.json.
+Final default production and production-emulator builds both succeeded; Workbox precache 75 entries, approximately 3844.62 KiB. The final dist is the default production build with no owner configuration. A fresh Chromium preview verified 'Firebase setup required' and zero external requests, with any external request explicitly blocked by the test.
+Lighthouse 13.5.0 command: npx.cmd -y lighthouse@13.5.0 http://127.0.0.1:4173/login --only-categories=performance,accessibility,best-practices,seo --chrome-flags='--headless --no-sandbox' --output=json --output=html --output-path=docs/lighthouse. Exit 0. The Chrome launcher warned it could not remove its locked temporary directory; audit output was written successfully. No temporary directory was manually removed.
+Measured Lighthouse: performance 82; accessibility 100; best practices 100; SEO 92; PWA N/A (category absent).
+Final initial JS/CSS gzip: 349,201 bytes (341.02 KiB), excluding HTML/fonts/lazy routes. Lazy map/worker/RTL/CSS and admin are listed below.
+  CommunityMap-B8-mEBLf.css: 10,471 gzip bytes (10.23 KiB).
+  CommunityMap-CtfV7NFX.js: 276,113 gzip bytes (269.64 KiB).
+  mapbox-gl-rtl-text-DosxTATq.js: 43,529 gzip bytes (42.51 KiB).
+  maplibre-gl-worker-v2kpBMIs.js: 145,197 gzip bytes (141.79 KiB).
+  AdminScreens-CU1BCZhp.js: 7,886 gzip bytes (7.70 KiB).
+Machine-readable measured summary: web/docs/verification.json. Runtime logs remain local/ignored because emulator Auth logs can contain disposable verification codes.
+
+CLEANUP / FINAL SCOPE
+Stopped only the command-line-verified task-owned Vite dev/preview processes and isolated demo-catmap-web-test tree, including descendants created after that root. No listeners remained on test ports 5173, 4173, 4317, 8180, 9098, 9198, 4402, 4502 or 9150. Existing unrelated services were not stopped. No saved emulator export was written. All work remains local and uncommitted; the owner can restart the local preview using web/README.md.

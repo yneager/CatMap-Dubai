@@ -1,0 +1,394 @@
+[
+  {
+    "key": "deira",
+    "nameEn": "Deira",
+    "nameAr": "ديرة",
+    "lat": 25.2711,
+    "lng": 55.3075
+  },
+  {
+    "key": "al_ras",
+    "nameEn": "Al Ras",
+    "nameAr": "الراس",
+    "lat": 25.2697,
+    "lng": 55.2953
+  },
+  {
+    "key": "naif",
+    "nameEn": "Naif",
+    "nameAr": "نايف",
+    "lat": 25.2722,
+    "lng": 55.3125
+  },
+  {
+    "key": "al_rigga",
+    "nameEn": "Al Rigga",
+    "nameAr": "الرقة",
+    "lat": 25.265,
+    "lng": 55.322
+  },
+  {
+    "key": "al_muraqqabat",
+    "nameEn": "Al Muraqqabat",
+    "nameAr": "المرقبات",
+    "lat": 25.262,
+    "lng": 55.329
+  },
+  {
+    "key": "hor_al_anz",
+    "nameEn": "Hor Al Anz",
+    "nameAr": "هور العنز",
+    "lat": 25.277,
+    "lng": 55.342
+  },
+  {
+    "key": "al_mamzar",
+    "nameEn": "Al Mamzar",
+    "nameAr": "الممزر",
+    "lat": 25.295,
+    "lng": 55.345
+  },
+  {
+    "key": "al_qusais",
+    "nameEn": "Al Qusais",
+    "nameAr": "القصيص",
+    "lat": 25.283,
+    "lng": 55.387
+  },
+  {
+    "key": "al_nahda",
+    "nameEn": "Al Nahda",
+    "nameAr": "النهدة",
+    "lat": 25.29,
+    "lng": 55.37
+  },
+  {
+    "key": "al_twar",
+    "nameEn": "Al Twar",
+    "nameAr": "الطوار",
+    "lat": 25.26,
+    "lng": 55.38
+  },
+  {
+    "key": "muhaisnah",
+    "nameEn": "Muhaisnah",
+    "nameAr": "محيصنة",
+    "lat": 25.262,
+    "lng": 55.42
+  },
+  {
+    "key": "mirdif",
+    "nameEn": "Mirdif",
+    "nameAr": "مردف",
+    "lat": 25.218,
+    "lng": 55.421
+  },
+  {
+    "key": "al_mizhar",
+    "nameEn": "Al Mizhar",
+    "nameAr": "المزهر",
+    "lat": 25.24,
+    "lng": 55.45
+  },
+  {
+    "key": "al_khawaneej",
+    "nameEn": "Al Khawaneej",
+    "nameAr": "الخوانيج",
+    "lat": 25.235,
+    "lng": 55.48
+  },
+  {
+    "key": "al_rashidiya",
+    "nameEn": "Al Rashidiya",
+    "nameAr": "الراشدية",
+    "lat": 25.228,
+    "lng": 55.39
+  },
+  {
+    "key": "al_garhoud",
+    "nameEn": "Al Garhoud",
+    "nameAr": "القرهود",
+    "lat": 25.24,
+    "lng": 55.35
+  },
+  {
+    "key": "festival_city",
+    "nameEn": "Dubai Festival City",
+    "nameAr": "دبي فستيفال سيتي",
+    "lat": 25.222,
+    "lng": 55.353
+  },
+  {
+    "key": "al_jaddaf",
+    "nameEn": "Al Jaddaf",
+    "nameAr": "الجداف",
+    "lat": 25.22,
+    "lng": 55.333
+  },
+  {
+    "key": "oud_metha",
+    "nameEn": "Oud Metha",
+    "nameAr": "عود ميثاء",
+    "lat": 25.236,
+    "lng": 55.315
+  },
+  {
+    "key": "al_karama",
+    "nameEn": "Al Karama",
+    "nameAr": "الكرامة",
+    "lat": 25.242,
+    "lng": 55.304
+  },
+  {
+    "key": "bur_dubai",
+    "nameEn": "Bur Dubai",
+    "nameAr": "بر دبي",
+    "lat": 25.258,
+    "lng": 55.297
+  },
+  {
+    "key": "al_fahidi",
+    "nameEn": "Al Fahidi",
+    "nameAr": "الفهيدي",
+    "lat": 25.2635,
+    "lng": 55.299
+  },
+  {
+    "key": "al_mankhool",
+    "nameEn": "Al Mankhool",
+    "nameAr": "المنخول",
+    "lat": 25.25,
+    "lng": 55.293
+  },
+  {
+    "key": "al_satwa",
+    "nameEn": "Al Satwa",
+    "nameAr": "السطوة",
+    "lat": 25.226,
+    "lng": 55.277
+  },
+  {
+    "key": "jumeirah_1",
+    "nameEn": "Jumeirah 1",
+    "nameAr": "جميرا 1",
+    "lat": 25.22,
+    "lng": 55.258
+  },
+  {
+    "key": "jumeirah_2",
+    "nameEn": "Jumeirah 2",
+    "nameAr": "جميرا 2",
+    "lat": 25.205,
+    "lng": 55.242
+  },
+  {
+    "key": "jumeirah_3",
+    "nameEn": "Jumeirah 3",
+    "nameAr": "جميرا 3",
+    "lat": 25.19,
+    "lng": 55.23
+  },
+  {
+    "key": "al_wasl",
+    "nameEn": "Al Wasl",
+    "nameAr": "الوصل",
+    "lat": 25.195,
+    "lng": 55.255
+  },
+  {
+    "key": "al_safa",
+    "nameEn": "Al Safa",
+    "nameAr": "الصفا",
+    "lat": 25.18,
+    "lng": 55.235
+  },
+  {
+    "key": "umm_suqeim",
+    "nameEn": "Umm Suqeim",
+    "nameAr": "أم سقيم",
+    "lat": 25.155,
+    "lng": 55.21
+  },
+  {
+    "key": "difc",
+    "nameEn": "DIFC",
+    "nameAr": "مركز دبي المالي العالمي",
+    "lat": 25.212,
+    "lng": 55.28
+  },
+  {
+    "key": "downtown",
+    "nameEn": "Downtown Dubai",
+    "nameAr": "وسط مدينة دبي",
+    "lat": 25.1972,
+    "lng": 55.2744
+  },
+  {
+    "key": "business_bay",
+    "nameEn": "Business Bay",
+    "nameAr": "الخليج التجاري",
+    "lat": 25.186,
+    "lng": 55.265
+  },
+  {
+    "key": "ras_al_khor",
+    "nameEn": "Ras Al Khor",
+    "nameAr": "رأس الخور",
+    "lat": 25.19,
+    "lng": 55.35
+  },
+  {
+    "key": "nad_al_sheba",
+    "nameEn": "Nad Al Sheba",
+    "nameAr": "ند الشبا",
+    "lat": 25.17,
+    "lng": 55.32
+  },
+  {
+    "key": "al_quoz",
+    "nameEn": "Al Quoz",
+    "nameAr": "القوز",
+    "lat": 25.15,
+    "lng": 55.24
+  },
+  {
+    "key": "dubai_hills",
+    "nameEn": "Dubai Hills Estate",
+    "nameAr": "دبي هيلز استيت",
+    "lat": 25.11,
+    "lng": 55.25
+  },
+  {
+    "key": "al_barsha",
+    "nameEn": "Al Barsha",
+    "nameAr": "البرشاء",
+    "lat": 25.11,
+    "lng": 55.2
+  },
+  {
+    "key": "barsha_heights",
+    "nameEn": "Barsha Heights",
+    "nameAr": "مرتفعات البرشاء",
+    "lat": 25.096,
+    "lng": 55.175
+  },
+  {
+    "key": "al_sufouh",
+    "nameEn": "Al Sufouh",
+    "nameAr": "الصفوح",
+    "lat": 25.11,
+    "lng": 55.165
+  },
+  {
+    "key": "palm_jumeirah",
+    "nameEn": "Palm Jumeirah",
+    "nameAr": "نخلة جميرا",
+    "lat": 25.1124,
+    "lng": 55.139
+  },
+  {
+    "key": "dubai_marina",
+    "nameEn": "Dubai Marina",
+    "nameAr": "دبي مارينا",
+    "lat": 25.0805,
+    "lng": 55.1403
+  },
+  {
+    "key": "jbr",
+    "nameEn": "JBR",
+    "nameAr": "جميرا بيتش ريزيدنس",
+    "lat": 25.078,
+    "lng": 55.133
+  },
+  {
+    "key": "jlt",
+    "nameEn": "Jumeirah Lakes Towers",
+    "nameAr": "أبراج بحيرات جميرا",
+    "lat": 25.069,
+    "lng": 55.143
+  },
+  {
+    "key": "discovery_gardens",
+    "nameEn": "Discovery Gardens",
+    "nameAr": "ديسكفري جاردنز",
+    "lat": 25.04,
+    "lng": 55.137
+  },
+  {
+    "key": "al_furjan",
+    "nameEn": "Al Furjan",
+    "nameAr": "الفرجان",
+    "lat": 25.027,
+    "lng": 55.146
+  },
+  {
+    "key": "jebel_ali",
+    "nameEn": "Jebel Ali",
+    "nameAr": "جبل علي",
+    "lat": 25.005,
+    "lng": 55.095
+  },
+  {
+    "key": "jvc",
+    "nameEn": "Jumeirah Village Circle",
+    "nameAr": "قرية جميرا الدائرية",
+    "lat": 25.059,
+    "lng": 55.209
+  },
+  {
+    "key": "sports_city",
+    "nameEn": "Dubai Sports City",
+    "nameAr": "مدينة دبي الرياضية",
+    "lat": 25.04,
+    "lng": 55.22
+  },
+  {
+    "key": "motor_city",
+    "nameEn": "Motor City",
+    "nameAr": "موتور سيتي",
+    "lat": 25.048,
+    "lng": 55.24
+  },
+  {
+    "key": "arabian_ranches",
+    "nameEn": "Arabian Ranches",
+    "nameAr": "المرابع العربية",
+    "lat": 25.055,
+    "lng": 55.27
+  },
+  {
+    "key": "silicon_oasis",
+    "nameEn": "Dubai Silicon Oasis",
+    "nameAr": "واحة دبي للسيليكون",
+    "lat": 25.12,
+    "lng": 55.38
+  },
+  {
+    "key": "international_city",
+    "nameEn": "International City",
+    "nameAr": "المدينة العالمية",
+    "lat": 25.165,
+    "lng": 55.41
+  },
+  {
+    "key": "al_warqa",
+    "nameEn": "Al Warqa",
+    "nameAr": "الورقاء",
+    "lat": 25.195,
+    "lng": 55.43
+  },
+  {
+    "key": "dip",
+    "nameEn": "Dubai Investments Park",
+    "nameAr": "مجمع دبي للاستثمار",
+    "lat": 24.99,
+    "lng": 55.17
+  },
+  {
+    "key": "dubai_south",
+    "nameEn": "Dubai South",
+    "nameAr": "دبي الجنوب",
+    "lat": 24.89,
+    "lng": 55.16
+  }
+]

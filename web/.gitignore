@@ -4,6 +4,16 @@ dev-dist/
 coverage/
 playwright-report/
 test-results/
+screen-test-results/
+pwa-test-results/
+chrome-audit/
+webkit-recheck/
+e2e/.emulator-rules/
+e2e/*-debug.log
+e2e/firebase-debug.log
+# Runtime logs can contain disposable Auth verification codes; reports summarize results.
+docs/*.log
+docs/lighthouse-browser-pid.txt
 # Firebase web config and optional keys for local runs (see .env.example)
 .env.local
 .env.*.local

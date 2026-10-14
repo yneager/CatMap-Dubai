@@ -1,11 +1,15 @@
 """Generates values/strings.xml and values-ar/strings.xml from the tables, and checks them against the code."""
 import importlib.util
+import io
+import json
 import os
 import re
 import sys
+import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT = sys.argv[1]
+CHECK = "--check" in sys.argv[2:]
 RES = os.path.join(PROJECT, "app", "src", "main", "res")
 SRC = os.path.join(PROJECT, "app", "src", "main", "java")
 
@@ -67,8 +71,7 @@ PLURALS_AR = """    <plurals name="unread_notifications">
 
 
 def write(path, index, plurals):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8", newline="\n") as out:
+    with io.StringIO(newline="\n") as out:
         out.write('<?xml version="1.0" encoding="utf-8"?>\n')
         out.write("<!-- Generated from the translation tables; keep English and Arabic in sync. -->\n")
         out.write('<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="TypographyEllipsis,TypographyDashes">\n')
@@ -76,8 +79,48 @@ def write(path, index, plurals):
             out.write(f'    <string name="{entry[0]}">{esc(entry[index])}</string>\n')
         out.write(plurals)
         out.write("</resources>\n")
+        generated = out.getvalue()
+    write_or_check(path, generated)
+
+
+def write_or_check(path, generated):
+    expected = generated.encode("utf-8")
+    # Git checks Android XML out as CRLF on this Windows workspace. Preserve its
+    # existing newline convention, so regeneration also preserves the raw bytes.
+    if path.endswith(".xml") and os.path.isfile(path):
+        with open(path, "rb") as previous:
+            if b"\r\n" in previous.read():
+                expected = expected.replace(b"\n", b"\r\n")
+    if CHECK:
+        if not os.path.isfile(path) or open(path, "rb").read() != expected:
+            sys.exit(f"Generated strings are stale: {path}; run tools/strings/build_strings.py .")
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as out:
+        out.write(expected)
 
 
 write(os.path.join(RES, "values", "strings.xml"), 1, PLURALS_EN)
 write(os.path.join(RES, "values-ar", "strings.xml"), 2, PLURALS_AR)
-print(f"wrote {len(entries)} strings per language")
+print(f"{'checked' if CHECK else 'wrote'} {len(entries)} strings per language")
+
+# Keep web-only entries outside Android's missing/unused checks and XML.
+spec = importlib.util.spec_from_file_location("strings_web", os.path.join(HERE, "strings_web.py"))
+web_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(web_module)
+web_entries = entries + web_module.S
+web_keys = [key for key, _, _ in web_entries]
+web_dupes = {key for key in web_keys if web_keys.count(key) > 1}
+if web_dupes:
+    sys.exit(f"Duplicate web keys: {sorted(web_dupes)}")
+for key, en, ar in web_module.S:
+    if placeholders(en) != placeholders(ar):
+        sys.exit(f"Placeholder mismatch in {key}: {placeholders(en)} vs {placeholders(ar)}")
+for language, index, plural_xml in (("en", 1, PLURALS_EN), ("ar", 2, PLURALS_AR)):
+    strings = {entry[0]: entry[index] for entry in web_entries}
+    strings["unread_notifications"] = {
+        item.attrib["quantity"]: item.text for item in ET.fromstring(plural_xml)
+    }
+    generated = json.dumps(strings, ensure_ascii=False, indent=2) + "\n"
+    write_or_check(os.path.join(PROJECT, "web", "src", "i18n", language + ".json"), generated)
+print(f"{'checked' if CHECK else 'wrote'} {len(web_entries)} web strings plus unread_notifications per language")

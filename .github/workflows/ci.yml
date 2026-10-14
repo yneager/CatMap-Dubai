@@ -46,3 +46,21 @@ jobs:
       - run: >
           npx -y firebase-tools@latest emulators:exec --config firebase.rules-test.json --only firestore
           --project demo-catmap-rules-test "npm --prefix tools/rulestest test"
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run lint && npm run typecheck && npm run test && npm run build && npm run strings:check
+        working-directory: web
+      - run: python tools/strings/build_strings.py . --check
+      - run: python tools/icons/vector_to_svg.py . --check
+      - run: git diff --exit-code -- app/src/main/res/values/strings.xml app/src/main/res/values-ar/strings.xml

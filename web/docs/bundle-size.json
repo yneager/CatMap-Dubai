@@ -1,0 +1,381 @@
+{
+  "initialAssets": [
+    {
+      "name": "firebase-CXsUTseN.js",
+      "bytes": 659349,
+      "gzipBytes": 192476
+    },
+    {
+      "name": "Firestore-CckQWHp2.js",
+      "bytes": 110199,
+      "gzipBytes": 38274
+    },
+    {
+      "name": "index-DDE2F-Hd.css",
+      "bytes": 29982,
+      "gzipBytes": 7000
+    },
+    {
+      "name": "index-De32R9P3.js",
+      "bytes": 147238,
+      "gzipBytes": 29958
+    },
+    {
+      "name": "react-DPqPq5Na.js",
+      "bytes": 258147,
+      "gzipBytes": 81065
+    },
+    {
+      "name": "rolldown-runtime-hePW80VL.js",
+      "bytes": 716,
+      "gzipBytes": 428
+    }
+  ],
+  "initialGzipBytes": 349201,
+  "lazyMap": [
+    {
+      "name": "CommunityMap-B8-mEBLf.css",
+      "bytes": 82962,
+      "gzipBytes": 10471
+    },
+    {
+      "name": "CommunityMap-CtfV7NFX.js",
+      "bytes": 1026030,
+      "gzipBytes": 276113
+    },
+    {
+      "name": "mapbox-gl-rtl-text-DosxTATq.js",
+      "bytes": 147947,
+      "gzipBytes": 43529
+    },
+    {
+      "name": "maplibre-gl-worker-v2kpBMIs.js",
+      "bytes": 509448,
+      "gzipBytes": 145197
+    }
+  ],
+  "lazyAdmin": [
+    {
+      "name": "AdminScreens-CU1BCZhp.js",
+      "bytes": 26336,
+      "gzipBytes": 7886
+    }
+  ],
+  "assets": [
+    {
+      "name": "AdminScreens-CU1BCZhp.js",
+      "bytes": 26336,
+      "gzipBytes": 7886
+    },
+    {
+      "name": "AdoptionRepository-tKp4inR3.js",
+      "bytes": 1260,
+      "gzipBytes": 608
+    },
+    {
+      "name": "AdoptionScreens-Dnzn5exP.js",
+      "bytes": 3386,
+      "gzipBytes": 1279
+    },
+    {
+      "name": "AiServer-OPyzc6cD.js",
+      "bytes": 2359,
+      "gzipBytes": 1109
+    },
+    {
+      "name": "AuthRepository-BqY7hUTb.js",
+      "bytes": 3732,
+      "gzipBytes": 1652
+    },
+    {
+      "name": "AuthScreens-D2lqAXEk.js",
+      "bytes": 4727,
+      "gzipBytes": 1683
+    },
+    {
+      "name": "CatAnalyzer-BX-1utFr.js",
+      "bytes": 4216,
+      "gzipBytes": 2001
+    },
+    {
+      "name": "CatRepository-CvVGXBjd.js",
+      "bytes": 7915,
+      "gzipBytes": 2923
+    },
+    {
+      "name": "CatScreens-B-24zoWz.js",
+      "bytes": 14263,
+      "gzipBytes": 4433
+    },
+    {
+      "name": "CommunityMap-B8-mEBLf.css",
+      "bytes": 82962,
+      "gzipBytes": 10471
+    },
+    {
+      "name": "CommunityMap-CtfV7NFX.js",
+      "bytes": 1026030,
+      "gzipBytes": 276113
+    },
+    {
+      "name": "ExploreScreen-CmVWw5P9.js",
+      "bytes": 3774,
+      "gzipBytes": 1569
+    },
+    {
+      "name": "Filtering-CxOfRgtD.js",
+      "bytes": 2492,
+      "gzipBytes": 1062
+    },
+    {
+      "name": "firebase-CXsUTseN.js",
+      "bytes": 659349,
+      "gzipBytes": 192476
+    },
+    {
+      "name": "Firestore-CckQWHp2.js",
+      "bytes": 110199,
+      "gzipBytes": 38274
+    },
+    {
+      "name": "HelpDirectoryScreen-BcxVfXf-.js",
+      "bytes": 3181,
+      "gzipBytes": 1333
+    },
+    {
+      "name": "images-BXpqgUgd.js",
+      "bytes": 1474,
+      "gzipBytes": 746
+    },
+    {
+      "name": "index-DDE2F-Hd.css",
+      "bytes": 29982,
+      "gzipBytes": 7000
+    },
+    {
+      "name": "index-De32R9P3.js",
+      "bytes": 147238,
+      "gzipBytes": 29958
+    },
+    {
+      "name": "links-BNgE45zF.js",
+      "bytes": 621,
+      "gzipBytes": 388
+    },
+    {
+      "name": "LocationField-CblQR3LJ.js",
+      "bytes": 2573,
+      "gzipBytes": 1136
+    },
+    {
+      "name": "LocationPickerScreen-A1tmKlVf.js",
+      "bytes": 1307,
+      "gzipBytes": 720
+    },
+    {
+      "name": "mapbox-gl-rtl-text-DosxTATq.js",
+      "bytes": 147947,
+      "gzipBytes": 43529
+    },
+    {
+      "name": "maplibre-gl-worker-v2kpBMIs.js",
+      "bytes": 509448,
+      "gzipBytes": 145197
+    },
+    {
+      "name": "MapScreen-BynkvcmP.js",
+      "bytes": 7082,
+      "gzipBytes": 2459
+    },
+    {
+      "name": "MessagesScreens-TlVhbedK.js",
+      "bytes": 4707,
+      "gzipBytes": 1923
+    },
+    {
+      "name": "noto-sans-arabic-arabic-400-normal-AAMxebZb.woff2",
+      "bytes": 48840,
+      "gzipBytes": 48649
+    },
+    {
+      "name": "noto-sans-arabic-arabic-400-normal-hsqIUL9Q.woff",
+      "bytes": 79084,
+      "gzipBytes": 78029
+    },
+    {
+      "name": "noto-sans-arabic-arabic-500-normal-CoaTbVwZ.woff",
+      "bytes": 84280,
+      "gzipBytes": 83274
+    },
+    {
+      "name": "noto-sans-arabic-arabic-500-normal-DPISWLls.woff2",
+      "bytes": 53120,
+      "gzipBytes": 53043
+    },
+    {
+      "name": "noto-sans-arabic-arabic-600-normal-JLzruTOp.woff",
+      "bytes": 84980,
+      "gzipBytes": 83936
+    },
+    {
+      "name": "noto-sans-arabic-arabic-600-normal-JPxwL-XU.woff2",
+      "bytes": 53260,
+      "gzipBytes": 52974
+    },
+    {
+      "name": "noto-sans-arabic-arabic-700-normal-3CqrwsiZ.woff2",
+      "bytes": 50228,
+      "gzipBytes": 50156
+    },
+    {
+      "name": "noto-sans-arabic-arabic-700-normal-DXnsSW3z.woff",
+      "bytes": 81068,
+      "gzipBytes": 79933
+    },
+    {
+      "name": "PostAppearance-CvUKLQS_.js",
+      "bytes": 2900,
+      "gzipBytes": 1458
+    },
+    {
+      "name": "PostDetailScreen-BPgOl-yH.js",
+      "bytes": 10446,
+      "gzipBytes": 3499
+    },
+    {
+      "name": "PostDraftStore-qF6Ag_rJ.js",
+      "bytes": 153,
+      "gzipBytes": 139
+    },
+    {
+      "name": "PostEditorScreen-9EaUN9OS.js",
+      "bytes": 14266,
+      "gzipBytes": 4803
+    },
+    {
+      "name": "PosterScreen-wNTYiEwJ.js",
+      "bytes": 28023,
+      "gzipBytes": 10866
+    },
+    {
+      "name": "PostLists-BLpkrJ-M.js",
+      "bytes": 2080,
+      "gzipBytes": 980
+    },
+    {
+      "name": "ProfileScreens-C3USPaHD.js",
+      "bytes": 8522,
+      "gzipBytes": 3132
+    },
+    {
+      "name": "react-DPqPq5Na.js",
+      "bytes": 258147,
+      "gzipBytes": 81065
+    },
+    {
+      "name": "ReportButton-BS1vXx9-.js",
+      "bytes": 1016,
+      "gzipBytes": 564
+    },
+    {
+      "name": "RescueRepository-B-A_VmeX.js",
+      "bytes": 2057,
+      "gzipBytes": 844
+    },
+    {
+      "name": "RescueScreens-DbJL9oYP.js",
+      "bytes": 5704,
+      "gzipBytes": 2090
+    },
+    {
+      "name": "roboto-latin-400-normal-BqEyEoaF.woff2",
+      "bytes": 21884,
+      "gzipBytes": 21912
+    },
+    {
+      "name": "roboto-latin-400-normal-D27F5sTu.woff",
+      "bytes": 21060,
+      "gzipBytes": 21078
+    },
+    {
+      "name": "roboto-latin-500-normal-7RbcRiD8.woff2",
+      "bytes": 22200,
+      "gzipBytes": 22228
+    },
+    {
+      "name": "roboto-latin-500-normal-fsTFPL3E.woff",
+      "bytes": 21168,
+      "gzipBytes": 21190
+    },
+    {
+      "name": "roboto-latin-600-normal-CzqH9ZEY.woff2",
+      "bytes": 22240,
+      "gzipBytes": 22268
+    },
+    {
+      "name": "roboto-latin-600-normal-X4S5XP0J.woff",
+      "bytes": 21200,
+      "gzipBytes": 21218
+    },
+    {
+      "name": "roboto-latin-700-normal-BZpUvMxY.woff2",
+      "bytes": 22240,
+      "gzipBytes": 22268
+    },
+    {
+      "name": "roboto-latin-700-normal-YuyVweIx.woff",
+      "bytes": 21216,
+      "gzipBytes": 21242
+    },
+    {
+      "name": "rolldown-runtime-hePW80VL.js",
+      "bytes": 716,
+      "gzipBytes": 428
+    },
+    {
+      "name": "SettingsAndNotifications-jv89hF1d.js",
+      "bytes": 13809,
+      "gzipBytes": 4768
+    },
+    {
+      "name": "share-NCZNwUfF.js",
+      "bytes": 566,
+      "gzipBytes": 398
+    },
+    {
+      "name": "SightingScreens-BoZt5rRL.js",
+      "bytes": 11159,
+      "gzipBytes": 3883
+    },
+    {
+      "name": "Similarity-DIc_m0M8.js",
+      "bytes": 1267,
+      "gzipBytes": 690
+    },
+    {
+      "name": "SittingRepository-B7ERRTy3.js",
+      "bytes": 3159,
+      "gzipBytes": 1271
+    },
+    {
+      "name": "SittingScreens-GTDPeOXt.js",
+      "bytes": 10667,
+      "gzipBytes": 3231
+    },
+    {
+      "name": "StationRepository-BMIDYKUG.js",
+      "bytes": 2810,
+      "gzipBytes": 1311
+    },
+    {
+      "name": "StationScreens-Dx9RgCrE.js",
+      "bytes": 6238,
+      "gzipBytes": 2105
+    },
+    {
+      "name": "workbox-window.prod.es5-Bd17z0YL.js",
+      "bytes": 5653,
+      "gzipBytes": 2199
+    }
+  ]
+}

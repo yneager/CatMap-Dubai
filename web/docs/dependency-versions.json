@@ -1,0 +1,164 @@
+[
+  {
+    "name": "@fontsource/noto-sans-arabic",
+    "version": "5.3.0",
+    "published": "2026-07-19T03:42:39.177Z",
+    "ageDays": 85
+  },
+  {
+    "name": "@fontsource/roboto",
+    "version": "5.3.0",
+    "published": "2026-07-19T03:45:49.588Z",
+    "ageDays": 85
+  },
+  {
+    "name": "@mapbox/mapbox-gl-rtl-text",
+    "version": "0.3.0",
+    "published": "2024-07-24T10:55:57.403Z",
+    "ageDays": 810
+  },
+  {
+    "name": "firebase",
+    "version": "12.19.0",
+    "published": "2026-09-09T19:20:03.458Z",
+    "ageDays": 33
+  },
+  {
+    "name": "maplibre-gl",
+    "version": "6.11.2",
+    "published": "2026-09-24T12:44:57.542Z",
+    "ageDays": 18
+  },
+  {
+    "name": "qrcode",
+    "version": "1.5.4",
+    "published": "2024-08-05T21:52:58.518Z",
+    "ageDays": 798
+  },
+  {
+    "name": "react",
+    "version": "19.3.0",
+    "published": "2026-09-09T17:21:30.071Z",
+    "ageDays": 33
+  },
+  {
+    "name": "react-dom",
+    "version": "19.3.0",
+    "published": "2026-09-09T17:17:39.744Z",
+    "ageDays": 33
+  },
+  {
+    "name": "react-router-dom",
+    "version": "7.18.4",
+    "published": "2026-09-15T15:05:55.974Z",
+    "ageDays": 27
+  },
+  {
+    "name": "@eslint/js",
+    "version": "10.0.1",
+    "published": "2026-02-06T22:34:56.290Z",
+    "ageDays": 248
+  },
+  {
+    "name": "@playwright/test",
+    "version": "1.63.0",
+    "published": "2026-09-04T22:44:00.304Z",
+    "ageDays": 38
+  },
+  {
+    "name": "@types/node",
+    "version": "24.19.0",
+    "published": "2026-09-25T22:09:25.850Z",
+    "ageDays": 17
+  },
+  {
+    "name": "@types/qrcode",
+    "version": "1.5.6",
+    "published": "2025-10-24T04:28:45.136Z",
+    "ageDays": 353
+  },
+  {
+    "name": "@types/react",
+    "version": "19.3.0",
+    "published": "2026-09-09T18:08:49.750Z",
+    "ageDays": 33
+  },
+  {
+    "name": "@types/react-dom",
+    "version": "19.3.0",
+    "published": "2026-09-09T18:07:51.886Z",
+    "ageDays": 33
+  },
+  {
+    "name": "@vitejs/plugin-react",
+    "version": "6.1.1",
+    "published": "2026-08-28T03:30:56.619Z",
+    "ageDays": 45
+  },
+  {
+    "name": "eslint",
+    "version": "10.11.0",
+    "published": "2026-09-18T20:15:36.485Z",
+    "ageDays": 24
+  },
+  {
+    "name": "eslint-plugin-react-hooks",
+    "version": "7.1.1",
+    "published": "2026-04-17T18:03:19.591Z",
+    "ageDays": 178
+  },
+  {
+    "name": "globals",
+    "version": "17.12.0",
+    "published": "2026-09-01T11:00:43.545Z",
+    "ageDays": 41
+  },
+  {
+    "name": "prettier",
+    "version": "3.6.2",
+    "published": "2025-06-27T02:53:53.185Z",
+    "ageDays": 472
+  },
+  {
+    "name": "typescript",
+    "version": "5.9.3",
+    "published": "2025-09-30T21:19:38.784Z",
+    "ageDays": 377
+  },
+  {
+    "name": "typescript-eslint",
+    "version": "8.71.0",
+    "published": "2026-09-28T17:12:00.356Z",
+    "ageDays": 14
+  },
+  {
+    "name": "vite",
+    "version": "8.3.1",
+    "published": "2026-09-24T12:26:19.940Z",
+    "ageDays": 18
+  },
+  {
+    "name": "vite-plugin-pwa",
+    "version": "1.3.0",
+    "published": "2026-05-05T15:04:06.752Z",
+    "ageDays": 160
+  },
+  {
+    "name": "vitest",
+    "version": "5.0.2",
+    "published": "2026-09-25T09:00:46.560Z",
+    "ageDays": 17
+  },
+  {
+    "name": "@grpc/grpc-js",
+    "version": "1.14.5",
+    "published": "2026-09-17T19:47:01.706Z",
+    "ageDays": 25
+  },
+  {
+    "name": "tinypool",
+    "version": "2.2.0",
+    "published": "2026-09-13T11:03:40.535Z",
+    "ageDays": 29
+  }
+]

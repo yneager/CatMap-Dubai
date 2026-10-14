@@ -1,0 +1,1392 @@
+{
+  "Post": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "ownerId": {
+      "type": "String",
+      "documentId": false
+    },
+    "ownerName": {
+      "type": "String",
+      "documentId": false
+    },
+    "ownerPhotoId": {
+      "type": "String",
+      "documentId": false
+    },
+    "animalType": {
+      "type": "String",
+      "documentId": false
+    },
+    "category": {
+      "type": "String",
+      "documentId": false
+    },
+    "status": {
+      "type": "String",
+      "documentId": false
+    },
+    "name": {
+      "type": "String",
+      "documentId": false
+    },
+    "description": {
+      "type": "String",
+      "documentId": false
+    },
+    "color": {
+      "type": "String",
+      "documentId": false
+    },
+    "breed": {
+      "type": "String",
+      "documentId": false
+    },
+    "features": {
+      "type": "String",
+      "documentId": false
+    },
+    "sex": {
+      "type": "String",
+      "documentId": false
+    },
+    "ageGroup": {
+      "type": "String",
+      "documentId": false
+    },
+    "photoIds": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "videoPath": {
+      "type": "String",
+      "documentId": false
+    },
+    "lat": {
+      "type": "Double",
+      "documentId": false
+    },
+    "lng": {
+      "type": "Double",
+      "documentId": false
+    },
+    "approximate": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "areaRadiusM": {
+      "type": "Long",
+      "documentId": false
+    },
+    "neighborhood": {
+      "type": "String",
+      "documentId": false
+    },
+    "lastSeenAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "reward": {
+      "type": "Long",
+      "documentId": false
+    },
+    "contactMethod": {
+      "type": "String",
+      "documentId": false
+    },
+    "contactPhone": {
+      "type": "String",
+      "documentId": false
+    },
+    "contactEmail": {
+      "type": "String",
+      "documentId": false
+    },
+    "adoptionStatus": {
+      "type": "String",
+      "documentId": false
+    },
+    "health": {
+      "type": "String",
+      "documentId": false
+    },
+    "vaccinated": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "neutered": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "updatesCount": {
+      "type": "Long",
+      "documentId": false
+    },
+    "hidden": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "keywords": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "updatedAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "resolvedAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "lastActivityAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "fingerprint": {
+      "type": "List<Double>",
+      "documentId": false
+    },
+    "microchip": {
+      "type": "String",
+      "documentId": false
+    }
+  },
+  "PostUpdate": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "postId": {
+      "type": "String",
+      "documentId": false
+    },
+    "kind": {
+      "type": "String",
+      "documentId": false
+    },
+    "text": {
+      "type": "String",
+      "documentId": false
+    },
+    "photoId": {
+      "type": "String",
+      "documentId": false
+    },
+    "lat": {
+      "type": "Double",
+      "documentId": false
+    },
+    "lng": {
+      "type": "Double",
+      "documentId": false
+    },
+    "neighborhood": {
+      "type": "String",
+      "documentId": false
+    },
+    "byUid": {
+      "type": "String",
+      "documentId": false
+    },
+    "byName": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "AdoptionRequest": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "postId": {
+      "type": "String",
+      "documentId": false
+    },
+    "postName": {
+      "type": "String",
+      "documentId": false
+    },
+    "postPhotoId": {
+      "type": "String",
+      "documentId": false
+    },
+    "ownerId": {
+      "type": "String",
+      "documentId": false
+    },
+    "requesterId": {
+      "type": "String",
+      "documentId": false
+    },
+    "requesterName": {
+      "type": "String",
+      "documentId": false
+    },
+    "message": {
+      "type": "String",
+      "documentId": false
+    },
+    "home": {
+      "type": "String",
+      "documentId": false
+    },
+    "status": {
+      "type": "String",
+      "documentId": false
+    },
+    "ownerNote": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "decidedAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "SitterProfile": {
+    "uid": {
+      "type": "String",
+      "documentId": true
+    },
+    "name": {
+      "type": "String",
+      "documentId": false
+    },
+    "photoId": {
+      "type": "String",
+      "documentId": false
+    },
+    "headline": {
+      "type": "String",
+      "documentId": false
+    },
+    "description": {
+      "type": "String",
+      "documentId": false
+    },
+    "experience": {
+      "type": "String",
+      "documentId": false
+    },
+    "petTypes": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "services": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "availability": {
+      "type": "String",
+      "documentId": false
+    },
+    "rate": {
+      "type": "Long",
+      "documentId": false
+    },
+    "rateUnit": {
+      "type": "String",
+      "documentId": false
+    },
+    "lat": {
+      "type": "Double",
+      "documentId": false
+    },
+    "lng": {
+      "type": "Double",
+      "documentId": false
+    },
+    "neighborhood": {
+      "type": "String",
+      "documentId": false
+    },
+    "active": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "ratingSum": {
+      "type": "Long",
+      "documentId": false
+    },
+    "verified": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "ratingCount": {
+      "type": "Long",
+      "documentId": false
+    },
+    "lastReviewId": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "updatedAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "Booking": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "ownerId": {
+      "type": "String",
+      "documentId": false
+    },
+    "ownerName": {
+      "type": "String",
+      "documentId": false
+    },
+    "sitterId": {
+      "type": "String",
+      "documentId": false
+    },
+    "sitterName": {
+      "type": "String",
+      "documentId": false
+    },
+    "petTypes": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "petCount": {
+      "type": "Long",
+      "documentId": false
+    },
+    "startAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "endAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "notes": {
+      "type": "String",
+      "documentId": false
+    },
+    "sitterNote": {
+      "type": "String",
+      "documentId": false
+    },
+    "status": {
+      "type": "String",
+      "documentId": false
+    },
+    "reviewed": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "updatedAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "Review": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "sitterId": {
+      "type": "String",
+      "documentId": false
+    },
+    "authorId": {
+      "type": "String",
+      "documentId": false
+    },
+    "authorName": {
+      "type": "String",
+      "documentId": false
+    },
+    "rating": {
+      "type": "Long",
+      "documentId": false
+    },
+    "text": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "Chat": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "members": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "names": {
+      "type": "Map<String, String>",
+      "documentId": false
+    },
+    "photos": {
+      "type": "Map<String, String>",
+      "documentId": false
+    },
+    "lastText": {
+      "type": "String",
+      "documentId": false
+    },
+    "lastSender": {
+      "type": "String",
+      "documentId": false
+    },
+    "lastAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "unread": {
+      "type": "Map<String, Long>",
+      "documentId": false
+    }
+  },
+  "Message": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "senderId": {
+      "type": "String",
+      "documentId": false
+    },
+    "text": {
+      "type": "String",
+      "documentId": false
+    },
+    "imageId": {
+      "type": "String",
+      "documentId": false
+    },
+    "postId": {
+      "type": "String",
+      "documentId": false
+    },
+    "postTitle": {
+      "type": "String",
+      "documentId": false
+    },
+    "postPhotoId": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "AreaFollow": {
+    "uid": {
+      "type": "String",
+      "documentId": true
+    },
+    "neighborhoods": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "lat": {
+      "type": "Double",
+      "documentId": false
+    },
+    "lng": {
+      "type": "Double",
+      "documentId": false
+    },
+    "radiusKm": {
+      "type": "Double",
+      "documentId": false
+    },
+    "updatedAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "Favorite": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "postId": {
+      "type": "String",
+      "documentId": false
+    },
+    "savedAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "UserProfile": {
+    "uid": {
+      "type": "String",
+      "documentId": true
+    },
+    "username": {
+      "type": "String",
+      "documentId": false
+    },
+    "displayName": {
+      "type": "String",
+      "documentId": false
+    },
+    "bio": {
+      "type": "String",
+      "documentId": false
+    },
+    "photoId": {
+      "type": "String",
+      "documentId": false
+    },
+    "role": {
+      "type": "String",
+      "documentId": false
+    },
+    "volunteerStatus": {
+      "type": "String",
+      "documentId": false
+    },
+    "stats": {
+      "type": "Map<String, Long>",
+      "documentId": false
+    },
+    "points": {
+      "type": "Long",
+      "documentId": false
+    },
+    "neighborhoods": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "badges": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "followedCats": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "showStatsPublicly": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "suspended": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "lastPostAt": {
+      "type": "Timestamp?",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "Cat": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "name": {
+      "type": "String",
+      "documentId": false
+    },
+    "aliases": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "description": {
+      "type": "String",
+      "documentId": false
+    },
+    "distinctiveMarks": {
+      "type": "String",
+      "documentId": false
+    },
+    "coatColor": {
+      "type": "String",
+      "documentId": false
+    },
+    "pattern": {
+      "type": "String",
+      "documentId": false
+    },
+    "size": {
+      "type": "String",
+      "documentId": false
+    },
+    "sex": {
+      "type": "String",
+      "documentId": false
+    },
+    "breedHints": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "photoIds": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "coverPhotoId": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdBy": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdByName": {
+      "type": "String",
+      "documentId": false
+    },
+    "contributors": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "followers": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "firstSeen": {
+      "type": "Long",
+      "documentId": false
+    },
+    "lastSeen": {
+      "type": "Long",
+      "documentId": false
+    },
+    "sightingCount": {
+      "type": "Long",
+      "documentId": false
+    },
+    "lat": {
+      "type": "Double",
+      "documentId": false
+    },
+    "lng": {
+      "type": "Double",
+      "documentId": false
+    },
+    "neighborhood": {
+      "type": "String",
+      "documentId": false
+    },
+    "neighborhoods": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "tnrStatus": {
+      "type": "String",
+      "documentId": false
+    },
+    "tnrVerified": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "healthStatus": {
+      "type": "String",
+      "documentId": false
+    },
+    "features": {
+      "type": "List<Double>",
+      "documentId": false
+    },
+    "mergedInto": {
+      "type": "String",
+      "documentId": false
+    },
+    "hidden": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "updatedAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "Sighting": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "catId": {
+      "type": "String",
+      "documentId": false
+    },
+    "catName": {
+      "type": "String",
+      "documentId": false
+    },
+    "userId": {
+      "type": "String",
+      "documentId": false
+    },
+    "username": {
+      "type": "String",
+      "documentId": false
+    },
+    "photoIds": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "seenAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "lat": {
+      "type": "Double",
+      "documentId": false
+    },
+    "lng": {
+      "type": "Double",
+      "documentId": false
+    },
+    "neighborhood": {
+      "type": "String",
+      "documentId": false
+    },
+    "locationSource": {
+      "type": "String",
+      "documentId": false
+    },
+    "coatColor": {
+      "type": "String",
+      "documentId": false
+    },
+    "pattern": {
+      "type": "String",
+      "documentId": false
+    },
+    "size": {
+      "type": "String",
+      "documentId": false
+    },
+    "healthTags": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "behaviorTags": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "earTipped": {
+      "type": "String",
+      "documentId": false
+    },
+    "possiblyNotNeutered": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "needsMedical": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "notes": {
+      "type": "String",
+      "documentId": false
+    },
+    "newCat": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "matchScore": {
+      "type": "Double",
+      "documentId": false
+    },
+    "aiSummary": {
+      "type": "String",
+      "documentId": false
+    },
+    "suggestedCatIds": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "rejectedCatIds": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "status": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "updatedAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "PrivateLocation": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "ownerId": {
+      "type": "String",
+      "documentId": false
+    },
+    "lat": {
+      "type": "Double",
+      "documentId": false
+    },
+    "lng": {
+      "type": "Double",
+      "documentId": false
+    },
+    "accuracy": {
+      "type": "Double",
+      "documentId": false
+    }
+  },
+  "MedicalRecord": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "catId": {
+      "type": "String",
+      "documentId": false
+    },
+    "type": {
+      "type": "String",
+      "documentId": false
+    },
+    "note": {
+      "type": "String",
+      "documentId": false
+    },
+    "byUid": {
+      "type": "String",
+      "documentId": false
+    },
+    "byName": {
+      "type": "String",
+      "documentId": false
+    },
+    "at": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "RescueUpdate": {
+    "status": {
+      "type": "String",
+      "documentId": false
+    },
+    "note": {
+      "type": "String",
+      "documentId": false
+    },
+    "byUid": {
+      "type": "String",
+      "documentId": false
+    },
+    "byName": {
+      "type": "String",
+      "documentId": false
+    },
+    "at": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "RescueReport": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "type": {
+      "type": "String",
+      "documentId": false
+    },
+    "urgency": {
+      "type": "String",
+      "documentId": false
+    },
+    "description": {
+      "type": "String",
+      "documentId": false
+    },
+    "landmark": {
+      "type": "String",
+      "documentId": false
+    },
+    "photoIds": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "lat": {
+      "type": "Double",
+      "documentId": false
+    },
+    "lng": {
+      "type": "Double",
+      "documentId": false
+    },
+    "neighborhood": {
+      "type": "String",
+      "documentId": false
+    },
+    "catId": {
+      "type": "String",
+      "documentId": false
+    },
+    "catName": {
+      "type": "String",
+      "documentId": false
+    },
+    "reporterId": {
+      "type": "String",
+      "documentId": false
+    },
+    "reporterName": {
+      "type": "String",
+      "documentId": false
+    },
+    "status": {
+      "type": "String",
+      "documentId": false
+    },
+    "assignedTo": {
+      "type": "String",
+      "documentId": false
+    },
+    "assignedName": {
+      "type": "String",
+      "documentId": false
+    },
+    "updates": {
+      "type": "List<RescueUpdate>",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "updatedAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "FeedingStation": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "name": {
+      "type": "String",
+      "documentId": false
+    },
+    "description": {
+      "type": "String",
+      "documentId": false
+    },
+    "operatorName": {
+      "type": "String",
+      "documentId": false
+    },
+    "schedule": {
+      "type": "String",
+      "documentId": false
+    },
+    "foodType": {
+      "type": "String",
+      "documentId": false
+    },
+    "hasWater": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "lat": {
+      "type": "Double",
+      "documentId": false
+    },
+    "lng": {
+      "type": "Double",
+      "documentId": false
+    },
+    "neighborhood": {
+      "type": "String",
+      "documentId": false
+    },
+    "verified": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "active": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "sample": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "checkinCount": {
+      "type": "Long",
+      "documentId": false
+    },
+    "lastCheckinAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "lastCheckinBy": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "updatedAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "StationCheckin": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "stationId": {
+      "type": "String",
+      "documentId": false
+    },
+    "stationName": {
+      "type": "String",
+      "documentId": false
+    },
+    "userId": {
+      "type": "String",
+      "documentId": false
+    },
+    "username": {
+      "type": "String",
+      "documentId": false
+    },
+    "catsSeen": {
+      "type": "Long",
+      "documentId": false
+    },
+    "catIds": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "foodLevel": {
+      "type": "String",
+      "documentId": false
+    },
+    "waterLevel": {
+      "type": "String",
+      "documentId": false
+    },
+    "note": {
+      "type": "String",
+      "documentId": false
+    },
+    "at": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "MaintenanceReport": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "stationId": {
+      "type": "String",
+      "documentId": false
+    },
+    "stationName": {
+      "type": "String",
+      "documentId": false
+    },
+    "userId": {
+      "type": "String",
+      "documentId": false
+    },
+    "username": {
+      "type": "String",
+      "documentId": false
+    },
+    "issue": {
+      "type": "String",
+      "documentId": false
+    },
+    "description": {
+      "type": "String",
+      "documentId": false
+    },
+    "status": {
+      "type": "String",
+      "documentId": false
+    },
+    "resolutionNote": {
+      "type": "String",
+      "documentId": false
+    },
+    "resolvedBy": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "updatedAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "MergeRequest": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "primaryCatId": {
+      "type": "String",
+      "documentId": false
+    },
+    "primaryName": {
+      "type": "String",
+      "documentId": false
+    },
+    "duplicateCatId": {
+      "type": "String",
+      "documentId": false
+    },
+    "duplicateName": {
+      "type": "String",
+      "documentId": false
+    },
+    "requestedBy": {
+      "type": "String",
+      "documentId": false
+    },
+    "requestedByName": {
+      "type": "String",
+      "documentId": false
+    },
+    "reason": {
+      "type": "String",
+      "documentId": false
+    },
+    "similarity": {
+      "type": "Double",
+      "documentId": false
+    },
+    "status": {
+      "type": "String",
+      "documentId": false
+    },
+    "reviewedBy": {
+      "type": "String",
+      "documentId": false
+    },
+    "reviewedByName": {
+      "type": "String",
+      "documentId": false
+    },
+    "reviewNote": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "reviewedAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "ContentReport": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "targetType": {
+      "type": "String",
+      "documentId": false
+    },
+    "targetId": {
+      "type": "String",
+      "documentId": false
+    },
+    "targetLabel": {
+      "type": "String",
+      "documentId": false
+    },
+    "reason": {
+      "type": "String",
+      "documentId": false
+    },
+    "details": {
+      "type": "String",
+      "documentId": false
+    },
+    "reporterId": {
+      "type": "String",
+      "documentId": false
+    },
+    "reporterName": {
+      "type": "String",
+      "documentId": false
+    },
+    "status": {
+      "type": "String",
+      "documentId": false
+    },
+    "resolution": {
+      "type": "String",
+      "documentId": false
+    },
+    "resolvedBy": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "AppNotification": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "type": {
+      "type": "String",
+      "documentId": false
+    },
+    "params": {
+      "type": "Map<String, String>",
+      "documentId": false
+    },
+    "route": {
+      "type": "String",
+      "documentId": false
+    },
+    "fromUid": {
+      "type": "String",
+      "documentId": false
+    },
+    "read": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "ModAction": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "moderatorId": {
+      "type": "String",
+      "documentId": false
+    },
+    "moderatorName": {
+      "type": "String",
+      "documentId": false
+    },
+    "action": {
+      "type": "String",
+      "documentId": false
+    },
+    "targetType": {
+      "type": "String",
+      "documentId": false
+    },
+    "targetId": {
+      "type": "String",
+      "documentId": false
+    },
+    "targetLabel": {
+      "type": "String",
+      "documentId": false
+    },
+    "note": {
+      "type": "String",
+      "documentId": false
+    },
+    "at": {
+      "type": "Long",
+      "documentId": false
+    }
+  },
+  "VolunteerApplication": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "userId": {
+      "type": "String",
+      "documentId": false
+    },
+    "username": {
+      "type": "String",
+      "documentId": false
+    },
+    "motivation": {
+      "type": "String",
+      "documentId": false
+    },
+    "experience": {
+      "type": "String",
+      "documentId": false
+    },
+    "area": {
+      "type": "String",
+      "documentId": false
+    },
+    "status": {
+      "type": "String",
+      "documentId": false
+    },
+    "reviewedBy": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    }
+  }
+}

@@ -29,3 +29,6 @@ __pycache__/
 /functions/node_modules/
 /app/src/staging/generated/
 
+
+# Firebase CLI deploy cache
+/.firebase/
