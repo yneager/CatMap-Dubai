@@ -1,7 +1,7 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 14 Oct 2026 (Android: PC photo check (CLIP), location-first posting and "Animal Spotted"; not released yet, next is v0.0.8. The web app is reviewed, committed and live at https://catmap-dubai.web.app; Android changes it still lacks are in `WEB_TODO.txt`. The last Android release is v0.0.7 at `356e18d`).**
+and what's left. **Last updated: 14 Oct 2026 (Android **v0.0.8 released** at `2b07278`: PC photo check (CLIP), location-first posting and "Animal Spotted"; CI and the release passed. The web app is reviewed, committed and live at https://catmap-dubai.web.app; Android changes it still lacks are in `WEB_TODO.txt`. The last Android release is v0.0.7 at `356e18d`).**
 
 ## 14 October 2026 - photo check, location-first posting, "Animal Spotted" (Claude)
 
