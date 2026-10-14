@@ -32,6 +32,12 @@ The reference behavior and fields are documented from `PostEditorScreen.kt`, its
 
 ## Remaining visible differences
 
+Round 2 follows Android 0.0.8: Animal Spotted is first in the chooser, location precedes Photos, street posts omit Contact, and photo classification plus nearby matching run on Photos. The install-only gate is a deliberate iPhone adaptation. There is no Firebase runtime behind a normal-tab gate. iPhone home-screen launches start at `/map`; Android links use the manifest's `/` scope.
+
+The shell now has a fixed viewport with internal scrolling and leading-edge back. Map and photo viewer retain their own zoom. Safe-area custom properties resolve to the real `env(safe-area-inset-*)` values. The additional 393×852 and 430×932 test renders simulate 59px top / 34px bottom insets because desktop WebKit has no physical notch; these do not replace real-device testing. This installed WebKit build lacks `overscroll-behavior`, so touch-edge prevention supplies the bounce fallback.
+
+The light/dark launch-image set includes the 402×874 / 440×956 families and 420×912 family at 3× scale, derived from the pixel dimensions in [Apple's Pro specifications](https://images.apple.com/uk/iphone-18-pro/specs/) and [Apple's Air specifications](https://www.apple.com/iphone-air/specs/). Five older/common viewport families are covered as well; the complete 16-image set is 392,504 bytes. Actual iOS launch-image selection remains a real-device check.
+
 - Browser text shaping, font metrics, canvas wrapping and anti-aliasing differ from Compose/Android. The self-hosted fonts and explicit type weights match the chosen families; line breaks can still differ, especially with Arabic and large text.
 - Generic back/search/settings controls use small inline SVGs and CSS state layers; their strokes and hover/focus/ripple behavior are not exact Material Android renders.
 - Text fields have the same limits and labels but use a label above the outline rather than Compose's floating label animation. Select menus, date/time pickers, sliders and focus outlines use browser rendering; iOS itself needs a real-phone check.

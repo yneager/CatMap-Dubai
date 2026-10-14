@@ -27,8 +27,12 @@ export function PostChooser({ onClose }: { onClose: () => void }) {
         },
       ]
     : [
-        ...enums.PostCategory.filter((c) => !['spotted', 'other'].includes(c.key)).map((c) => ({
+        ...[
+          ...enums.PostCategory.filter((c) => c.key === 'street'),
+          ...enums.PostCategory.filter((c) => !['street', 'spotted', 'other'].includes(c.key)),
+        ].map((c) => ({
           ...c,
+          label: c.key === 'street' ? 'chooser_street' : c.label,
           hint: 'hint_' + c.key,
           icon: CatMapIcons.category(c.key),
           route: '/post-new?category=' + c.key,

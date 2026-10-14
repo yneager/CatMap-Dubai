@@ -297,13 +297,13 @@ for (const variant of ['light', 'dark', 'arabic'] as const) {
     await page.locator('dialog .icon-button').click();
     await navigate(page, '/post-new');
     for (let step = 0; step < 6; step++) {
-      if (step === 2) {
+      if (step === 3) {
         await page.locator('input[maxlength="60"]').first().fill('Amber');
         await page
           .locator('textarea[maxlength="2000"]')
           .fill('Orange coat, teal collar. Last seen near the park.');
       }
-      if (step === 3) {
+      if (step === 1) {
         await page.locator('.location-field button').first().click();
         await page.locator('dialog button.primary').click();
       }

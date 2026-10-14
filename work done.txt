@@ -1,172 +1,66 @@
-CATMAP WEB IMPLEMENTATION / REVIEW REPORT
-14 October 2026. Local candidate: web 0.0.8. Android remains 0.0.7.
+CATMAP WEB - ROUND 2 IMPLEMENTATION REPORT
+14 October 2026. Source brief: CLAUDE_TO_CODEX.txt (round 2).
 
-The task brief was CLAUDE_TO_CODEX.txt. Android Kotlin was treated as the functional specification. No commit, push, tag, release, deployment or Firebase console change was made. Forbidden signing/configuration files, saved demo passwords, and Desktop/cat-server were not opened or modified. No production Firebase requests were intentionally made; development was forced to local demo emulators.
+SCOPE AND SAFETY
+All three WEB_TODO items, the install-only gate, app behavior, and production map regression coverage have been implemented locally. Final results are below. No commits, pushes, tags, deploys, console changes or production Firebase requests were made in this run. No forbidden credential/configuration file or cat-server file was inspected, printed or edited. Android source, rules, indexes and CI were not changed. Existing owner/Claude changes were retained, including the higher-specificity map selector. The report itself is the explicit root-file exception in section 9.
 
-MILESTONES (brief section 13)
-1. DONE: Vite/React/strict TypeScript scaffold, self-hosted fonts, tokens, CSS components, generated strings/icons, Firebase wiring. web/package.json; vite.config.ts; src/ui/theme; src/ui/components; src/firebase.ts; src/icons; src/i18n.
-2. DONE: Registration, verification/polling, email/eligible username login, reset, gates, profiles, encrypted demo vault. src/ui/auth; src/data/AuthRepository.ts; UserRepository.ts; DemoAccounts.ts; App.tsx.
-3. DONE: Kotlin-generated models/defaults/integer writes, shared feed/listeners, images/cache, inbox/delivery, settings. src/data/model; src/state.tsx; src/data/ImageRepository.ts; NotificationRepository.ts; SettingsRepository.ts; src/notifications.
-4. DONE locally: MapLibre styles, clusters/markers, coat pins, urgent pulse, remembered camera, shared filters/GPS, map/list, picker, previews/mini maps. src/ui/map; src/data/LocationRepository.ts. Geographic pixel parity and real iOS location remain unverified.
-5. DONE: Explore shortcuts/feed/newest/nearest, search, filters, old-post/microchip policy. src/ui/explore; src/data/PostStaleness.ts.
-6. DONE: Six-step editor, limits, JPEG pipeline, per-account blob drafts, duplicates, descriptor matching, AI job client and same-animal add-to-existing flow. src/ui/posts/PostEditorScreen.tsx; src/util/images.ts; src/data/PostDraftStore.ts; src/ai; src/data/AiServer.ts.
-7. DONE: Detail/photo pager, updates, adoption/owner status/actions, favorites, report/share/poster, lists/alerts and stale reminders. src/ui/posts; src/util/poster.ts; share.ts; links.ts; src/data/PostRepository.ts; FavoritesRepository.ts.
-8. DONE: Chat list/text/photo/shared-post, unread/read alerts, block/unblock/report and starting chats. src/ui/messages; src/data/ChatRepository.ts.
-9. DONE: Adoption listing/request/withdraw/approval/decline; sitter directory/profile/pet filters, booking states and transactional review totals. src/ui/adoption; src/ui/sitting; src/data/AdoptionRepository.ts; SittingRepository.ts.
-10. DONE: My/other profile, editing, stats/badges, settings, quiet hours/categories, demo vault/switcher, JSON export, cleanup/deletion and release notes. src/ui/profile; src/ui/settings; src/gamification; src/data/UserDataExport.ts; CommunityAccountCleanup.ts; AccountDeletion.ts; src/util/whatsNew.ts.
-11. DONE: Cats/filter/profile/edit/merge/photo viewer, sightings/edit/privacy/matching, rescue, feeding stations/check-ins/maintenance and public help/editor. src/ui/cats; sighting; rescue; stations; help; src/data/CatRepository.ts; RescueRepository.ts; StationRepository.ts; HelpDirectoryRepository.ts.
-12. DONE locally: Dashboard/counts/eight-week charts, posts/users/sitters, reports/rescue/merges/volunteers/maintenance/submissions/log, recognition folder evaluation and AI heartbeat. src/ui/admin; src/data/AdminRepository.ts; AdminAnalyticsRepository.ts; ModerationRepository.ts; src/ai/RecognitionEvaluation.ts. Actual PC worker/model evaluation was not run.
-13. DONE locally: Manifest/icons/SW/update prompt, Safari install hint, safe areas/offline cache, SPA Hosting/cache/CSP configuration. vite.config.ts; src/App.tsx; public; root firebase.json. Hosting is not deployed.
-14. DONE local tooling, with platform/visual limitations below: static/unit/rules/shape/image/browser/PWA checks, screenshots, CI and documentation. web/tests; e2e; docs; tools; root .github/workflows/ci.yml; README.md; SETUP.md; HANDOFF.md. Exact Compose pixel parity is partial, not claimed.
+SECTION 4 - INSTALL-ONLY APP
+web/src/platform/install.ts: one standalone/fullscreen/navigator.standalone helper; early beforeinstallprompt/appinstalled listeners; platform detection. web/src/platform/InstallRoot.tsx: full-screen themed/RTL gate, iOS Share steps and original inline icon, iPhone bottom/iPad top Share arrow, iOS 26 Open as Web App instruction, Safari handoff and Copy link for recognized in-app browsers, Android prompt/menu fallback, desktop QR and optional install.
+web/src/main.tsx and platform/Runtime.tsx: the gate sits outside a lazy runtime. Normal-tab gates do not import Firebase or mount AppProvider/Auth/Firestore listeners. Only local appearance settings are loaded. Install events are captured before React renders. The old dismissible iOS banner was removed from App.tsx.
+web/vite.config.ts: production gate is always on and rejects VITE_INSTALL_GATE=off. Emulator dev/builds skip it by default; VITE_INSTALL_GATE=on enables gate tests. No query/storage bypass exists. Manifest id=/, start_url=/map, scope=/, standalone display/display_override, portrait. The existing production-emulator safety guard remains.
+web/index.html: zoom-limited viewport, light/dark theme-color metas, Apple/mobile capable, black-translucent status bar and launch-image links. web/tools/generate-splash.py creates 16 images from the existing icon: light/dark at 375x812@3, 390x844@3, 393x852@3, 402x874@3, 420x912@3, 430x932@3, 440x956@3, 414x896@2. Total 392,504 bytes, well below 1.5 MB.
+Choices: recognized in-app brands and generic Mobile WebKit UAs lacking Safari/CriOS/FxiOS/EdgiOS/OPiOS markers receive the Safari handoff. Other unrecognized iOS browser UAs use the Safari-style instructions. In-app detection is necessarily heuristic; a website cannot inspect a browser's native Share menu. Android deep links remain within manifest scope. iPhone home-screen launch starts at /map, as the brief permits. Desktop F11/fullscreen follows the brief's installed definition. An appinstalled event alone displays the launch instruction; it does not unlock a normal tab.
 
-SCREENS (brief section 9, all implemented)
-Auth: login, register, forgot, verify - src/ui/auth/AuthScreens.tsx.
-Map and picker - src/ui/map/MapScreen.tsx, CommunityMap.tsx, MapStyles.ts, LocationPickerScreen.tsx.
-Explore/search/filter sheet - src/ui/explore/ExploreScreen.tsx, Filtering.tsx.
-Chooser/editor steps/edit - src/ui/posts/PostChooser.tsx, PostEditorScreen.tsx.
-Post detail/poster/my posts/favorites/area alerts - src/ui/posts/PostDetailScreen.tsx, PosterScreen.tsx, PostLists.tsx.
-Messages/chat/chat-with - src/ui/messages/MessagesScreens.tsx.
-Adoption/list/request management - src/ui/adoption/AdoptionScreens.tsx, detail dialogs.
-Sitter directory/detail/editor/book/bookings/reviews - src/ui/sitting/SittingScreens.tsx.
-Profile/edit/public profile/achievements - src/ui/profile/ProfileScreens.tsx.
-Settings/inbox/export/delete/switcher/what's-new - src/ui/settings/SettingsAndNotifications.tsx.
-Cats/list/profile/edit/merge/photo viewer - src/ui/cats/CatScreens.tsx, PhotoViewer.tsx.
-Sightings/new/detail/edit - src/ui/sighting/SightingScreens.tsx, EditSighting.tsx.
-Rescue/list/new/detail - src/ui/rescue/RescueScreens.tsx.
-Stations/list/detail/edit/check-ins/maintenance - src/ui/stations/StationScreens.tsx.
-Help directory, available signed out, and admin editor - src/ui/help/HelpDirectoryScreen.tsx.
-Admin/dashboard/posts/users/sitters/reports/rescues/merges/volunteers/maintenance/submissions/log/recognition/AI status - src/ui/admin/AdminScreens.tsx, AdminVolunteers.tsx.
-54 concrete routes have captures in each visual variant; six editor steps, chooser/filter, four auth screens and pure component fixtures extend the set.
+SECTION 5 - APP BEHAVIOR
+web/src/platform/appFeel.ts and appFeel.css, main.tsx, theme.css: fixed-height shell with internal scrolling; hidden scrollbars, no body/page scroll, no selection except editable fields, no image dragging or link/image callouts, no default context menu outside fields, touch tap highlights removed, keyboard-only focus outlines, hover effects restricted to fine hover pointers.
+Page gesture zoom, desktop modifier wheel and +/-/0 are suppressed. Every form control computes to at least 16px. Map gestures and photo zoom stay active. PhotoViewer.tsx also fixes an actual pinch bug: capture the ratio before React's deferred state update, so pointer-up cannot reset its denominator and force maximum zoom.
+WebKit in this installed Playwright build has no overscroll-behavior support (CSS.supports=false and empty computed values). CSS declares none for html/body, while the fixed frame and touch-edge prevention also stop overscroll on that engine. Tests exercise the fallback, not a falsely claimed computed property.
+App.tsx uses leading-edge swipe-back (20px start, left English/right Arabic); content follows the finger, with a 90px/25% completion threshold. Root tabs, editable fields, open dialogs and map/photo gesture targets are excluded. Back still uses browser history. Internal anchors remain in-window; external HTTP links use an outside window with noopener/noreferrer; phone/mail/application links retain their system handlers. Android message UI has no text-selection/copy handler to port; editable fields retain native selection.
+platform/updates.ts centralizes registration/update state, shared by App's existing in-app update banner and Settings -> About -> Check for updates. The title remains CatMap Dubai in both languages. Safe-area variables resolve to env(safe-area-inset-top/bottom); top bars and bottom navigation honor them.
 
-VERIFICATION / COMMANDS
-Final measured counts, scores and exact dependency versions are appended below from saved results.
+SECTION 6 - PRODUCTION MAP REGRESSION
+The pre-existing .community-map > .map-canvas specificity fix is preserved. The only lazily imported library CSS is MapLibre's; all fonts and app CSS are entry imports. App overrides use higher specificity, including compact map geometry. LocationField's compact picker is now 320px high.
+web/e2e/preview-map.spec.ts tests the actual production-emulator JS/CSS/worker: full and compact map container heights >300px, nonzero canvas sizes, isStyleLoaded(), map double-tap zoom, photo double-tap/pinch, zoom prevention, internal scrolling, RTL/LTR edge back and 393x852/430x932 insets. A deterministic valid style is intercepted to avoid tile-provider/network outages; real external tile imagery is not asserted. The test map reference is attached only in emulator builds.
+web/tools/preview-tests.mjs and playwright.config.ts add Chromium-preview and WebKit-preview projects to default test runs. They build to ignored .preview-dist and serve on 4318. Existing dev projects remain because their schema/image fixtures import source modules. Gate projects run an emulator app with the gate on at 5174. Default Playwright runs include all six projects; no CI workflow was edited (outside this round's scope).
 
-Static checks: npm.cmd run lint; npm.cmd run typecheck; npm.cmd run strings:check; npm.cmd run test; npm.cmd run build. Final static runs pass. Vitest: 3 files, 34 tests passed. Strings: 85 source files, 1182 JSON keys per language (1181 strings plus the plural); Android retains its 1157 strings.
-python tools/strings/build_strings.py . --check: missing=[], unused=[], checked strings. Generation and git diff checks leave both Android XML files byte-identical. Web-only Arabic entries equal English with TODO-AR, as required.
-python tools/icons/vector_to_svg.py . --check: 64 vectors, theme/original variants and registry checked. 129 SVGs including launcher; generated opaque RGB PNG/ICO app icons. Maskable foreground radius 161.5px <= 204.8px safe zone.
-node test.mjs ../../firestore.rules (tools/rulestest): 270 passed, 0 failed, unchanged suite.
-npx.cmd -y firebase-tools@latest emulators:exec --config firebase.rules-test.json --only firestore --project demo-catmap-rules-test "npm --prefix tools/rulestest test": 270 passed, 0 failed; isolated suite exited successfully. Log: web/docs/rules-full-run.log.
-.\gradlew.bat --no-parallel --max-workers=1 :app:testDebugUnitTest --tests com.catmap.dubai.ai.WebFingerprintFixtureTest: BUILD SUCCESSFUL, run twice while deriving/refining the fixtures. Afterwards .\gradlew.bat --stop stopped the owned daemon each time. No Android source/build change. adb devices showed no available Android device/emulator; installStaging was therefore skipped.
-Fingerprint fixture: tests/fixtures/android-fingerprints.json exports the actual Kotlin descriptors and decoded RGBA for orange_tabby_1/2, tuxedo_1 and seed cat_orange. Native RGBA web analysis maximum delta 0 and cosine 1. Browser JPEG comparison passed both engines: worst Chromium post delta 0.0188/cosine 0.99991791; worst WebKit post delta 0.0247/cosine 0.99986072. WebKit analysis worst delta 0.0020/cosine 0.99999944. Thresholds: every value <=0.03; cosine >=0.98. JPEG size/dimensions/EXIF checks ran in the browsers.
-Browser command: npm.cmd run test:e2e -- --grep-invert "visual screenshots|production manifest". Final isolation uses demo-catmap-web-test, Auth 9098, Firestore 8180, Storage 9198. The helpers create disposable accounts with random passwords and compare web-written shapes/types against a parser over Kotlin declarations. A fake local worker covers the AI answeredRequestId protocol. GPS is simulated, not a real device measurement. The extra cross-screen test confirms a Map distance filter remains active in Explore; the same session fix also sorts sitters by distance. Final results are appended below.
-npm.cmd run screens: WebKit at 393x852 light/dark/Arabic; additional 360px native-data component fixtures and a 1080x1350 poster. 3 tests passed; 214 PNG captures (72 light including fixture poster, 71 dark, 71 Arabic). Logs and per-variant routes.json in web/docs/screens. Final capture waits for route content rather than an old suspended screen.
-Production PWA: build --mode emulators, then CATMAP_PWA=true playwright test e2e/pwa.spec.ts. Both engines passed manifest, service worker, persistent login and cached Explore reload with the test-owned preview origin stopped. 70 unique cached assets; Workbox build lists 75 entries. Regular browser flows also test context.setOffline(true) and the banner. WebKit's setOffline+SW navigation defect is documented at https://github.com/microsoft/playwright/issues/42775; stopping the test-owned origin is the independent offline check. No owner emulator is stopped by that test.
-Lighthouse 13.5.0 against vite preview /login: performance/accessibility/best-practices/SEO are recorded in web/docs/lighthouse.report.json/.html. Lighthouse 13.5 supplies no PWA category; PWA score N/A, with actual manifest/SW/offline checks above. The audit is a login-page mobile simulation, not a performance claim for every map/admin view or a real iPhone.
-npm.cmd audit --json: 0 total vulnerabilities. docs/dependency-versions.json records publication dates; all direct pins/overrides meet the >=14-day age rule.
-node tools/bundle-report.mjs: measures gzip of initial HTML-linked JS/CSS plus recursive static imports, and separate map/admin/worker chunks. It excludes fonts, HTML and lazily loaded Auth from the initial subtotal. Both the default production build and emulator production build succeeded; final values are appended below. Vite warns about large Firebase/MapLibre chunks; map and admin are lazy, while SW precaches the complete shell/assets for offline use.
-git diff/status checks: protected rules/indexes/release workflow/Android strings and build/source unchanged. Existing CI jobs preserved; only a web job appended. Existing firebase.json sections retained; only Hosting appended. The required report itself is the brief's additional root-file exception.
+SECTION 7 - ANDROID 0.0.8 PARITY
+PostChooser.tsx: Animal Spotted first, using chooser_street only in the chooser. Other street-animal wording stays unchanged.
+PostSteps.ts and PostEditorScreen.tsx: TYPE, PLACE, PHOTOS, DETAILS, CONTACT, REVIEW. Menu presets start at PLACE. Street posts have five visible steps, skip Contact in both directions, and publish in_app with empty phone/email. Drafts save stepName plus a numeric compatibility field; restore prefers the name, then maps old numeric positions through the old order. An old street draft on CONTACT resumes REVIEW instead of displaying a forbidden Contact step. PostDraftStore.ts preserves existing saved photos/post fields.
+PhotoCheck.ts and AiServer.ts: one kind=check job, up to six 320px JPEGs, optional cropped query plus nearest eight open street candidates within 1km, request/answeredRequestId matching, 390-second health window, 15-second timeout, throttling and cancellation. Classification preserves kind/type/phrase/score, checks batch length and safely treats missing/malformed answers as unknown.
+usePhotoCheck.ts: caches verdicts by local photo key, rechecks new photos and changed cover/location, filters candidates by animal type after the answer, auto-fills cover type only until manually picked, and falls back to unknown classification plus the existing >=0.85 color fingerprint matches. Like Kotlin, already-checked unchanged photos are not sent again just because a non-street photo is removed. Outdated requests cannot update the current photo list.
+PostEditorScreen.tsx: checking spinner, red photo outline and phrase, error/action card, blocked Next/Publish, and Already on the map? on Photos and Review. New matching happens before details. Existing add-to-post and publish-anyway confirmation remain.
+Tests: post-flow.test.ts covers parsing, blocking, unknown/bad answers, visible steps and old/new draft restoration. install.test.ts covers iPad/embedded/Android/version detection. photo-check.spec.ts uses fake-photo-worker.ts: a disposable account signs into the Auth emulator with catmapAiWorker, writes heartbeat and answers through the actual worker rules. It blocks a person, accepts a replacement animal and fills dog. Legacy duplicate, posting and screenshot flows use the new order.
 
-INTERMEDIATE FAILURES AND CORRECTIONS (not presented as successes)
-Initial dependency set had audit findings; updated mature exact pins and two overrides bring the final audit to zero.
-Initial native orientation descriptor differed; corrected Float32 arithmetic/atan2 behavior. The actual exported RGBA fixtures now match exactly.
-Several initial harness assertions used old labels, ambiguous controls, or corrupted Unicode from Windows text decoding. Fixed UTF-8 selectors, document polling, the profile-creation race in fixtures, route readiness and artifact watch/lint exclusions. The early photo-reunion denial was a faulty test helper, not a confirmed rules blocker; the unchanged rules later allowed the flow.
-Vite 8 rejected a non-exported RTL bundle path and lost MapLibre's worker dependency. The correct self-hosted RTL asset and bundled worker/shared module are now explicit.
-Fixed a real late auth/verification callback that could return a user to Map after moving elsewhere; verification polling stops and ignores in-flight results after unmount/account change. Firebase initialization now reuses clients across development module re-evaluation.
-The final screenshot refresh exposed a second delayed redirect: repeated start-chat requests could resolve after leaving that route and return to a chat. MessagesScreens now cancels both success and failure navigation on effect cleanup. The two-browser chat flow explicitly delays each outcome, leaves for Explore, releases the response and verifies that Explore stays open. The interrupted screenshot attempt is not the final capture result.
-Safari poster font readiness could remain pending; wait for the required faces with a bounded fallback. Poster errors no longer silently keep the spinner forever.
-Long repeated runs found the shared Firestore service unresponsive, and later shared Auth unavailable. Final tests use a fresh complete demo suite, separate ports/project and byte-identical rule fixtures. Startup attempts with invalid rule-relative paths failed and are not validation evidence; the preparation script verifies the copies before the final suite starts. Saved .emulator-data was neither exported nor changed.
-Some intermediate browser runs failed due to live source edits/automatic reloads, stalled shared services, experimental polling or stale harness labels. The final code uses normal SDK transport detection and one auth navigation effect; focused registration/verification checks passed both engines after this correction. Final results, not intermediate counts, are the acceptance evidence.
+STRINGS, ASSETS AND DEPENDENCIES
+15 new web-only strings were appended to tools/strings/strings_web.py; Arabic repeats English with TODO-AR. Generated JSON has 1201 strings plus unread_notifications (1202 keys) per language. Existing 1162 Android strings and both XML files are unchanged. No dependency was added or changed. The splash script uses the already-installed Pillow, not a new npm dependency. Existing generated icons/fonts were reused.
 
-NOT DONE / NOT VERIFIED
-Real iPhone installation, actual safe areas/status bar, camera capture, share sheet/files, real geolocation and Safari storage eviction behavior. WebKit is a stand-in.
-Android staging reading web records: no running Android emulator/device. Document schema/integer/default parity and native image fixtures were tested instead.
-Real PC AI model/embeddings/heartbeat integration: no reads or changes to cat-server. Mocked/fake-worker protocol and local descriptor tests were run.
-Optional Blaze Storage video upload/playback and a real MapTiler satellite key. These paths stay hidden/off by default and need owner validation.
-Production deployment/console config/authorized domains/hosting CSP delivery and browser integrations on the actual host. Deploy was forbidden. No web Firebase config or real keys were created/copied.
-GitHub-hosted CI execution: the job was added but not pushed, so no hosted run is claimed.
-No claim of pixel-exact Android parity; some visible CSS/browser differences remain. No known security-rule blocker remains from the successfully verified local flows.
-
-REMAINING VISIBLE DIFFERENCES
-See web/docs/parity.md and its actual side-by-side images. Font shaping/metrics/anti-aliasing and canvas wrapping differ; generic SVG control strokes/state layers are approximate; fields/selects/date/time/sliders use browser rendering; dialogs do not implement Compose's exact draggable-sheet behavior. Chip heights, spacing/elevation, empty states/chart labels and viewport/status-bar presentation differ. Map tiles/glyphs require a network and snapshots can precede tile completion. Poster text baselines/QR rasterization differ. Real Safari install/share/camera/permission UI is not represented by desktop WebKit. New web-only Arabic strings intentionally remain English TODO-AR.
-
-FILES OUTSIDE web/ CHANGED
-tools/strings/build_strings.py - generate web JSON/check drift while preserving Android XML bytes.
-tools/strings/strings_web.py - web-only English/English-TODO-AR strings, excluded from Android.
-tools/icons/vector_to_svg.py - native VectorDrawable conversion/registry/PWA raster generation/checks.
-app/src/test/java/com/catmap/dubai/ai/WebFingerprintFixtureTest.kt - the sole allowed new Android JVM fixture exporter/test.
-firebase.json - Hosting config/cache/SPA/CSP only; pre-existing sections unchanged.
-.github/workflows/ci.yml - appended secret-free web job; original jobs and release.yml unchanged.
-README.md - short web entry in feature map.
-SETUP.md - owner-only Web/iPhone setup steps.
-HANDOFF.md - dated local architecture/evidence/limits section at the top.
-work done.txt - this explicitly required review report.
-
-OWNER STEPS (after Claude/owner review)
-1. Review this report, web/docs/parity.md and the screenshots. Use the emulator instructions in web/README.md for a local preview; stop the test-owned suite after use. The normal demo defaults are still demo-catmap at 9099/8080/9199.
-2. Register a Web app in the existing Firebase project yourself. Copy only its public Web config into web/.env.local using .env.example; keep it out of Git. Set VITE_USE_EMULATORS=false. Do not use Android's config/signing files.
-3. In Authentication -> Settings -> Authorized domains, confirm catmap-dubai.web.app and catmap-dubai.firebaseapp.com and add any custom domain.
-4. Optionally set VITE_PUBLIC_URL to the HTTPS address and VITE_MAPTILER_KEY. Keep VITE_BLAZE=false on Spark. Remove isolated test overrides from the build environment.
-5. PowerShell build commands:
-   Set-Location C:\Users\mohammad\Desktop\cat\web
-   npm.cmd ci
-   npm.cmd run lint
-   npm.cmd run typecheck
-   npm.cmd run test
-   npm.cmd run build
-6. Only the owner, after review, publishes Hosting from the repository root after checking the intended Firebase project:
-   Set-Location C:\Users\mohammad\Desktop\cat
-   npx.cmd -y firebase-tools@latest deploy --only hosting
-   Do not deploy rules, indexes or functions as part of this web handoff.
-7. Open the HTTPS address in Safari on an iPhone. Share -> Add to Home Screen. Test login, posting/photos, location, Arabic/large text, chat/adoption/booking, poster/share/download, offline and updates on the real device before distributing it.
-
-WHAT CLAUDE SHOULD REVIEW FIRST
-1. Data/write/rule parity and destructive cleanup: src/data/PostRepository.ts, CatRepository.ts, SittingRepository.ts, CommunityAccountCleanup.ts, AccountDeletion.ts; e2e/shape-parity.spec.ts and care-and-privacy.spec.ts.
-2. Auth/UID lifecycle, verification callback guards, role gates and encrypted demo vault.
-3. Fingerprint native/browser evidence, AI request matching/throttle/timeout and the clearly labelled ML Kit adaptation.
-4. Actual light/dark/Arabic visuals, route readiness, map network behavior, fields/sheets and poster comparison. Do not approve a pixel-identical claim.
-5. Owner production configuration, CSP with worker/wasm needs, deployment guardrails and real iPhone integration boundaries.
+CHECK RESULTS
+All required local checks passed. No command was refused by automatic approval review in this round.
+- npm.cmd run lint: passed.
+- npm.cmd run typecheck: passed (also included by both successful builds).
+- npm.cmd test: Test Files 5 passed (5); Tests 39 passed (39).
+- npm.cmd run strings:check: 93 source files, 1202 keys per language.
+- python tools/strings/build_strings.py . --check: missing []; unused []; 1162 Android strings; 1201 web strings plus unread_notifications. Android XML unchanged.
+- npm.cmd run build: passed, normal production mode with the install gate on; 92 precache entries, 4250.97 KiB. Log: web/round2-results/build-production.log. This package was not published or opened against production Firebase.
+- npm.cmd run build -- --mode emulators: passed with isolated local ports/project; 92 precache entries, 4248.30 KiB. Log: web/round2-results/build-emulators-final.log.
+- Production negative guard: VITE_INSTALL_GATE=off, VITE_USE_EMULATORS=false, node node_modules/vite/bin/vite.js build was rejected before building, as expected. Log: production-guard.log.
+- Full E2E: npx.cmd playwright test --grep-invert 'visual screenshots|production manifest' --reporter=line: 34 passed (12.4m), zero failed. This covered 12 regular scenarios per engine, 2 preview scenarios per engine and 3 gate scenarios per engine. Log: full-ready.log.
+- Final targeted platform run after mobile-device/touch/webview refinements: CATMAP_PWA=true npx.cmd playwright test e2e/pwa.spec.ts e2e/preview-map.spec.ts e2e/install-gate.spec.ts --reporter=line: 12 passed (1.1m), zero failed. This overlaps 10 full-suite platform cases and adds the 2 production-offline cases; it is not 12 extra unique cases. Log: platform-accepted.log.
+- Production PWA in both engines: 87 cached assets; persistent login and Explore survive reload with the test-owned origin stopped. Chromium additionally disconnected network; WebKit uses origin shutdown due to its known offline-emulation issue. Manifest name/display/display_override/id/scope/orientation/maskable icons passed. Worker/cache and the installed app's lazy runtime were exercised.
+- Final preview projects use Pixel 7 Chromium and iPhone 15 WebKit at 393x852. Native touchscreen taps are placed on an unoccupied canvas point, with page focus and 100ms between taps. map.getZoom() increases. Before the final platform run, WebKit passed 3 consecutive repetitions (55.6s): mobile-paced.log. Photo double-click and synthetic pointer-touch pinch passed (scale 3.4); overscroll/gesture/modifier-zoom/context-menu/16px controls and RTL/LTR back/inset checks passed.
+- npm.cmd run screens: 3 passed (6.0m), zero failed; 214 PNGs (72 light, 71 dark, 71 Arabic), 54 concrete routes per variant plus sheets, auth, editor and component fixtures. Log: screens-final.log. Viewed the location/photo sequence, the install gate, and 393x852/430x932 phone renders with simulated 59px top/34px bottom insets; controls clear the protected areas.
+- Splash generation: 16 portrait PNGs; 392,504 bytes total. No new npm or Python dependency was installed.
+- git diff --check: passed. Protected Android/rules/index/CI/release/shared-generator paths have no diff. Existing owner edits and staged deletions were preserved.
+All logs and diagnostic scripts are in ignored web/round2-results or normal ignored test result folders, not docs. All three completed WEB_TODO items were removed and the requested empty-list/date/version line restored.
 
 
-EXACT DEPENDENCIES (no ranges; release-date evidence in web/docs/dependency-versions.json)
-dependencies:
-  @fontsource/noto-sans-arabic 5.3.0 - self-hosted Arabic fonts/offline RTL
-  @fontsource/roboto 5.3.0 - self-hosted native font family/offline
-  @mapbox/mapbox-gl-rtl-text 0.3.0 - self-hosted Arabic map shaping worker
-  firebase 12.19.0 - modular Auth/Firestore and optional lazy Storage
-  maplibre-gl 6.11.2 - native-compatible vector maps/clustering
-  qrcode 1.5.4 - poster QR generation
-  react 19.3.0 - UI/hooks
-  react-dom 19.3.0 - browser rendering
-  react-router-dom 7.18.4 - history routing/deep links
-devDependencies:
-  @eslint/js 10.0.1 - base lint rules
-  @playwright/test 1.63.0 - Chromium/WebKit E2E/screens
-  @types/node 24.19.0 - Node test/tool types
-  @types/qrcode 1.5.6 - QR types
-  @types/react 19.3.0 - React types
-  @types/react-dom 19.3.0 - DOM React types
-  @vitejs/plugin-react 6.1.1 - Vite JSX/React integration
-  eslint 10.11.0 - static lint
-  eslint-plugin-react-hooks 7.1.1 - hook correctness/dependencies
-  globals 17.12.0 - browser/Node lint globals
-  prettier 3.6.2 - handwritten source formatting
-  typescript 5.9.3 - strict compile/typecheck and test parsing
-  typescript-eslint 8.71.0 - typed lint configuration
-  vite 8.3.1 - build/dev/preview
-  vite-plugin-pwa 1.3.0 - manifest/Workbox/update registration
-  vitest 5.0.2 - unit tests
-overrides:
-  @grpc/grpc-js 1.14.5 - transitive Firebase security fix override
-  tinypool 2.2.0 - transitive test runner security fix override
+INTERMEDIATE FAILURES / REPAIRS
+Initial focused run: install cases passed, while ambiguous Back selectors failed in the photo test; those now target the editor footer. The photo pinch test exposed and fixed the deferred-ratio bug. This WebKit engine cannot compute unsupported overscroll CSS; the test now verifies support where present and touch-edge prevention everywhere. Swipe tests initially started before a lazy screen committed; they now wait for the committed route and two frames. An initial full run switched offline after language initialization but before the lazy runtime loaded; the test now waits for the signed-in settings route before disconnecting. The common navigate helper now waits for the mounted app and committed route before dispatching history events after a reload. Rejected photos also exposed a navigation trap in earlier steps; the block is now confined to Photos/Review, and the return path is tested. A capture-script step-index replacement also tried to fill Details on Place; the capture condition was corrected. A too-fast WebKit tap sequence was intermittent; the test now focuses the page and uses an empty canvas point with human-paced taps. A temporary diagnostic once emitted an ephemeral emulator credential in a verbose error; its error output was then sanitized. No password is in this report or tracked source; the disposable emulator state is discarded at shutdown. These failed/interrupted runs are not the acceptance evidence.
 
+LIMITATIONS / OWNER STEPS
+A real installed iPhone/iPad, actual notch/status-bar/home-indicator, Safari/Chrome/Edge native menus, physical multi-touch/keyboard and storage separation/eviction cannot be verified with desktop WebKit. Browser tests synthesize touch/prompt/display-mode events. Phone-layout tests simulate 59px top /34px bottom insets and retain screenshots in round2-results; ordinary route captures remain in docs/screens. Actual tile-provider imagery and real PC model inference were not exercised; the worker protocol was exercised with a real claimed emulator account. No file in cat-server was touched.
+No production deployment, production security headers, live rules/worker state or hosted CI run is claimed. Existing round-1 visual differences remain documented in web/docs/parity.md. The initial worktree already contained Claude's map fix and edits to the brief/HANDOFF plus staged deletions; these were preserved rather than attributed to this run.
+Next: Claude reviews this report and the changed web files; the owner approves the changes and then runs web/publish.cmd. Real-phone install/photo/share/GPS checks follow on the deployed app. The agent did not run publish.cmd or any deployment command.
 
-FINAL ACCEPTANCE RESULTS - 14 OCTOBER 2026
-Final source includes the stale start-chat callback fix and its delayed-success/failure regression check. No frontend changes followed these accepted runs.
-Browser suite: 22 passed, 0 failed (11 Chromium + 11 WebKit), 6.2 minutes. Log: web/docs/e2e-final-accepted.log.
-Screenshots: 3 passed, 0 failed, 4.7 minutes. 214 PNGs: light 72, dark 71, Arabic 71; 54 concrete routes per variant plus editor/sheet/auth/component captures. Log: web/docs/screens-final-accepted.log. The 360px web component fixtures and 320px native post-card bitmaps are not pixel-aligned comparisons.
-PWA: 2 passed, 0 failed, 12.6 seconds. Both engines restored login and Explore with their test-owned origin stopped; 70 cached assets. Log: web/docs/pwa-final-accepted.log.
-Final lint/typecheck passed after the chat fix. Final unit run: 34/34 in 3 files. Shared generator checks passed (1157 Android strings; 1181 web strings plus plural; 64 vectors). Protected rules/indexes/release workflow/Android strings still have no diff.
-Final npm audit: 0 vulnerabilities in every severity. web/docs/audit-final.json.
-Final default production and production-emulator builds both succeeded; Workbox precache 75 entries, approximately 3844.62 KiB. The final dist is the default production build with no owner configuration. A fresh Chromium preview verified 'Firebase setup required' and zero external requests, with any external request explicitly blocked by the test.
-Lighthouse 13.5.0 command: npx.cmd -y lighthouse@13.5.0 http://127.0.0.1:4173/login --only-categories=performance,accessibility,best-practices,seo --chrome-flags='--headless --no-sandbox' --output=json --output=html --output-path=docs/lighthouse. Exit 0. The Chrome launcher warned it could not remove its locked temporary directory; audit output was written successfully. No temporary directory was manually removed.
-Measured Lighthouse: performance 82; accessibility 100; best practices 100; SEO 92; PWA N/A (category absent).
-Final initial JS/CSS gzip: 349,201 bytes (341.02 KiB), excluding HTML/fonts/lazy routes. Lazy map/worker/RTL/CSS and admin are listed below.
-  CommunityMap-B8-mEBLf.css: 10,471 gzip bytes (10.23 KiB).
-  CommunityMap-CtfV7NFX.js: 276,113 gzip bytes (269.64 KiB).
-  mapbox-gl-rtl-text-DosxTATq.js: 43,529 gzip bytes (42.51 KiB).
-  maplibre-gl-worker-v2kpBMIs.js: 145,197 gzip bytes (141.79 KiB).
-  AdminScreens-CU1BCZhp.js: 7,886 gzip bytes (7.70 KiB).
-Machine-readable measured summary: web/docs/verification.json. Runtime logs remain local/ignored because emulator Auth logs can contain disposable verification codes.
-
-CLEANUP / FINAL SCOPE
-Stopped only the command-line-verified task-owned Vite dev/preview processes and isolated demo-catmap-web-test tree, including descendants created after that root. No listeners remained on test ports 5173, 4173, 4317, 8180, 9098, 9198, 4402, 4502 or 9150. Existing unrelated services were not stopped. No saved emulator export was written. All work remains local and uncommitted; the owner can restart the local preview using web/README.md.
+FINAL CLEANUP
+Stopped the verified task-owned isolated Firebase emulator process tree (three processes). All round-2 test service ports are closed: 5173, 5174, 4317, 4318, 8180, 9098, 9198, 4402, 4502 and 9150. Disposable test accounts/state were discarded without export. No unrelated emulator or owner service was stopped.

@@ -13,6 +13,7 @@ import { mapStyle, customize } from './MapStyles';
 import { CatMapIcons, catMapSvg } from '../../icons/CatMapIcons';
 import { enums } from '../../data/model/Enums';
 import { t } from '../../i18n';
+import { config } from '../../config';
 export interface MapPoint {
   id: string;
   kind: 'post' | 'cat' | 'station' | 'sitter';
@@ -188,6 +189,10 @@ export default function CommunityMap({
         attributionControl: { compact: true },
       });
       mapRef.current = map;
+      if (config.emulators) {
+        const testHost = container.current as HTMLDivElement & { catmapMap?: LibreMap };
+        testHost.catmapMap = map;
+      }
     } catch {
       setError(t('web_map_unavailable'));
       return;

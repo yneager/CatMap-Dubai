@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { updates } from '../../platform/updates';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useApp, useSettings, useAction } from '../../state';
 import { SettingsRepository, categories } from '../../data/SettingsRepository';
@@ -333,6 +334,13 @@ function Settings() {
         </button>
         <SectionHeader>{t('about')}</SectionHeader>
         <p>{t('about_text', config.version)}</p>
+        <button
+          className="link-row"
+          disabled={action.busy}
+          onClick={() => void action.run(() => updates.check(), t('web_update_checked'))}
+        >
+          {t('check_for_updates')}
+        </button>
         <p>{t('map_attribution')}</p>
         <button
           className="link-row"

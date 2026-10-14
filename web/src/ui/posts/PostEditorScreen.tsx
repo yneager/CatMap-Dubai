@@ -6,10 +6,19 @@ import { PostRepository, toPost, likelyDuplicates } from '../../data/PostReposit
 import { PostDraftStore, type SavedDraft } from '../../data/PostDraftStore';
 import { ImageRepository } from '../../data/ImageRepository';
 import { VideoRepository } from '../../data/VideoRepository';
-import { AiServer } from '../../data/AiServer';
+import { blocksPhoto } from '../../ai/PhotoCheck';
+import { usePhotoCheck, type SameAnimalMatch as Match } from './usePhotoCheck';
+import {
+  postSteps,
+  stepLabels,
+  visibleSteps,
+  restoredStep,
+  stepAfter,
+  type PostStep,
+} from './PostSteps';
 import { PostAppearance } from '../../ai/PostAppearance';
-import { processPhoto, decodeUpright, scaleToMax, type ProcessedPhoto } from '../../util/images';
-import { Dubai, LocationPrivacy, distanceKm } from '../../data/Neighborhoods';
+import { processPhoto, type ProcessedPhoto } from '../../util/images';
+import { Dubai, LocationPrivacy } from '../../data/Neighborhoods';
 import { useApp, useAction, useSettings } from '../../state';
 import { t } from '../../i18n';
 import {
@@ -35,20 +44,6 @@ interface LocalPhoto {
   url: string;
   uploaded?: string;
 }
-interface Match {
-  post: Post;
-  similarity: number;
-  verdict: string;
-  server: boolean;
-}
-const steps = [
-  'step_type',
-  'step_photos',
-  'step_details',
-  'step_place',
-  'step_contact',
-  'step_review',
-];
 export default function PostEditorScreen() {
   const { id } = useParams(),
     location = useLocation(),
@@ -70,13 +65,11 @@ export default function PostEditorScreen() {
       lastSeenAt: Date.now(),
     })),
     [existing, setExisting] = useState<Post | null>(null),
-    [step, setStep] = useState(editing ? 2 : preset ? 1 : 0),
+    [step, setStep] = useState<PostStep>(editing ? 'DETAILS' : preset ? 'PLACE' : 'TYPE'),
     [photos, setPhotos] = useState<LocalPhoto[]>([]),
     [draft, setDraft] = useState<SavedDraft | null>(null),
     [loaded, setLoaded] = useState(false),
     [video, setVideo] = useState<File | null>(null),
-    [matches, setMatches] = useState<Match[]>([]),
-    [checking, setChecking] = useState(false),
     [rejected, setRejected] = useState<string[]>([]),
     [guard, setGuard] = useState<Match | null>(null);
   const [busyPhoto, setBusyPhoto] = useState(false);
@@ -84,7 +77,17 @@ export default function PostEditorScreen() {
     queue = useRef(Promise.resolve()),
     photoRef = useRef(photos);
   photoRef.current = photos;
-  const matchingVersion = useRef(0);
+  const animalTypePicked = useRef(params.has('type') || editing);
+  const { verdicts, matches, checking } = usePhotoCheck(
+    photos,
+    post,
+    editing,
+    posts,
+    animalTypePicked,
+    (animalType) => change({ animalType }),
+  );
+  const blockedPhoto = photos.map((photo) => verdicts[photo.key]).find(blocksPhoto);
+  const steps = visibleSteps(post.category);
   const change = (patch: Partial<Post>) => setPost((p) => ({ ...p, ...patch }));
   const draftSnapshot = useRef<{ uid: string; saved: SavedDraft } | null>(null);
   draftSnapshot.current =
@@ -93,8 +96,17 @@ export default function PostEditorScreen() {
     !draft &&
     uid &&
     !finished.current &&
-    (step > 0 || post.name || post.description || photos.length || post.lat)
-      ? { uid, saved: { post, step, photos: photos.map((p) => p.blob), at: Date.now() } }
+    (step !== 'TYPE' || post.name || post.description || photos.length || post.lat)
+      ? {
+          uid,
+          saved: {
+            post,
+            step: postSteps.indexOf(step),
+            stepName: step,
+            photos: photos.map((p) => p.blob),
+            at: Date.now(),
+          },
+        }
       : null;
   useEffect(() => {
     const save = () => {
@@ -145,12 +157,18 @@ export default function PostEditorScreen() {
       draft ||
       !profile ||
       finished.current ||
-      (!post.name && !post.description && !photos.length && !post.lat && step === 0)
+      (!post.name && !post.description && !photos.length && !post.lat && step === 'TYPE')
     )
       return;
     const uid = profile.uid;
     const timeout = setTimeout(() => {
-      const saved = { post, step, photos: photos.map((p) => p.blob), at: Date.now() };
+      const saved = {
+        post,
+        step: postSteps.indexOf(step),
+        stepName: step,
+        photos: photos.map((p) => p.blob),
+        at: Date.now(),
+      };
       queue.current = queue.current
         .catch(() => {})
         .then(() => (finished.current ? undefined : PostDraftStore.save(uid, saved)));
@@ -160,7 +178,9 @@ export default function PostEditorScreen() {
   const restore = async () => {
     if (!draft) return;
     setPost({ ...PostDefaults, ...draft.post });
-    setStep(Math.max(0, Math.min(5, draft.step)));
+    const restored = restoredStep(draft);
+    setStep(draft.post.category === 'street' && restored === 'CONTACT' ? 'REVIEW' : restored);
+    animalTypePicked.current = true;
     const locals = [];
     for (const blob of draft.photos.slice(0, 6)) {
       try {
@@ -190,86 +210,6 @@ export default function PostEditorScreen() {
       setBusyPhoto(false);
     }
   };
-  useEffect(() => {
-    if (step !== 5 || editing || post.category !== 'street' || !photos.length || !post.lat) {
-      setMatches([]);
-      return;
-    }
-    const version = ++matchingVersion.current;
-    setChecking(true);
-    void (async () => {
-      const candidates = (posts ?? (await PostRepository.feedOnce()))
-        .filter(
-          (p) =>
-            p.category === 'street' &&
-            p.status === 'open' &&
-            !p.hidden &&
-            p.animalType === post.animalType &&
-            p.photoIds.length &&
-            Number.isFinite(distanceKm(p.lat, p.lng, post.lat, post.lng)) &&
-            distanceKm(p.lat, p.lng, post.lat, post.lng) <= 1,
-        )
-        .sort(
-          (a, b) =>
-            distanceKm(a.lat, a.lng, post.lat, post.lng) -
-            distanceKm(b.lat, b.lng, post.lat, post.lng),
-        )
-        .slice(0, 8);
-      const crops = [];
-      for (const p of candidates) {
-        const bytes = await ImageRepository.bytes(p.photoIds[0]);
-        if (bytes) {
-          const image = await decodeUpright(
-            new Blob([new Uint8Array(bytes)], { type: 'image/jpeg' }),
-          );
-          crops.push({ id: p.id, image: scaleToMax(image, 640) });
-          if ('close' in image) image.close();
-        }
-      }
-      const server = await AiServer.compare(
-        photos[0].processed.analysis,
-        crops,
-        crops.map((c) => {
-          const p = candidates.find((p) => p.id === c.id)!;
-          return p.name || 'Street ' + p.animalType;
-        }),
-      );
-      let result: Match[];
-      if (server !== null)
-        result = server
-          .filter((m) => ['same', 'maybe'].includes(m.verdict))
-          .flatMap((m) => {
-            const p = candidates.find((p) => p.id === m.id);
-            return p
-              ? [{ post: p, similarity: m.similarity, verdict: m.verdict, server: true }]
-              : [];
-          });
-      else {
-        const descriptor = PostAppearance.describe(photos[0].processed.analysis);
-        result = candidates
-          .map((post) => ({
-            post,
-            similarity: PostAppearance.similarity(descriptor, post.fingerprint),
-            verdict: 'maybe',
-            server: false,
-          }))
-          .filter((m) => m.similarity >= 0.85)
-          .sort((a, b) => b.similarity - a.similarity)
-          .slice(0, 3);
-      }
-      if (version === matchingVersion.current)
-        setMatches(result.sort((a, b) => b.similarity - a.similarity));
-    })()
-      .catch(() => {
-        if (version === matchingVersion.current) setMatches([]);
-      })
-      .finally(() => {
-        if (version === matchingVersion.current) setChecking(false);
-      });
-    return () => {
-      if (matchingVersion.current === version) matchingVersion.current = version + 1;
-    };
-  }, [step, editing, post.category, post.animalType, post.lat, post.lng, photos, posts]);
   const finishDraft = async () => {
     finished.current = true;
     await queue.current.catch(() => {});
@@ -277,7 +217,7 @@ export default function PostEditorScreen() {
   };
   const publish = async (force = false) => {
     if (!profile) return;
-    if (checking) return;
+    if (checking || blockedPhoto) return;
     const same = matches.find((m) => m.verdict === 'same' && !rejected.includes(m.post.id));
     if (same && !force) {
       setGuard(same);
@@ -315,8 +255,11 @@ export default function PostEditorScreen() {
         fingerprint,
         videoPath,
         areaRadiusM: post.category === 'lost' ? post.areaRadiusM : 0,
-        contactPhone: post.contactMethod === 'phone' ? post.contactPhone : '',
-        contactEmail: post.contactMethod === 'email' ? post.contactEmail : '',
+        contactMethod: post.category === 'street' ? 'in_app' : post.contactMethod,
+        contactPhone:
+          post.category === 'street' ? '' : post.contactMethod === 'phone' ? post.contactPhone : '',
+        contactEmail:
+          post.category === 'street' ? '' : post.contactMethod === 'email' ? post.contactEmail : '',
       };
       const target =
         editing && existing
@@ -357,6 +300,61 @@ export default function PostEditorScreen() {
       navigate('/post/' + match.post.id, { replace: true });
     }, t('same_animal_added'));
   };
+  const photoCheckStatus = (
+    <>
+      {checking && (
+        <p className="photo-check-status" role="status">
+          <span className="photo-check-spinner" aria-hidden="true" />
+          {t('photo_checking')}
+        </p>
+      )}
+      {blockedPhoto && (
+        <div className="photo-check-error" role="alert">
+          <strong>
+            {t(
+              blockedPhoto.phrase ? 'photo_not_animal' : 'photo_not_animal_unnamed',
+              blockedPhoto.phrase,
+            )}
+          </strong>
+          <p>{t('photo_not_animal_action')}</p>
+        </div>
+      )}
+    </>
+  );
+  const sameAnimalCards = (
+    <>
+      {checking && <p role="status">{t('same_animal_checking')}</p>}
+      {matches
+        .filter((m) => !rejected.includes(m.post.id))
+        .map((m) => (
+          <div className="same-animal card" key={m.post.id}>
+            <h3>{t('same_animal_title')}</h3>
+            <p>{t(m.server ? 'same_animal_hint_ai' : 'same_animal_hint_local')}</p>
+            <Link to={'/post/' + m.post.id} className="row">
+              <Photo id={m.post.photoIds[0]} />
+              <strong>{m.post.name}</strong>
+              <span>
+                {t(m.verdict === 'same' ? 'same_animal_likely' : 'same_animal_maybe')}{' '}
+                {Math.round(m.similarity * 100)}%
+              </span>
+            </Link>
+            <button
+              className="primary"
+              disabled={action.busy}
+              onClick={() => void addToExisting(m)}
+            >
+              {t('same_animal_add')}
+            </button>
+            <button
+              className="text-button"
+              onClick={() => setRejected((ids) => [...ids, m.post.id])}
+            >
+              {t('same_animal_no')}
+            </button>
+          </div>
+        ))}
+    </>
+  );
   if (!loaded) return <Loading />;
   if (editing && !existing)
     return (
@@ -372,11 +370,11 @@ export default function PostEditorScreen() {
   )
     return <ErrorText text={t('err_permission')} />;
   const valid =
-    step === 2
+    step === 'DETAILS'
       ? !!(post.name.trim() || post.description.trim() || post.features.trim())
-      : step === 3
+      : step === 'PLACE'
         ? Dubai.contains(post.lat, post.lng)
-        : step === 4
+        : step === 'CONTACT'
           ? post.contactMethod === 'phone'
             ? post.contactPhone.replace(/\D/g, '').length >= 7
             : post.contactMethod === 'email'
@@ -389,11 +387,11 @@ export default function PostEditorScreen() {
       <AppTopBar title={t(editing ? 'edit_post' : 'post_new')} />
       <main className="screen editor">
         <div className="step-heading">
-          <small>{t('step_x_of_y', step + 1, 6)}</small>
-          <h2>{t(steps[step])}</h2>
-          <progress max="6" value={step + 1} />
+          <small>{t('step_x_of_y', steps.indexOf(step) + 1, steps.length)}</small>
+          <h2>{t(stepLabels[step])}</h2>
+          <progress max={steps.length} value={steps.indexOf(step) + 1} />
         </div>
-        {step === 0 && (
+        {step === 'TYPE' && (
           <>
             <SectionHeader>{t('post_what_happened')}</SectionHeader>
             <div className="choice-grid">
@@ -413,11 +411,14 @@ export default function PostEditorScreen() {
             <Chips
               options={enums.AnimalType}
               value={post.animalType}
-              onChange={(animalType) => change({ animalType })}
+              onChange={(animalType) => {
+                animalTypePicked.current = true;
+                change({ animalType });
+              }}
             />
           </>
         )}
-        {step === 1 && (
+        {step === 'PHOTOS' && (
           <>
             <p>{t('add_photos_hint')}</p>
             <div className="photo-grid">
@@ -433,8 +434,18 @@ export default function PostEditorScreen() {
                 </div>
               ))}
               {photos.map((p, index) => (
-                <div key={p.key}>
-                  <img src={p.url} alt={t('photo_n', index + 1)} />
+                <div
+                  className={'photo-tile ' + (blocksPhoto(verdicts[p.key]) ? 'blocked-photo' : '')}
+                  key={p.key}
+                >
+                  <img src={p.url} alt={t('photo_n', index + 1)} draggable="false" />
+                  {verdicts[p.key]?.phrase && (
+                    <span
+                      className={'photo-verdict ' + (blocksPhoto(verdicts[p.key]) ? 'blocked' : '')}
+                    >
+                      {verdicts[p.key].phrase}
+                    </span>
+                  )}
                   <div className="row">
                     <button
                       className="text-button"
@@ -485,6 +496,8 @@ export default function PostEditorScreen() {
                 onChange={(e) => void pickPhotos(e.target.files)}
               />
             </label>
+            {photoCheckStatus}
+            {sameAnimalCards}
             <small>{t('photos_n_of_max', post.photoIds.length + photos.length, 6)}</small>
             {busyPhoto && <Loading rows={1} />}{' '}
             {VideoRepository.enabled && (
@@ -499,7 +512,7 @@ export default function PostEditorScreen() {
             )}
           </>
         )}
-        {step === 2 && (
+        {step === 'DETAILS' && (
           <>
             <Field
               label={t('name')}
@@ -578,7 +591,7 @@ export default function PostEditorScreen() {
             )}
           </>
         )}
-        {step === 3 && (
+        {step === 'PLACE' && (
           <>
             <LocationField
               lat={post.lat}
@@ -614,7 +627,7 @@ export default function PostEditorScreen() {
             )}
           </>
         )}
-        {step === 4 && (
+        {step === 'CONTACT' && (
           <>
             <p>{t('how_contact')}</p>
             <Chips
@@ -643,7 +656,7 @@ export default function PostEditorScreen() {
             <p className="muted">{t('contact_privacy_note')}</p>
           </>
         )}
-        {step === 5 && (
+        {step === 'REVIEW' && (
           <>
             <div className="card">
               <div className="row">
@@ -660,36 +673,8 @@ export default function PostEditorScreen() {
               <p dir="auto">{post.features}</p>
               <p>{t('photos_n_of_max', post.photoIds.length + photos.length, 6)}</p>
             </div>
-            {checking && <p role="status">{t('same_animal_checking')}</p>}
-            {matches
-              .filter((m) => !rejected.includes(m.post.id))
-              .map((m) => (
-                <div className="same-animal card" key={m.post.id}>
-                  <h3>{t('same_animal_title')}</h3>
-                  <p>{t(m.server ? 'same_animal_hint_ai' : 'same_animal_hint_local')}</p>
-                  <Link to={'/post/' + m.post.id} className="row">
-                    <Photo id={m.post.photoIds[0]} />
-                    <strong>{m.post.name}</strong>
-                    <span>
-                      {t(m.verdict === 'same' ? 'same_animal_likely' : 'same_animal_maybe')}{' '}
-                      {Math.round(m.similarity * 100)}%
-                    </span>
-                  </Link>
-                  <button
-                    className="primary"
-                    disabled={action.busy}
-                    onClick={() => void addToExisting(m)}
-                  >
-                    {t('same_animal_add')}
-                  </button>
-                  <button
-                    className="text-button"
-                    onClick={() => setRejected((ids) => [...ids, m.post.id])}
-                  >
-                    {t('same_animal_no')}
-                  </button>
-                </div>
-              ))}
+            {photoCheckStatus}
+            {sameAnimalCards}
             {duplicates.length > 0 && (
               <>
                 <SectionHeader>{t('possible_duplicates')}</SectionHeader>
@@ -704,11 +689,11 @@ export default function PostEditorScreen() {
         )}
         <ErrorText text={action.error} />
         <div className="editor-footer">
-          {step > 0 && (
+          {step !== 'TYPE' && (
             <button
               className="outlined"
               disabled={action.busy}
-              onClick={() => setStep((s) => s - 1)}
+              onClick={() => setStep((s) => stepAfter(s, post.category, false))}
             >
               <ControlIcon name="back" />
               {t('back')}
@@ -716,10 +701,17 @@ export default function PostEditorScreen() {
           )}
           <button
             className="primary"
-            disabled={!valid || action.busy || busyPhoto || checking}
-            onClick={() => (step < 5 ? setStep((s) => s + 1) : void publish())}
+            disabled={
+              !valid ||
+              action.busy ||
+              busyPhoto ||
+              ((step === 'PHOTOS' || step === 'REVIEW') && (checking || !!blockedPhoto))
+            }
+            onClick={() =>
+              step !== 'REVIEW' ? setStep((s) => stepAfter(s, post.category, true)) : void publish()
+            }
           >
-            {action.busy ? t('web_loading') : t(step === 5 ? 'publish' : 'next')}
+            {action.busy ? t('web_loading') : t(step === 'REVIEW' ? 'publish' : 'next')}
           </button>
         </div>
       </main>

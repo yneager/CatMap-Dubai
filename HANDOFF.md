@@ -1,7 +1,39 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 14 Oct 2026 (Android **v0.0.8 released** at `2b07278`: PC photo check (CLIP), location-first posting and "Animal Spotted"; CI and the release passed. The web app is reviewed, committed and live at https://catmap-dubai.web.app; Android changes it still lacks are in `WEB_TODO.txt`. The last Android release is v0.0.7 at `356e18d`).**
+and what's left. **Last updated: 14 Oct 2026 (Android **v0.0.8 released** at `2b07278`: PC photo check (CLIP), location-first posting and "Animal Spotted"; CI and the release passed. The web app is reviewed, committed and live at https://catmap-dubai.web.app; Android changes it still lacks are in `WEB_TODO.txt`. The last Android release is v0.0.7 at `356e18d`. Web round 2 (install-only app, v0.0.8 parity, map fix) done by Codex and reviewed by Claude; uncommitted, not deployed).**
+
+## 14 October 2026 - web map fix and Codex brief, round 2 (Claude)
+
+* **Map blank on phones (live site).** Cause:
+  * MapLibre's CSS is a lazy chunk (`CommunityMap-*.css`) that loads after `index-*.css` in production builds.
+  * Its `.maplibregl-map { position: relative }` beat our `.map-canvas { position: absolute; inset: 0 }`, so the map
+    was 0 px tall.
+  * Dev mode orders the CSS differently, which is why e2e missed it.
+
+  Fix: `.community-map > .map-canvas` in `web/src/ui/theme/theme.css`. Verified in a `--mode emulators` production
+  build at phone size: the map, tiles and markers draw. **Not deployed:** the owner runs `web\publish.cmd`.
+* **`CLAUDE_TO_CODEX.txt` now holds the round-2 brief.** Round 1 is at `git show 801d9b9:CLAUDE_TO_CODEX.txt`. It
+  covers:
+  * the 3 `WEB_TODO.txt` items;
+  * an install gate (the web app runs only when installed to the home screen);
+  * removing website behaviour (zoom, pull-to-refresh, selection, callouts, swipe-back);
+  * a production-build map regression test.
+* **Codex round 2 done; Claude reviewed it** (report: `work done.txt`). New parts:
+  * `web/src/platform/`: the install gate (`InstallRoot`, `install.ts`), app feel (`appFeel.ts`/`.css`) and updates;
+  * `PostSteps.ts`, `usePhotoCheck.ts`, `ai/PhotoCheck.ts`;
+  * `AiServer.check`;
+  * splash images;
+  * e2e tests: `preview-map`, `install-gate`, `photo-check` (with a fake worker).
+
+  Claude re-ran:
+  * lint, typecheck, unit tests (39/39), the string checks and the production build;
+  * the production guard: `VITE_INSTALL_GATE=off` is refused;
+  * the gate in a production build at phone size: install screen only, Firebase not loaded;
+  * the new e2e specs (12/12, Chromium and WebKit).
+
+  `WEB_TODO.txt` is empty again. Minor, not fixed: on the Photos step a street post can show both "checking photo"
+  and "checking same animal" at once. Not verified: a real iPhone. **Uncommitted and not deployed.**
 
 ## 14 October 2026 - photo check, location-first posting, "Animal Spotted" (Claude)
 

@@ -156,6 +156,8 @@ export async function navigate(page: Page, route: string) {
     await page.goto(route);
     return;
   }
+  await expect(page.locator('.app[data-route]')).toHaveCount(1);
+  await expect(page.locator('.route-screen')).toHaveCount(1);
   await page.evaluate((route) => {
     history.pushState(null, '', route);
     window.dispatchEvent(new PopStateEvent('popstate'));
@@ -179,6 +181,8 @@ export async function publishLost(page: Page, name: string) {
   await navigate(page, '/post-new');
   await page.getByRole('button', { name: 'Lost', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await pickLocation(page);
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.locator('input[type=file][multiple]').setInputFiles(photoPath);
   await expect(page.getByText('Photos: 1 / 6')).toBeVisible();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
@@ -186,8 +190,6 @@ export async function publishLost(page: Page, name: string) {
   await page
     .getByLabel('Description', { exact: true })
     .fill('Friendly orange cat with a blue collar.');
-  await page.getByRole('button', { name: 'Next', exact: true }).click();
-  await pickLocation(page);
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Publish', exact: true }).click();

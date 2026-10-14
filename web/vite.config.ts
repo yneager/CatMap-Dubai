@@ -2,20 +2,27 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({ command, mode }) => {
+  const env = loadEnv(mode, process.cwd(), 'VITE_');
+  if (command === 'build' && mode === 'production' && env.VITE_INSTALL_GATE === 'off')
+    throw new Error(
+      'VITE_INSTALL_GATE=off is forbidden in production. Use --mode emulators for local testing.',
+    );
   // A production build that points at the local emulators would ship a site that talks to 127.0.0.1.
   // Local production-like builds use `--mode emulators` instead.
-  if (
-    command === 'build' &&
-    mode === 'production' &&
-    loadEnv(mode, process.cwd(), 'VITE_').VITE_USE_EMULATORS === 'true'
-  ) {
+  if (command === 'build' && mode === 'production' && env.VITE_USE_EMULATORS === 'true') {
     throw new Error(
       'VITE_USE_EMULATORS=true in a production build. Set it to false in web/.env.local, or build with --mode emulators for local testing.',
     );
   }
   return {
-    define:
-      mode === 'emulators' ? { 'import.meta.env.VITE_USE_EMULATORS': JSON.stringify('true') } : {},
+    define: {
+      ...(mode === 'emulators'
+        ? { 'import.meta.env.VITE_USE_EMULATORS': JSON.stringify('true') }
+        : {}),
+      'import.meta.env.VITE_INSTALL_GATE': JSON.stringify(
+        mode === 'emulators' && env.VITE_INSTALL_GATE !== 'on' ? 'off' : 'on',
+      ),
+    },
     optimizeDeps: { exclude: ['maplibre-gl'] },
     plugins: [
       react(),
@@ -31,6 +38,8 @@ export default defineConfig(({ command, mode }) => {
           start_url: '/map',
           scope: '/',
           display: 'standalone',
+          display_override: ['standalone'],
+          id: '/',
           orientation: 'portrait',
           theme_color: '#A9531A',
           background_color: '#FFFBF7',
@@ -65,6 +74,8 @@ export default defineConfig(({ command, mode }) => {
           '**/chrome-audit/**',
           '**/playwright-report/**',
           '**/docs/**',
+          '**/.preview-dist/**',
+          '**/round2-results/**',
           '**/tests/**',
           '**/e2e/**',
         ],

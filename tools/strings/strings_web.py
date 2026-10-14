@@ -28,3 +28,21 @@ S += [
     ("web_loading", "Loading…", "Loading…"), # TODO-AR
     ("web_map_unavailable", "Map tiles could not load. Check your connection or use List view.", "Map tiles could not load. Check your connection or use List view."), # TODO-AR
 ]
+
+S += [
+    ('web_app_title', 'CatMap Dubai', 'CatMap Dubai'), # TODO-AR
+    ('web_install_title', 'Install CatMap to get started', 'Install CatMap to get started'), # TODO-AR
+    ('web_install_button', 'Install CatMap', 'Install CatMap'), # TODO-AR
+    ('web_install_share', 'Open the Share menu.', 'Open the Share menu.'), # TODO-AR
+    ('web_install_home', 'Choose Add to Home Screen, then tap Add.', 'Choose Add to Home Screen, then tap Add.'), # TODO-AR
+    ('web_install_open_as_app', 'Keep Open as Web App switched on.', 'Keep Open as Web App switched on.'), # TODO-AR
+    ('web_install_launch', 'Open CatMap from your Home Screen.', 'Open CatMap from your Home Screen.'), # TODO-AR
+    ('web_install_safari', 'Open this page in Safari to install CatMap.', 'Open this page in Safari to install CatMap.'), # TODO-AR
+    ('web_copy_link', 'Copy link', 'Copy link'), # TODO-AR
+    ('web_install_menu', 'Open the ⋮ menu, then choose Install app or Add to Home screen.', 'Open the ⋮ menu, then choose Install app or Add to Home screen.'), # TODO-AR
+    ('web_installed_open', 'Installed. Open CatMap from your home screen.', 'Installed. Open CatMap from your home screen.'), # TODO-AR
+    ('web_install_phone', 'CatMap is made for your phone', 'CatMap is made for your phone'), # TODO-AR
+    ('web_install_scan', 'Scan this code with your phone to open CatMap.', 'Scan this code with your phone to open CatMap.'), # TODO-AR
+    ('web_install_desktop', 'Install on this computer', 'Install on this computer'), # TODO-AR
+    ('web_update_checked', 'Update check complete. A new version will appear here when available.', 'Update check complete. A new version will appear here when available.'), # TODO-AR
+]

@@ -214,6 +214,9 @@ test('encrypted demo vault and post drafts survive reload without plain-text sto
   expect(checks).toEqual({ correct: true, exported: false, plaintext: false });
   await navigate(page, '/post-new');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await page.getByRole('button', { name: 'Choose location', exact: true }).click();
+  await page.getByRole('button', { name: 'Use this location', exact: true }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByLabel('Name', { exact: true }).fill('Persistent browser draft');
   await page.waitForTimeout(700);

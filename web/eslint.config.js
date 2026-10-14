@@ -6,6 +6,8 @@ export default ts.config(
   {
     ignores: [
       'dist/**',
+      '.preview-dist/**',
+      'round2-results/**',
       'dev-dist/**',
       'node_modules/**',
       'playwright-report/**',

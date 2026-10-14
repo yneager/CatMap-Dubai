@@ -67,8 +67,10 @@ export default function PhotoViewer() {
           if (pointers.current.size === 2) {
             const p = [...pointers.current.values()],
               next = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
-            if (distance.current > 0)
-              setZoom((z) => Math.max(1, Math.min(5, (z * next) / distance.current)));
+            if (distance.current > 0) {
+              const ratio = next / distance.current;
+              setZoom((z) => Math.max(1, Math.min(5, z * ratio)));
+            }
             distance.current = next;
           } else if (last.current && zoom > 1) {
             const dx = e.clientX - last.current.x,

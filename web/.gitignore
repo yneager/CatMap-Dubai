@@ -8,6 +8,8 @@ screen-test-results/
 pwa-test-results/
 chrome-audit/
 webkit-recheck/
+.preview-dist/
+round2-results/
 e2e/.emulator-rules/
 e2e/*-debug.log
 e2e/firebase-debug.log

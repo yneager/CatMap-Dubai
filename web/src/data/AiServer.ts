@@ -9,6 +9,7 @@ import {
 import { auth } from '../firebase';
 import { ref } from './Firestore';
 import { compress, centreCrop, scaleToMax } from '../util/images';
+import { parseClassification } from '../ai/PhotoCheck';
 export interface AiTransport {
   uid: () => string | null;
   get: (path: string) => Promise<DocumentData | null>;
@@ -60,9 +61,9 @@ export class AiServerClient {
       return null;
     }
   }
-  async run(fields: DocumentData): Promise<DocumentData | null> {
+  async run(fields: DocumentData, signal?: AbortSignal): Promise<DocumentData | null> {
     const uid = this.io.uid();
-    if (!uid) return null;
+    if (!uid || signal?.aborted) return null;
     const requestId = crypto.randomUUID(),
       path = `aiJobs/${uid}`;
     try {
@@ -70,6 +71,7 @@ export class AiServerClient {
       const seen = previous?.createdAt?.toMillis?.();
       const wait = seen === undefined ? 0 : 1200 - (Date.now() - seen);
       if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+      if (signal?.aborted) return null;
       await this.io.set(path, {
         ...fields,
         uid,
@@ -84,10 +86,13 @@ export class AiServerClient {
           if (finished) return;
           finished = true;
           clearTimeout(timer);
+          signal?.removeEventListener('abort', aborted);
           unsubscribe();
           resolve(value);
         };
         const timer = setTimeout(() => done(null), this.timeout);
+        const aborted = () => done(null);
+        signal?.addEventListener('abort', aborted, { once: true });
         unsubscribe = this.io.listen(
           path,
           (data) => {
@@ -97,7 +102,48 @@ export class AiServerClient {
           () => done(null),
         );
         if (finished) unsubscribe();
+        if (signal?.aborted) done(null);
       });
+    } catch {
+      return null;
+    }
+  }
+  async check(
+    photos: HTMLCanvasElement[],
+    query: HTMLCanvasElement | null,
+    candidates: { id: string; image: HTMLCanvasElement }[],
+    labels: string[] = [],
+    signal?: AbortSignal,
+  ) {
+    if (signal?.aborted || !(await this.health())) return null;
+    try {
+      const selected = candidates.slice(0, 8);
+      const compared = !!query && selected.length > 0;
+      const jpeg = async (image: HTMLCanvasElement, crop = false) =>
+        Bytes.fromUint8Array(await compress(scaleToMax(crop ? centreCrop(image) : image, 320), 85));
+      const done = await this.run(
+        {
+          kind: 'check',
+          photos: await Promise.all(photos.slice(0, 6).map((image) => jpeg(image))),
+          ...(compared ? { query: await jpeg(query!, true) } : {}),
+          images: compared ? await Promise.all(selected.map((c) => jpeg(c.image, true))) : [],
+          ids: compared ? selected.map((c) => c.id) : [],
+          labels: compared ? labels.slice(0, 8).map((label) => label.slice(0, 60)) : [],
+        },
+        signal,
+      );
+      if (!done) return null;
+      return {
+        photos: parseClassification(done.classification, Math.min(photos.length, 6)),
+        matches: (Array.isArray(done.results) ? done.results : [])
+          .filter((r: AiMatch) => typeof r.id === 'string')
+          .map((r: AiMatch) => ({
+            id: r.id,
+            similarity: typeof r.similarity === 'number' ? r.similarity : 0,
+            verdict: typeof r.verdict === 'string' ? r.verdict : 'different',
+          })),
+        compared,
+      };
     } catch {
       return null;
     }

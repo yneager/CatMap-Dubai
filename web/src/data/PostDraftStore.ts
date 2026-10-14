@@ -3,6 +3,7 @@ import type { Post } from './model';
 export interface SavedDraft {
   post: Post;
   step: number;
+  stepName?: string;
   photos: Blob[];
   at: number;
 }

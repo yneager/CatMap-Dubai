@@ -96,6 +96,7 @@ test('lost photo wizard, Explore/map, detail update, reunited, favourites and se
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await expect(page.locator('.route-screen')).toHaveAttribute('data-screen', '/settings');
   await context.setOffline(true);
   await expect(
     page
@@ -286,8 +287,9 @@ test('same street animal uses fake worker and adds sighting instead of a duplica
               status: 'done',
               answeredRequestId: job.requestId,
               results: [{ id, similarity: 0.94, verdict: 'same' }],
+              classification: [{ kind: 'animal', animalType: 'cat', phrase: 'a cat', score: 0.95 }],
             },
-            ['status', 'answeredRequestId', 'results'],
+            ['status', 'answeredRequestId', 'results', 'classification'],
           );
           break;
         }
@@ -298,15 +300,16 @@ test('same street animal uses fake worker and adds sighting instead of a duplica
     }
   })();
   await navigate(page, '/post-new?category=street');
+  await expect(page.getByRole('heading', { name: 'Where & when', exact: true })).toBeVisible();
+  await pickLocation(page);
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.locator('input[type=file][multiple]').setInputFiles(photoPath);
   await expect(page.getByText('Photos: 1 / 6')).toBeVisible();
+  await expect(page.getByText('Likely the same 94%', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByLabel('Description', { exact: true }).fill('Orange street cat');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
-  await pickLocation(page);
-  await page.getByRole('button', { name: 'Next', exact: true }).click();
-  await page.getByRole('button', { name: 'Next', exact: true }).click();
-  await expect(page.getByText('Likely the same 94%', { exact: true })).toBeVisible();
+  await expect(page.locator('.step-heading')).toContainText('Step 5 of 5');
   await page.getByRole('button', { name: 'Publish', exact: true }).click();
   await expect(page.getByRole('dialog').filter({ hasText: 'Our AI thinks' })).toBeVisible();
   await page

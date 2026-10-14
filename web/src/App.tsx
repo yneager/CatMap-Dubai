@@ -8,7 +8,8 @@ import {
   type ReactNode,
 } from 'react';
 import { Navigate, Route, Routes, Link, useLocation, useNavigate } from 'react-router-dom';
-import { registerSW } from 'virtual:pwa-register';
+import { updates } from './platform/updates';
+import { edgeBack } from './platform/appFeel';
 import { configured } from './firebase';
 import { config } from './config';
 import { useApp, useSettings } from './state';
@@ -115,25 +116,18 @@ export default function App() {
     settings = useSettings(),
     [chooser, setChooser] = useState(false),
     [offline, setOffline] = useState(!navigator.onLine),
-    [needsRefresh, setRefresh] = useState(false),
-    [notes, setNotes] = useState(false),
-    [reload, setReload] = useState<(() => Promise<void>) | null>(null);
+    [notes, setNotes] = useState(false);
+  const needsRefresh = useSyncExternalStore(updates.subscribe, updates.get);
+  const appFrame = useRef<HTMLDivElement>(null);
   const previousUid = useRef<string | undefined>(undefined);
   const listenerError = useSyncExternalStore(AppErrors.subscribe, AppErrors.get);
   const tabs = ['map', 'explore', 'messages', 'profile'],
     tab = location.pathname.slice(1),
     isTab = tabs.includes(tab);
-  const ios =
-    /iPad|iPhone|iPod/.test(navigator.userAgent) &&
-    /Safari/.test(navigator.userAgent) &&
-    !matchMedia('(display-mode: standalone)').matches &&
-    !('standalone' in navigator && navigator.standalone);
   useEffect(() => {
     const online = () => setOffline(!navigator.onLine);
     window.addEventListener('online', online);
     window.addEventListener('offline', online);
-    const update = registerSW({ onNeedRefresh: () => setRefresh(true), onRegisterError: () => {} });
-    setReload(() => () => update(true));
     return () => {
       window.removeEventListener('online', online);
       window.removeEventListener('offline', online);
@@ -154,9 +148,13 @@ export default function App() {
     previousUid.current = user?.uid;
   }, [ready, user, navigate]);
   useEffect(() => {
-    document.title = t('app_name');
-    window.scrollTo(0, 0);
+    document.title = t('web_app_title');
+    appFrame.current?.scrollTo(0, 0);
   }, [location.pathname, settings.language]);
+  useEffect(() => {
+    if (isTab || !user || !appFrame.current) return;
+    return edgeBack(appFrame.current, () => navigate(-1));
+  }, [isTab, user, navigate, location.pathname]);
   if (!configured)
     return (
       <div className="app">
@@ -175,6 +173,7 @@ export default function App() {
   );
   return (
     <div
+      ref={appFrame}
       className={'app ' + (isTab ? 'with-nav' : '')}
       data-route={location.pathname + location.search}
     >
@@ -327,21 +326,10 @@ export default function App() {
         </nav>
       )}
       {chooser && <PostChooser onClose={() => setChooser(false)} />}{' '}
-      {ios && user && !settings.installHintDismissed && (
-        <div className="install-hint">
-          <p>{t('web_install_hint')}</p>
-          <button
-            className="text-button"
-            onClick={() => void SettingsRepository.set({ installHintDismissed: true })}
-          >
-            {t('dismiss')}
-          </button>
-        </div>
-      )}
       {needsRefresh && (
         <div className="snackbar update-snackbar" role="status">
           {t('web_update_available')}
-          <button onClick={() => void reload?.()}>{t('web_reload')}</button>
+          <button onClick={() => void updates.reload()}>{t('web_reload')}</button>
         </div>
       )}
       {notes && (

@@ -19,6 +19,10 @@ test('production manifest, service worker, persistent login and offline app shel
     const manifest = await manifestResponse.json();
     expect(manifest.name).toBe('CatMap Dubai');
     expect(manifest.display).toBe('standalone');
+    expect(manifest.display_override).toEqual(['standalone']);
+    expect(manifest.id).toBe('/');
+    expect(manifest.scope).toBe('/');
+    expect(manifest.orientation).toBe('portrait');
     expect(manifest.start_url).toBe('/map');
     expect(manifest.icons.some((icon: { purpose?: string }) => icon.purpose === 'maskable')).toBe(
       true,
