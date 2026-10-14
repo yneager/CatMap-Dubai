@@ -1158,6 +1158,11 @@
     <string name="ai_server_ok">Online: %1$s</string>
     <string name="ai_server_down">Offline: start the CatMap AI Server on the PC</string>
     <string name="ai_server_never">The CatMap AI Server has never connected. Run tools/demo/create-demo-accounts.mjs, then start.cmd in the cat-server folder on the PC.</string>
+    <string name="chooser_street">Animal Spotted</string>
+    <string name="photo_checking">Checking your photo…</string>
+    <string name="photo_not_animal">This looks like %1$s, not an animal.</string>
+    <string name="photo_not_animal_unnamed">This photo doesn\'t look like an animal.</string>
+    <string name="photo_not_animal_action">Remove it and add a photo of the animal to continue.</string>
     <plurals name="unread_notifications">
         <item quantity="one">%d unread notification</item>
         <item quantity="other">%d unread notifications</item>

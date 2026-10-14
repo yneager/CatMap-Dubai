@@ -114,6 +114,17 @@ console.log("AI server jobs");
   await check("worker writes the heartbeat", assertSucceeds(setDoc(doc(W, "config", "aiWorker"), { online: true, lastSeen: serverTimestamp(), model: "m", provider: "cpu", same: 0.75, maybe: 0.6 })));
   await check("member reads the heartbeat", assertSucceeds(getDoc(doc(ctx("bob"), "config", "aiWorker"))));
   await check("member cannot fake the heartbeat", assertFails(setDoc(doc(ctx("admin"), "config", "aiWorker"), { online: true, lastSeen: serverTimestamp() })));
+  // Photo check: a new post's photos ("is it an animal?") plus the nearby comparison, in one job.
+  const photos = (n) => Array.from({ length: n }, () => Bytes.fromUint8Array(new Uint8Array(2000)));
+  await check("member creates a photo-check job", assertSucceeds(setDoc(doc(ctx("dave"), "aiJobs", "dave"), job("dave", { kind: "check", photos: photos(2) }))));
+  const alone = job("erin", { kind: "check", photos: photos(1), images: [], ids: [], labels: [] });
+  delete alone.query;
+  await check("photo check without nearby candidates", assertSucceeds(setDoc(doc(ctx("erin"), "aiJobs", "erin"), alone)));
+  await check("photo check is limited to 6 photos", assertFails(setDoc(doc(ctx("frank"), "aiJobs", "frank"), job("frank", { kind: "check", photos: photos(7) }))));
+  await check("photo check photos must be a list", assertFails(setDoc(doc(ctx("frank"), "aiJobs", "frank"), job("frank", { kind: "check", photos: "x" }))));
+  await check("unknown job kind rejected", assertFails(setDoc(doc(ctx("frank"), "aiJobs", "frank"), job("frank", { kind: "classify" }))));
+  await check("worker writes the photo classification", assertSucceeds(updateDoc(doc(W, "aiJobs", "dave"), { status: "done", classification: [{ kind: "object", animalType: "", phrase: "a coffee cup", score: 0.99 }], results: [], model: "m", provider: "cpu", ms: 5, doneAt: serverTimestamp(), answeredRequestId: "r1" })));
+  await check("member cannot fake a classification", assertFails(updateDoc(doc(ctx("dave"), "aiJobs", "dave"), { status: "done", classification: [{ kind: "animal" }] })));
 }
 
 console.log("Sightings");

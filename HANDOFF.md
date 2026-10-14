@@ -1,7 +1,70 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 14 Oct 2026 (CatMap Web 0.0.8 local implementation; owner/Claude review pending. Android remains the released v0.0.7 at `356e18d`).**
+and what's left. **Last updated: 14 Oct 2026 (Android: PC photo check (CLIP), location-first posting and "Animal Spotted"; not released yet, next is v0.0.8. The web app is reviewed, committed and live at https://catmap-dubai.web.app; Android changes it still lacks are in `WEB_TODO.txt`. The last Android release is v0.0.7 at `356e18d`).**
+
+## 14 October 2026 - photo check, location-first posting, "Animal Spotted" (Claude)
+
+The owner asked for four things:
+* Street animal renamed "Animal Spotted" and moved first, in the + menu only.
+* Location first, then photo, so a duplicate street animal is caught before anyone types details.
+* No Contact step for street animals.
+* Posting stopped unless the photo shows an animal, naming what it shows instead, including selfies, using the AI
+  on the PC.
+
+**Android:**
+* **Menu:** `PostLists.kt` puts STREET first with the string `chooser_street` ("Animal Spotted"). Pills, filters and
+  details still say "Street animal".
+* **Steps:**
+  * New order: `PostStep { TYPE, PLACE, PHOTOS, DETAILS, CONTACT, REVIEW }`. The menu opens on PLACE.
+  * `visibleSteps` drops CONTACT for street posts, and `stepAfter()` moves between visible steps. Progress shows
+    "Step x of 5" for street posts.
+  * Drafts save `stepName`; `restoredStep()` maps old drafts' positions through the 0.0.7 order (tested, and checked
+    on the emulator with a real old draft).
+* **Photo check (`PostEditorViewModel.checkPhotos`):**
+  * Runs when photos are added, removed or re-ordered, and when entering Photos or later steps.
+  * One `aiServer.check()` job per batch (`kind: "check"`, `photos` ≤ 6 at 320 px), plus the street-animal
+    comparison in the same job: nearby street posts of any type, filtered by the resolved type afterwards.
+  * **Results:** a `person` or `object` verdict blocks Next and Publish. The photo gets a red outline and a card
+    reading "This looks like a coffee cup, not an animal. Remove it and add a photo of the animal to continue." An
+    `animal` verdict fills the animal type unless it was picked (`pickAnimalType`).
+  * The "Already on the map?" card is now on the Photos step, and Next waits for it. Publish still asks if a "same"
+    match is unresolved.
+* **PC offline:** `PhotoCheck.fromLabels` on ML Kit labels blocks only at ≥ 0.7 confidence with no animal label;
+  anything unclear is allowed. A failed check never traps the person.
+* **Rules:**
+  * `aiJobs` accepts `kind: "check"` and the owner key `photos` (a list of at most 6); the worker may write
+    `classification`.
+  * 7 new tests; the suite is **277/277**.
+  * **Production needs the rules deployed** (`cat-server\setup.cmd` or `deploy --only firestore`). Until then
+    0.0.8's check jobs are refused, and phones quietly fall back to ML Kit.
+
+**PC server (`Desktop\cat-server`):**
+* **New model:** a `Classifier` running CLIP ViT-B/32 (`Xenova/clip-vit-base-patch32`, MIT, about 600 MB) zero-shot
+  over grouped descriptions: animals by app type, people/selfie, and about 70 everyday objects. The text embeddings
+  are cached in `models\clip-prompts-*.npy`.
+* **Decision rule:** a photo is an animal when the animal share is ≥ 0.40 or the largest share (`ANIMAL_THRESHOLD`).
+  The type comes from the best single animal description. Objects are named only when the best one is ≥ 0.15.
+* **Answers:** `kind: "check"` jobs get `classification` + `results`. The window shows each photo as ANIMAL /
+  PERSON / NOT AN ANIMAL. 0.0.7 phones' `compare` jobs still work.
+* **Startup:** `start.cmd` now reinstalls packages whenever `requirements.txt` changes (new: `tokenizers==0.21.1`)
+  and downloads any missing model on start.
+
+**Verified:**
+* **Sample photos:** 18 on the PC; every person and object was blocked and every animal allowed, about 0.4 s for 18 on
+  the GPU.
+* **Android checks:** unit tests 74/74, lint 0 errors, assembleDebug.
+* **Emulator, with the PC server in emulator mode:**
+  * the menu shows Animal Spotted first, and Animal Spotted starts at Where & when;
+  * the coffee cup was blocked ("a coffee cup", Next disabled), and so was the portrait ("a selfie or a photo of a
+    person");
+  * the orange cat was accepted, and "Already on the map? Simba, Likely the same 99%" appeared on the Photos step.
+    The PC answered in 96 ms with both models;
+  * Review had no Contact; the published post is street/cat/in_app;
+  * with the PC stopped and marked offline, ML Kit on the phone blocked the coffee photo ("a cup").
+
+**Not done:** real-phone and production testing; Arabic for the 5 new strings (TODO-AR); the web app (listed in
+`WEB_TODO.txt`).
 
 ## 14 October 2026 - CatMap Web local implementation (Codex)
 

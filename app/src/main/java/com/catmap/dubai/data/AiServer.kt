@@ -1,6 +1,7 @@
 package com.catmap.dubai.data
 
 import android.graphics.Bitmap
+import com.catmap.dubai.ai.PhotoVerdict
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.Blob
@@ -65,6 +66,43 @@ class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth
         }
     }
 
+    /**
+     * A new post's photos in one job: what each photo shows ([PhotoVerdict], from CLIP on the PC) and, when
+     * [query] and [candidates] are given (street animals), how alike the first photo is to each nearby post.
+     * Null when the PC is offline, too slow or refuses. [CheckResult.photos] is null when the PC answered but is
+     * an older version without the photo check.
+     */
+    suspend fun check(photos: List<Bitmap>, query: Bitmap?, candidates: List<Pair<String, Bitmap>>, labels: List<String>): CheckResult? {
+        if (health() == null) return null
+        val compare = query != null && candidates.isNotEmpty()
+        val fields = mutableMapOf<String, Any>(
+            "kind" to "check",
+            "photos" to photos.take(MAX_PHOTOS).map { Blob.fromBytes(jpeg(com.catmap.dubai.util.ImageUtils.scaleToMax(it, CHECK_PX))) },
+            "images" to if (compare) candidates.take(MAX_CANDIDATES).map { Blob.fromBytes(jpeg(it.second)) } else emptyList(),
+            "ids" to if (compare) candidates.take(MAX_CANDIDATES).map { it.first } else emptyList(),
+            "labels" to if (compare) labels.take(MAX_CANDIDATES).map { it.take(60) } else emptyList(),
+        )
+        if (compare) fields["query"] = Blob.fromBytes(jpeg(query))
+        val done = run(fields) ?: return null
+        @Suppress("UNCHECKED_CAST")
+        val verdicts = (done.get("classification") as? List<Map<String, Any?>>)?.map { c ->
+            PhotoVerdict(
+                kind = c["kind"] as? String ?: PhotoVerdict.UNKNOWN,
+                animalType = c["animalType"] as? String ?: "",
+                phrase = c["phrase"] as? String ?: "",
+                byServer = true,
+            )
+        }?.takeIf { it.size == photos.take(MAX_PHOTOS).size }
+        @Suppress("UNCHECKED_CAST")
+        val matches = (done.get("results") as? List<Map<String, Any?>>).orEmpty().mapNotNull { r ->
+            val id = r["id"] as? String ?: return@mapNotNull null
+            Match(id, (r["similarity"] as? Number)?.toDouble() ?: 0.0, r["verdict"] as? String ?: "different")
+        }
+        return CheckResult(verdicts, matches, compare)
+    }
+
+    data class CheckResult(val photos: List<PhotoVerdict>?, val matches: List<Match>, val compared: Boolean)
+
     /** Embeddings (unit vectors) for up to 16 crops, for the Recognition test. Null on any failure. */
     suspend fun embed(crops: List<Bitmap>): List<List<Double>>? {
         val done = run(mapOf("kind" to "embed", "images" to crops.take(16).map { Blob.fromBytes(jpeg(it)) }, "ids" to emptyList<String>())) ?: return null
@@ -99,6 +137,9 @@ class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth
 
     companion object {
         const val MAX_CANDIDATES = 8
+        /** Photos per check job (the rules allow 6, like a post), sent at this size: CLIP looks at 224 px. */
+        const val MAX_PHOTOS = 6
+        const val CHECK_PX = 320
         /** The PC refreshes its status every 5 minutes; a little longer than that means it crashed. */
         const val ONLINE_WINDOW_MS = 390_000L
         const val TIMEOUT_MS = 15_000L

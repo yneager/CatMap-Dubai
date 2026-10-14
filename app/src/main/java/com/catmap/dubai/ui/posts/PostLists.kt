@@ -85,8 +85,11 @@ import kotlinx.coroutines.launch
 
 private data class ChooserItem(val icon: Int, val title: Int, val subtitle: Int, val color: Long, val route: String)
 
-/** Categories offered by the "+" sheet. Spotted and Other stay valid for existing posts but aren't offered. */
-private val chooserCategories = PostCategory.entries - setOf(PostCategory.SPOTTED, PostCategory.OTHER)
+/**
+ * Categories offered by the "+" sheet. Spotted and Other stay valid for existing posts but aren't offered. Street
+ * animals come first, shown here (only here) as "Animal Spotted".
+ */
+private val chooserCategories = listOf(PostCategory.STREET) + (PostCategory.entries - setOf(PostCategory.STREET, PostCategory.SPOTTED, PostCategory.OTHER))
 private const val SITTING_CHOICE = "choose-sitting"
 
 /**
@@ -99,7 +102,9 @@ fun PostChooserSheet(nav: NavHostController, onDismiss: () -> Unit) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     var sitting by rememberSaveable { mutableStateOf(false) }
-    val main = chooserCategories.map { c -> ChooserItem(categoryIcon(c), c.label, categoryHint(c), c.color, Routes.newPost(c.key)) }
+    val main = chooserCategories.map { c ->
+        ChooserItem(categoryIcon(c), if (c == PostCategory.STREET) R.string.chooser_street else c.label, categoryHint(c), c.color, Routes.newPost(c.key))
+    }
     val community = listOf(
         ChooserItem(CatMapIcons.RESCUE, R.string.report_emergency, R.string.chooser_rescue_hint, 0xFFC62828, Routes.newRescue()),
         ChooserItem(CatMapIcons.SITTER, R.string.chooser_sitter, R.string.chooser_sitter_hint, 0xFF5E35B1, SITTING_CHOICE),

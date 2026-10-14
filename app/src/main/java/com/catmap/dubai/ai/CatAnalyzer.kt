@@ -137,6 +137,11 @@ class CatAnalyzer {
         analysis.copy(catDetected = detected, catConfidence = catLabel, usedSegmentation = usedSegmentation, subjectCount = subjects.size.coerceAtLeast(1))
     }
 
+    /** ML Kit's on-device labels for a photo (text and confidence), for the photo check when the PC is offline. */
+    suspend fun labels(bitmap: Bitmap): List<Pair<String, Float>> = withContext(Dispatchers.Default) {
+        runCatching { labeler.process(InputImage.fromBitmap(bitmap, 0)).await() }.getOrDefault(emptyList()).map { it.text to it.confidence }
+    }
+
     /**
      * One segmentation at a time. ML Kit's segmenter crashes natively when a second request starts while one
      * is still running (which happened when a slow first run outlasted a short timeout), so calls queue here.

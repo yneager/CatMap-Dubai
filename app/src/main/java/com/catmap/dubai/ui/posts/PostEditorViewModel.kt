@@ -39,6 +39,10 @@ import com.catmap.dubai.data.now
 import com.catmap.dubai.util.ImageUtils
 import com.catmap.dubai.util.ProcessedPhoto
 import com.catmap.dubai.ai.PostAppearance
+import com.catmap.dubai.ai.PhotoCheck
+import com.catmap.dubai.ai.PhotoVerdict
+import com.catmap.dubai.data.AiServer
+import androidx.compose.runtime.mutableStateMapOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -52,7 +56,20 @@ sealed interface FormPhoto {
     }
 }
 
-enum class PostStep { TYPE, PHOTOS, DETAILS, PLACE, CONTACT, REVIEW }
+/**
+ * The post form's steps, in order. Location comes before photos, so a street animal that's already on the map is
+ * found (from place and photo) before anyone types the details.
+ */
+enum class PostStep { TYPE, PLACE, PHOTOS, DETAILS, CONTACT, REVIEW }
+
+/** The order before 0.0.8 (drafts saved by older versions stored the step's position in this list). */
+private val OLD_STEP_ORDER = listOf(PostStep.TYPE, PostStep.PHOTOS, PostStep.DETAILS, PostStep.PLACE, PostStep.CONTACT, PostStep.REVIEW)
+
+/** The step a saved draft was on: by name (0.0.8 on), or by position in the old order. */
+fun restoredStep(fields: Map<String, String>): PostStep =
+    fields["stepName"]?.let { name -> PostStep.entries.firstOrNull { it.name == name } }
+        ?: fields["step"]?.toIntOrNull()?.let { OLD_STEP_ORDER.getOrNull(it) }
+        ?: PostStep.TYPE
 
 /**
  * A nearby street-animal post that may show the same animal. [similarity] is the AI server's cosine score,
@@ -77,11 +94,28 @@ class PostEditorViewModel(
     var existing: Post? = null
         private set
 
-    /** Starts on details when the category was already chosen from the Post menu. */
-    var step by mutableIntStateOf(if (presetCategory != null) PostStep.PHOTOS.ordinal else PostStep.TYPE.ordinal)
+    /** Starts on the location when the category was already chosen from the Post menu. */
+    var step by mutableIntStateOf(if (presetCategory != null) PostStep.PLACE.ordinal else PostStep.TYPE.ordinal)
+
+    /** Steps this post goes through: street animals have no Contact step (people reach the poster in the app). */
+    val visibleSteps: List<PostStep> get() = PostStep.entries.filter { it != PostStep.CONTACT || categoryEnum != PostCategory.STREET }
+
+    /** The visible step after (or before) the current one; the current step if there's none. */
+    fun stepAfter(forward: Boolean): Int {
+        val visible = visibleSteps
+        val current = PostStep.entries[step]
+        val at = visible.indexOf(current).takeIf { it >= 0 } ?: visible.indexOfLast { it.ordinal < current.ordinal }
+        return visible.getOrNull(if (forward) at + 1 else at - 1)?.ordinal ?: step
+    }
 
     var category by mutableStateOf(presetCategory?.takeIf { c -> PostCategory.entries.any { it.key == c } } ?: PostCategory.LOST.key)
     var animalType by mutableStateOf(presetType?.takeIf { t -> AnimalType.entries.any { it.key == t } } ?: AnimalType.CAT.key)
+    /** Whether the person chose the animal type; until then the photo check fills it in. */
+    private var animalTypePicked = presetType != null
+    fun pickAnimalType(key: String) {
+        animalType = key
+        animalTypePicked = true
+    }
     var name by mutableStateOf("")
     var description by mutableStateOf("")
     var color by mutableStateOf("")
@@ -112,6 +146,16 @@ class PostEditorViewModel(
     var duplicates by mutableStateOf<List<Post>>(emptyList())
         private set
 
+    /** What each new photo shows (by [FormPhoto.Local.draftId]), from the photo check. */
+    val photoVerdicts = mutableStateMapOf<String, PhotoVerdict>()
+    var photoChecking by mutableStateOf(false)
+        private set
+    private var checkJob: Job? = null
+
+    /** The first new photo that isn't an animal, with what it shows: posting can't go on while it's there. */
+    val blockedPhoto: Pair<FormPhoto.Local, PhotoVerdict>?
+        get() = photos.filterIsInstance<FormPhoto.Local>().firstNotNullOfOrNull { p -> photoVerdicts[p.draftId]?.takeIf { it.blocks }?.let { p to it } }
+
     /** Street posts: nearby posts that may show the same animal, best first. */
     var sameAnimal by mutableStateOf<List<SameAnimalCandidate>>(emptyList())
         private set
@@ -130,7 +174,7 @@ class PostEditorViewModel(
     private var preparedFingerprint by mutableStateOf<List<Double>>(emptyList())
 
     private fun snapshotDraft() = SavedPostDraft(mapOf(
-        "step" to step.toString(), "category" to category, "animalType" to animalType,
+        "step" to step.toString(), "stepName" to PostStep.entries[step].name, "category" to category, "animalType" to animalType,
         "name" to name, "description" to description, "color" to color, "breed" to breed, "features" to features,
         "sex" to sex, "ageGroup" to ageGroup, "lat" to lat.toString(), "lng" to lng.toString(),
         "radius" to radius.toString(), "approximate" to approximate.toString(), "lastSeenAt" to lastSeenAt.toString(),
@@ -183,8 +227,10 @@ class PostEditorViewModel(
                     }?.let(photos::add)
                 }
             }
-            step = f["step"]?.toIntOrNull()?.coerceIn(0,PostStep.entries.lastIndex) ?: 0
+            step = restoredStep(f).ordinal
+            animalTypePicked = true
             savedDraft = null
+            checkPhotos()
         }
     }
 
@@ -250,17 +296,21 @@ class PostEditorViewModel(
                 if (processed != null) photos.add(FormPhoto.Local(processed)) else onError()
             }
             processing = false
+            checkPhotos()
         }
     }
 
     fun removePhoto(photo: FormPhoto) {
         photos.remove(photo)
         if (photo is FormPhoto.Remote) removedRemote.add(photo.id)
+        if (photo is FormPhoto.Local) photoVerdicts.remove(photo.draftId)
+        checkPhotos()
     }
 
     fun makeCover(photo: FormPhoto) {
         photos.remove(photo)
         photos.add(0, photo)
+        checkPhotos()
     }
 
     fun removeVideo() {
@@ -271,6 +321,9 @@ class PostEditorViewModel(
     /** Whether the current step has what it needs to continue. */
     fun canContinue(): Boolean = when (PostStep.entries[step]) {
         PostStep.PLACE -> lat != null && lng != null && Dubai.contains(lat!!, lng!!)
+        // Waits for the photo check, and stops while a photo shows a person or an object instead of an animal.
+        // Street animals also wait for the "already on the map?" answer, so it's seen before the details.
+        PostStep.PHOTOS -> !photoChecking && !sameAnimalChecking && blockedPhoto == null
         PostStep.DETAILS -> description.isNotBlank() || name.isNotBlank() || features.isNotBlank()
         PostStep.CONTACT -> when (contactMethod) {
             ContactMethod.PHONE.key -> phone.count { it.isDigit() } >= 7
@@ -301,50 +354,73 @@ class PostEditorViewModel(
     }
 
     /**
-     * For a new street-animal post: looks for open street posts of the same kind of animal within
-     * [SAME_ANIMAL_RADIUS_KM] and asks the AI server (pet-recognition-base on the owner's PC) whether the
-     * new photo shows one of them. If the server can't be reached, the on-device colour fingerprint ranks
-     * them instead, and only clearly similar ones are shown, marked as such.
+     * The photo check, run as soon as photos are added (and again when the cover changes). One job to the AI server
+     * on the owner's PC answers both questions:
+     *  - what each new photo shows (CLIP): a person or an object stops the post, and an animal fills in the animal
+     *    type if the person hasn't chosen one. When the PC is offline, ML Kit's on-device labels decide instead,
+     *    blocking only when they're fairly sure ([PhotoCheck.fromLabels]).
+     *  - new street-animal posts: whether the cover photo shows an open street post within [SAME_ANIMAL_RADIUS_KM]
+     *    (pet-recognition-base). Offline, the on-device colour fingerprint ranks them instead, and only clearly
+     *    similar ones are shown, marked as such.
      */
-    fun checkSameAnimal() {
-        if (postId != null || categoryEnum != PostCategory.STREET) { sameAnimal = emptyList(); return }
-        val photo = photos.filterIsInstance<FormPhoto.Local>().firstOrNull() ?: run { sameAnimal = emptyList(); return }
-        val la = lat ?: return
-        val ln = lng ?: return
-        val key = "${photo.draftId}|$la|$ln|$animalType"
-        if (key == sameAnimalKey) return
-        sameAnimalKey = key
-        viewModelScope.launch {
-            sameAnimalChecking = true
+    fun checkPhotos() {
+        val locals = photos.filterIsInstance<FormPhoto.Local>()
+        val unchecked = locals.filter { it.draftId !in photoVerdicts }
+        val cover = locals.firstOrNull()
+        val la = lat
+        val ln = lng
+        val street = postId == null && categoryEnum == PostCategory.STREET
+        val key = if (street && cover != null && la != null && ln != null) "${cover.draftId}|$la|$ln" else null
+        if (key == null) { sameAnimal = emptyList(); sameAnimalKey = null }
+        val compare = key != null && key != sameAnimalKey
+        if (unchecked.isEmpty() && !compare) return
+        checkJob?.cancel()
+        checkJob = viewModelScope.launch {
+            photoChecking = unchecked.isNotEmpty()
+            sameAnimalChecking = compare
             try {
-                val nearby = runCatching { container.posts.feedOnce(400) }.getOrDefault(emptyList()).asSequence()
-                    .filter { it.category == PostCategory.STREET.key && it.status == "open" && !it.hidden && it.animalType == animalType && it.photoIds.isNotEmpty() }
-                    .map { it to com.catmap.dubai.data.distanceKm(la, ln, it.lat, it.lng) }
+                // Street posts of any animal type: the type is only known once the photo is checked.
+                val nearby = if (!compare) emptyList() else runCatching { container.posts.feedOnce(400) }.getOrDefault(emptyList()).asSequence()
+                    .filter { it.category == PostCategory.STREET.key && it.status == "open" && !it.hidden && it.photoIds.isNotEmpty() }
+                    .map { it to com.catmap.dubai.data.distanceKm(la!!, ln!!, it.lat, it.lng) }
                     .filter { (_, d) -> d.isFinite() && d <= SAME_ANIMAL_RADIUS_KM }
-                    .sortedBy { it.second }.take(8).toList()
-                if (nearby.isEmpty()) { sameAnimal = emptyList(); return@launch }
-                val query = container.analyzer.cropSubject(photo.photo.analysis)
-                val crops = nearby.mapNotNull { (p, _) ->
+                    .sortedBy { it.second }.take(AiServer.MAX_CANDIDATES).toList()
+                val query = if (nearby.isEmpty()) null else container.analyzer.cropSubject(cover!!.photo.analysis)
+                val crops = if (query == null) emptyList() else nearby.mapNotNull { (p, _) ->
                     container.images.bitmap(p.photoIds.first(), thumb = false, target = 640)?.let { p.id to container.analyzer.cropSubject(it) }
                 }
-                val labels = crops.map { (id, _) -> nearby.first { it.first.id == id }.first.name.ifBlank { "Street ${animalType}" } }
-                val server = if (crops.isEmpty()) null else container.aiServer.compare(query, crops, labels)
-                val distance = nearby.associate { (p, d) -> p.id to d }
-                sameAnimal = if (server != null) {
-                    server.filter { it.verdict == "same" || it.verdict == "maybe" }.mapNotNull { m ->
-                        nearby.firstOrNull { it.first.id == m.id }?.let { (p, d) -> SameAnimalCandidate(p, m.similarity, m.verdict, true, d) }
-                    }.sortedByDescending { it.similarity }
-                } else {
-                    val mine = withContext(Dispatchers.Default) { PostAppearance.describe(photo.photo.analysis) }
-                    nearby.map { (p, d) -> SameAnimalCandidate(p, PostAppearance.similarity(mine, p.fingerprint), "maybe", false, distance.getValue(p.id)) }
-                        .filter { it.similarity >= LOCAL_MAYBE }.sortedByDescending { it.similarity }.take(3)
+                val labels = crops.map { (id, _) -> nearby.first { it.first.id == id }.first.let { p -> p.name.ifBlank { "Street ${p.animalType}" } } }
+                val server = container.aiServer.check(unchecked.map { it.photo.analysis }, query, crops, labels)
+                val verdicts = server?.photos ?: unchecked.map { PhotoCheck.fromLabels(container.analyzer.labels(it.photo.analysis)) }
+                unchecked.zip(verdicts).forEach { (p, v) -> photoVerdicts[p.draftId] = v }
+                // An animal on the cover photo fills in the type, unless the person already chose one.
+                cover?.let { photoVerdicts[it.draftId] }?.takeIf { it.isAnimal && it.animalType.isNotEmpty() && !animalTypePicked }?.let { animalType = it.animalType }
+                if (compare) {
+                    sameAnimalKey = key
+                    val distance = nearby.associate { (p, d) -> p.id to d }
+                    sameAnimal = if (server != null && server.compared) {
+                        server.matches.filter { it.verdict == "same" || it.verdict == "maybe" }.mapNotNull { m ->
+                            nearby.firstOrNull { it.first.id == m.id && it.first.animalType == animalType }?.let { (p, d) -> SameAnimalCandidate(p, m.similarity, m.verdict, true, d) }
+                        }.sortedByDescending { it.similarity }
+                    } else if (nearby.isEmpty()) emptyList() else {
+                        val mine = withContext(Dispatchers.Default) { PostAppearance.describe(cover!!.photo.analysis) }
+                        nearby.filter { it.first.animalType == animalType }
+                            .map { (p, _) -> SameAnimalCandidate(p, PostAppearance.similarity(mine, p.fingerprint), "maybe", false, distance.getValue(p.id)) }
+                            .filter { it.similarity >= LOCAL_MAYBE }.sortedByDescending { it.similarity }.take(3)
+                    }
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 AppErrors.report(e)
-                sameAnimal = emptyList()
+                // A failed check never traps the person: unchecked photos count as "couldn't tell".
+                unchecked.forEach { photoVerdicts.putIfAbsent(it.draftId, PhotoVerdict(PhotoVerdict.UNKNOWN)) }
+                if (compare) sameAnimal = emptyList()
             } finally {
-                sameAnimalChecking = false
+                // A check replaced by a newer one (another photo added) leaves the newer one's progress alone.
+                if (checkJob === coroutineContext[Job]) {
+                    photoChecking = false
+                    sameAnimalChecking = false
+                }
             }
         }
     }

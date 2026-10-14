@@ -163,16 +163,18 @@ fun PostEditorScreen(nav: NavHostController, postId: String?, presetCategory: St
         }
     }
 
-    val steps = PostStep.entries
-    val step = steps[vm.step]
+    val step = PostStep.entries[vm.step]
+    // Street animals skip Contact, so the progress counts only the steps this post goes through.
+    val steps = vm.visibleSteps
+    val position = steps.indexOf(step).coerceAtLeast(0)
     var forward by remember { mutableStateOf(true) }
     fun go(to: Int) {
         forward = to > vm.step
-        vm.step = to.coerceIn(0, steps.lastIndex)
+        vm.step = to.coerceIn(0, PostStep.entries.lastIndex)
         vm.saveDraftNow()
-        // Street animals: start the same-animal check as soon as photo and place are known.
-        if (vm.step > PostStep.PLACE.ordinal) vm.checkSameAnimal()
-        if (steps[vm.step] == PostStep.REVIEW) vm.checkDuplicates(me)
+        // From the photos on, the photo check (and the street-animal "already on the map?" check) is up to date.
+        if (vm.step >= PostStep.PHOTOS.ordinal) vm.checkPhotos()
+        if (PostStep.entries[vm.step] == PostStep.REVIEW) vm.checkDuplicates(me)
     }
     val addedToExisting = stringResource(R.string.same_animal_added)
     var askSameAnimal by remember { mutableStateOf<SameAnimalCandidate?>(null) }
@@ -211,7 +213,7 @@ fun PostEditorScreen(nav: NavHostController, postId: String?, presetCategory: St
             },
         )
     }
-    BackHandler(enabled = vm.step > 0 && !vm.publishing) { go(vm.step - 1) }
+    BackHandler(enabled = position > 0 && !vm.publishing) { go(vm.stepAfter(false)) }
 
     Scaffold(
         topBar = {
@@ -220,10 +222,10 @@ fun PostEditorScreen(nav: NavHostController, postId: String?, presetCategory: St
                     stringResource(if (postId == null) R.string.post_new else R.string.edit_post),
                     onBack = { nav.popBackStack() },
                 )
-                val progress by animateFloatAsState((vm.step + 1f) / steps.size, tween(400), label = "progress")
+                val progress by animateFloatAsState((position + 1f) / steps.size, tween(400), label = "progress")
                 LinearProgressIndicator(progress = { progress }, Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(50)))
                 Text(
-                    stringResource(R.string.step_x_of_y, vm.step + 1, steps.size) + " · " + stringResource(stepTitle(step)),
+                    stringResource(R.string.step_x_of_y, position + 1, steps.size) + " · " + stringResource(stepTitle(step)),
                     Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
@@ -236,11 +238,11 @@ fun PostEditorScreen(nav: NavHostController, postId: String?, presetCategory: St
                     Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 16.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    if (vm.step > 0) {
-                        OutlinedButton(onClick = { go(vm.step - 1) }, enabled = !vm.publishing, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.back)) }
+                    if (position > 0) {
+                        OutlinedButton(onClick = { go(vm.stepAfter(false)) }, enabled = !vm.publishing, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.back)) }
                     }
                     if (step != PostStep.REVIEW) {
-                        Button(onClick = { go(vm.step + 1) }, enabled = vm.canContinue() && !vm.processing, modifier = Modifier.weight(1f)) {
+                        Button(onClick = { go(vm.stepAfter(true)) }, enabled = vm.canContinue() && !vm.processing, modifier = Modifier.weight(1f)) {
                             Text(stringResource(R.string.next))
                         }
                     } else {
@@ -250,8 +252,8 @@ fun PostEditorScreen(nav: NavHostController, postId: String?, presetCategory: St
                                 val same = vm.unresolvedSameAnimal
                                 if (same != null) askSameAnimal = same else publishNow()
                             },
-                            // Street posts wait for the same-animal check, so a duplicate can't slip through.
-                            enabled = !vm.publishing && !vm.sameAnimalChecking && me != null,
+                            // Waits for the photo checks, so a duplicate street animal or a photo of no animal can't slip through.
+                            enabled = !vm.publishing && !vm.sameAnimalChecking && !vm.photoChecking && vm.blockedPhoto == null && me != null,
                             modifier = Modifier.weight(1f),
                         ) {
                             if (vm.publishing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
@@ -282,7 +284,7 @@ fun PostEditorScreen(nav: NavHostController, postId: String?, presetCategory: St
             ) {
                 when (s) {
                     PostStep.TYPE -> TypeStep(vm)
-                    PostStep.PHOTOS -> PhotosStep(vm)
+                    PostStep.PHOTOS -> PhotosStep(vm, nav, onSameAnimal = ::addToExisting)
                     PostStep.DETAILS -> DetailsStep(vm)
                     PostStep.PLACE -> PlaceStep(vm, nav)
                     PostStep.CONTACT -> ContactStep(vm)
@@ -329,7 +331,7 @@ private fun TypeStep(vm: PostEditorViewModel) {
     Text(stringResource(R.string.which_animal), style = MaterialTheme.typography.titleMedium)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AnimalType.entries.forEach { t ->
-            FilterChip(vm.animalType == t.key, { vm.animalType = t.key }, label = { IconLabel(t.icon, stringResource(t.label)) })
+            FilterChip(vm.animalType == t.key, { vm.pickAnimalType(t.key) }, label = { IconLabel(t.icon, stringResource(t.label)) })
         }
     }
 }
@@ -365,7 +367,7 @@ fun ChoiceTile(selected: Boolean, title: String, subtitle: String, icon: Int, co
 }
 
 @Composable
-private fun PhotosStep(vm: PostEditorViewModel) {
+private fun PhotosStep(vm: PostEditorViewModel, nav: NavHostController, onSameAnimal: (SameAnimalCandidate) -> Unit) {
     val context = LocalContext.current
     val snackbar = LocalSnackbar.current
     val scope = rememberCoroutineScope()
@@ -416,10 +418,13 @@ private fun PhotosStep(vm: PostEditorViewModel) {
     } else {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(vm.photos, key = { _, p -> if (p is FormPhoto.Remote) p.id else (p as FormPhoto.Local).draftId }, contentType = { _, _ -> "editor-photo" }) { i, p ->
-                Box(Modifier.size(132.dp).animateItem()) {
+                val verdict = (p as? FormPhoto.Local)?.let { vm.photoVerdicts[it.draftId] }
+                Column(Modifier.width(132.dp).animateItem(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(Modifier.size(132.dp)) {
+                    val frame = if (verdict?.blocks == true) Modifier.border(3.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(18.dp)) else Modifier
                     when (p) {
-                        is FormPhoto.Remote -> RemoteImage(p.id, Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp)))
-                        is FormPhoto.Local -> LocalBitmap(p.preview, Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp)))
+                        is FormPhoto.Remote -> RemoteImage(p.id, Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp)).then(frame))
+                        is FormPhoto.Local -> LocalBitmap(p.preview, Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp)).then(frame))
                     }
                     PhotoAction(Icons.Default.Close, stringResource(R.string.remove), Modifier.align(Alignment.TopEnd)) { vm.removePhoto(p) }
                     if (i == 0) {
@@ -430,10 +435,21 @@ private fun PhotosStep(vm: PostEditorViewModel) {
                         PhotoAction(Icons.Default.Star, stringResource(R.string.make_cover), Modifier.align(Alignment.BottomStart)) { vm.makeCover(p) }
                     }
                 }
+                // What the photo check saw, under each new photo.
+                if (verdict != null && verdict.kind != com.catmap.dubai.ai.PhotoVerdict.UNKNOWN && verdict.phrase.isNotEmpty()) {
+                    Text(
+                        verdict.phrase, maxLines = 2, style = MaterialTheme.typography.labelSmall,
+                        color = if (verdict.blocks) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                }
             }
         }
+        PhotoCheckStatus(vm)
         Text(stringResource(R.string.photos_n_of_max, vm.photos.size, PostRepository.MAX_PHOTOS), style = MaterialTheme.typography.labelMedium)
     }
+    // Street animals: is this animal already on the map? Shown here, before any details are typed.
+    SameAnimalCard(vm, nav, onSameAnimal)
     SectionHeader(stringResource(R.string.video_optional))
     if (container.videos.enabled) {
         val hasVideo = vm.videoUri != null || vm.videoPath.isNotBlank()
@@ -467,6 +483,32 @@ private fun PhotoAction(icon: androidx.compose.ui.graphics.vector.ImageVector, l
     ) { Icon(icon, label, tint = Color.White, modifier = Modifier.size(18.dp)) }
 }
 
+/** "Checking your photo...", or why a photo stops the post (it shows a person or an object, not an animal). */
+@Composable
+private fun PhotoCheckStatus(vm: PostEditorViewModel) {
+    if (vm.photoChecking) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.width(10.dp))
+            Text(stringResource(R.string.photo_checking), style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+    val blocked = vm.blockedPhoto?.second ?: return
+    Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.errorContainer)) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
+            Icon(Icons.Outlined.WarningAmber, null, tint = MaterialTheme.colorScheme.onErrorContainer)
+            Spacer(Modifier.width(10.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    if (blocked.phrase.isNotEmpty()) stringResource(R.string.photo_not_animal, blocked.phrase) else stringResource(R.string.photo_not_animal_unnamed),
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+                Text(stringResource(R.string.photo_not_animal_action), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DetailsStep(vm: PostEditorViewModel) {
@@ -481,7 +523,7 @@ private fun DetailsStep(vm: PostEditorViewModel) {
     Text(stringResource(R.string.which_animal), style = MaterialTheme.typography.labelLarge)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AnimalType.entries.forEach { t ->
-            FilterChip(vm.animalType == t.key, { vm.animalType = t.key }, label = { IconLabel(t.icon, stringResource(t.label)) })
+            FilterChip(vm.animalType == t.key, { vm.pickAnimalType(t.key) }, label = { IconLabel(t.icon, stringResource(t.label)) })
         }
     }
     OutlinedTextField(vm.name, { vm.name = it.take(60) }, label = { Text(stringResource(R.string.animal_name_optional)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -634,7 +676,7 @@ private fun ReviewStep(vm: PostEditorViewModel, nav: NavHostController, onSameAn
     val me by container.session.profile.collectAsStateWithLifecycle()
     Text(stringResource(R.string.looks_good), style = MaterialTheme.typography.headlineSmall)
     // Also covers reaching Review from a restored draft or the edit shortcuts (the check is keyed, so it runs once).
-    LaunchedEffect(Unit) { vm.checkSameAnimal() }
+    LaunchedEffect(Unit) { vm.checkPhotos() }
     SameAnimalCard(vm, nav, onSameAnimal)
     val preview = vm.previewPost(me)
     val localCover = (vm.photos.firstOrNull() as? FormPhoto.Local)?.preview
@@ -643,7 +685,7 @@ private fun ReviewStep(vm: PostEditorViewModel, nav: NavHostController, onSameAn
         cover = localCover?.let { bmp -> { m: Modifier -> LocalBitmap(bmp, m) } },
     )
     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        listOf(PostStep.PHOTOS, PostStep.DETAILS, PostStep.PLACE, PostStep.CONTACT).forEach { st ->
+        vm.visibleSteps.filter { it in setOf(PostStep.PLACE, PostStep.PHOTOS, PostStep.DETAILS, PostStep.CONTACT) }.forEach { st ->
             TextButton(onClick = { vm.step = st.ordinal }) {
                 Icon(Icons.Default.Edit, null, Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))

@@ -93,4 +93,9 @@ S = [
 ('ai_server_ok','Online: %1$s','Online: %1$s'), # TODO-AR
 ('ai_server_down','Offline: start the CatMap AI Server on the PC','Offline: start the CatMap AI Server on the PC'), # TODO-AR
 ('ai_server_never','The CatMap AI Server has never connected. Run tools/demo/create-demo-accounts.mjs, then start.cmd in the cat-server folder on the PC.','The CatMap AI Server has never connected. Run tools/demo/create-demo-accounts.mjs, then start.cmd in the cat-server folder on the PC.'), # TODO-AR
+('chooser_street','Animal Spotted','Animal Spotted'), # TODO-AR
+('photo_checking','Checking your photo…','Checking your photo…'), # TODO-AR
+('photo_not_animal','This looks like %1$s, not an animal.','This looks like %1$s, not an animal.'), # TODO-AR
+('photo_not_animal_unnamed',"This photo doesn't look like an animal.","This photo doesn't look like an animal."), # TODO-AR
+('photo_not_animal_action','Remove it and add a photo of the animal to continue.','Remove it and add a photo of the animal to continue.'), # TODO-AR
 ]

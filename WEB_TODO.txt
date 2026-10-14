@@ -12,4 +12,23 @@ Format for each item:
 
 Pending
 -------
-(nothing yet: the web app was built from the Android app as of 14 Oct 2026, v0.0.7)
+- [14 Oct 2026] "+" menu: the street-animal tile is now first and reads "Animal Spotted" (string chooser_street). Only
+  the menu changes; posts, filters and pills still say "Street animal". Where: ui/posts/PostLists.kt
+  (chooserCategories, PostChooserSheet). Web notes: web/src/ui/posts/PostChooser.tsx; the string is already in the
+  generated web JSON.
+- [14 Oct 2026] Post form order is now Type, Where & when, Photos, Details, Contact, Review (was Type, Photos, Details,
+  Place, Contact, Review). From the menu it starts at Where & when. Street animals (Animal Spotted) skip Contact
+  entirely: 5 steps, contact stays "in app". Drafts now save the step by name ("stepName"); older drafts map their
+  old step position (restoredStep). Where: ui/posts/PostEditorViewModel.kt (PostStep, visibleSteps, stepAfter,
+  restoredStep), PostEditorScreen.kt. Web notes: the web editor's step list, progress label and draft restore.
+- [14 Oct 2026] Photo check: when photos are added, one aiJobs job of kind "check" (field "photos": up to 6 JPEGs at
+  320 px, plus query/images/ids/labels for the street-animal comparison when there are nearby street posts) asks the
+  PC what each photo shows. The PC writes "classification": [{kind: animal|person|object, animalType, phrase, score}]
+  and "results". A person or an object blocks Next and Publish, with "This looks like <phrase>, not an animal." and
+  the photo outlined in red. An animal fills in the animal type if the person hasn't picked one. The "Already on the
+  map?" card now appears on the Photos step, and Next waits for it. When the PC is offline, Android falls back to
+  ML Kit labels (ai/PhotoCheck.kt): the web has no ML Kit, so offline it should allow the photo ("unknown"). Rules
+  changed: kind "check", owner key "photos" (list of at most 6), worker key "classification". Where:
+  data/AiServer.kt (check), ai/PhotoCheck.kt, PostEditorViewModel.checkPhotos, PostEditorScreen (PhotoCheckStatus,
+  SameAnimalCard on the Photos step), firestore.rules. Web notes: web/src/data/AiServer.ts and the editor; strings
+  photo_checking, photo_not_animal, photo_not_animal_unnamed, photo_not_animal_action.
