@@ -1,7 +1,93 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 14 Oct 2026 (Android **v0.0.8 released** at `2b07278`: PC photo check (CLIP), location-first posting and "Animal Spotted"; CI and the release passed. The web app is reviewed, committed and live at https://catmap-dubai.web.app; Android changes it still lacks are in `WEB_TODO.txt`. The last Android release is v0.0.7 at `356e18d`. Web round 2 (install-only app, v0.0.8 parity, map fix) done by Codex and reviewed by Claude; uncommitted, not deployed).**
+and what's left. **Last updated: 16 Oct 2026 (lost-to-reunited workflow with AI matching on Android, web and the PC worker; local only: uncommitted, nothing deployed or pushed. **Deploy the rules before releasing** (see below). Last release v0.0.8 at `2b07278`; next is v0.0.9).**
+
+## 16 October 2026 - lost → sighting → AI match → chat → reunion (Claude)
+
+The owner gave a prompt (`Desktop\prompt5.txt`) for advanced animal recognition and the complete lost-to-reunited
+workflow. Full design: **`docs/MATCHING.md`**. Measured AI results: **`docs/AI_EVALUATION.md`**.
+
+**What it does**
+* Every new lost report and sighting (found / Animal Spotted / street) is matched **in both directions** (a sighting
+  posted first is found when the report comes). Results are `matches/{lostId}__{sightingId}` documents: one per
+  pair, seen only by the two people, labelled Strong possible / Possible / Weak (never a percentage), with plain
+  reasons (photo similarity, distance, time).
+* The owner gets "Possible sighting of Simba!", the reporter "Your sighting may help find Simba" (fixed ids, once
+  per pair, possible/strong only, top 3; existing notification settings and quiet hours apply).
+* Review screen (`match/{id}`): both photos side by side (tap to enlarge), details table, why, features to check.
+  Owner: might be mine / not mine / request more info / message. Reporter: same animal / different / message.
+  Rejected pairs are remembered and never suggested again. Nothing is ever merged or confirmed automatically.
+* Chat: the existing one-to-one chat is reused, with one "Possible match" card (both photos) per match.
+* "I posted a sighting of this animal" on someone's lost report links your own sighting.
+* **Mark as reunited** asks how (CatMap sighting → which one / came home on its own / another way), one
+  transaction, once; reporter thanked; Reunited banner shows "reported by the owner" / "confirmed by the person who
+  saw them" / "checked by a moderator" (new moderator button). Confirmation screen with privacy-safe "Share the good
+  news". Recently reunited lost pets show 7 days on the map as a green marker with a tick. Report history section.
+  Admin analytics: match counts by strength, owners' answers, reunions credited/confirmed/verified.
+* Reopening a report clears `resolution`; the old Android "possible match" broadcast to every lost owner within
+  5 km was replaced by this.
+
+**AI (PC worker, `Desktop\cat-server`, not in git)**
+* `recovery.py` (new): live listener on recent posts; DETR ResNet-50 (`Xenova/detr-resnet-50`, Apache-2.0, ~170 MB,
+  downloaded by `start.cmd`) finds and crops the animal; pet-recognition-base embeds **each photo** (stored in
+  `postEmbeddings/{postId}`, versioned); scores with `matching.py`; writes matches and alerts; startup catch-up.
+  `recognition.py` (model + detector, shared with the evaluation), `fingerprint.py` (the phone's fingerprint, exact).
+* Thresholds are now measured, per species (cats strong ≥ 0.88, possible ≥ 0.79, weak ≥ 0.68; dogs 0.89/0.66/0.27).
+  The "already on the map?" street check uses the cat strong/possible values (was 0.75/0.60).
+* Key findings: AI top-1 0.95 vs colour fingerprint 0.18 on DogFaceNet (unseen dogs); several photos per animal
+  help; colour fusion doesn't (weight 0); **same-breed cats look alike to the model** (mean 0.53), so cat labels are
+  strict and **cat recall is unmeasured** (no labelled cat set). PetFace not used (non-commercial licence).
+* `--no-matching` turns the background matcher off. Window logs each match.
+
+**PC offline:** the publishing phone (and the owner's phone when the report is opened) pairs posts by colour
+fingerprint with the same rules (`ai/MatchEngine.kt`, `web/src/ai/MatchEngine.ts`), never "strong"; the PC
+re-scores them when it's back.
+
+**Files**
+* Android: `ai/MatchEngine.kt`, `data/MatchRepository.kt`, `ui/matches/MatchUi.kt`, `ui/matches/MatchReviewScreen.kt`
+  (new); `data/model/Community.kt` (PostMatch, MatchTier, Resolution, Post.resolution/resolvedMatchId,
+  Message.matchId/matchPhotoId), `PostRepository.kt`, `ChatRepository.kt`, `NotificationRepository.kt`,
+  `AdminRepository.kt`, `AdminAnalytics.kt`, `notifications/Notifications.kt`, `ui/posts/PostDetailScreen.kt`,
+  `PostEditorViewModel.kt` (afterPublish), `ui/messages/MessagesScreens.kt`, `ui/map/MapScreen.kt`, `MapMarkers.kt`,
+  `ui/explore/Filtering.kt`, `ui/admin/AnalyticsPanel.kt`, navigation, `AppContainer.kt`.
+* Web: `src/ai/MatchEngine.ts`, `src/data/MatchRepository.ts`, `src/ui/matches/MatchScreens.tsx` (new); detail,
+  editor, chat, notifications, map, filter, theme CSS, regenerated models; `e2e/reunion.spec.ts` (new),
+  `e2e/flows.spec.ts` (new reunite dialog).
+* Shared: `firestore.rules` (matches, postEmbeddings, worker match alerts, post resolution fields),
+  `tools/rulestest/test.mjs` (+48 checks), `tools/strings/strings_j.py` (106 strings, **Arabic written by Claude,
+  marked AR-REVIEW**), `tools/matching/cases.json`, `docs/MATCHING.md`, `docs/AI_EVALUATION.md`,
+  `docs/evaluation/` (result JSONs, mistake images with attribution).
+* PC: `recovery.py`, `recognition.py`, `matching.py`, `fingerprint.py`, `server.py`, `start.cmd`, `eval/`
+  (`evaluate.py`, `lookalikes.py`, `prepare_dogfacenet.py`, `requirements-eval.txt`), `tests/`.
+
+**Verified (all local)**
+* Rules suite **325/325** (was 277). Android `MatchEngineTest` 4/4 (all 201 shared cases equal to Python).
+* PC end-to-end on the Firestore emulator with real photos (`tests/test_recovery_e2e.py`) **20/20**: match + alerts,
+  look-alike never strong, rejection sticks, sighting-first order, reunited report not matched, restart without
+  duplicates, photo-less old posts. Python unit tests (matching, fingerprint exact to Android).
+* Web: typecheck, lint, **42/42** unit tests, strings check; e2e **36 passed, 8 skipped (by design)** in Chromium +
+  WebKit, including the new two-account `reunion.spec.ts` (review, reject, chat card reused, reply, reporter
+  confirms, reunion credited once, banner).
+* Android: `testDebugUnitTest` **78/78**, `verifyRoborazziDebug` passed, `lintDebug` 0 errors (one new warning,
+  LogNotTimber, same category as before), `assembleDebug` OK. Web `npm run build` OK.
+* Worker e2e scores: the same dog in two photos 0.95 → strong; the look-alike dog 0.51 → weak, no alert.
+
+**Not done / limits**
+* Not run on a real phone or against production; Android UI not driven on the emulator this time (web e2e covers
+  the same flow and documents).
+* Cat recall unmeasured (`docs/AI_EVALUATION.md` §8 says how to measure with ~30 local cats).
+* Community `cats` profiles (v1 sightings) are not part of the matching; only posts.
+* Arabic for the new strings needs a native check (AR-REVIEW).
+
+**Owner's next steps**
+1. **Deploy the rules first** (`cat-server\setup.cmd`, or `npx.cmd -y firebase-tools@latest deploy --only firestore`):
+   new Android/web builds write `resolution`/`resolvedMatchId` on every new post, which the current production rules
+   refuse.
+2. Restart `cat-server\start.cmd` once (downloads the detector, ~170 MB).
+3. Review, then OK the commit/push and the v0.0.9 release; `web\publish.cmd` for the web app.
+4. Collect a small labelled cat set and re-run `eval\evaluate.py` to set the cat thresholds from real recall.
+
 
 ## 14 October 2026 - web map fix and Codex brief, round 2 (Claude)
 

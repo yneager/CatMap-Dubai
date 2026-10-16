@@ -184,8 +184,9 @@ private fun PostDetail(nav: NavHostController, post: Post) {
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
     var menu by remember { mutableStateOf(false) }
     val saved = post.id in favorites
-    val matchingFeed by remember { container.communityFeed }.collectAsStateWithLifecycle(emptyList())
-    val possibleMatches = remember(post,matchingFeed) { com.catmap.dubai.ai.PostAppearance.matches(post,matchingFeed) }
+    val myMatches by remember(post.id, uid) { container.matches.forPost(uid, post.id) }.collectAsStateWithLifecycle(emptyList())
+    val creditedMatch = myMatches.firstOrNull { it.id == post.resolvedMatchId }
+    val searchPost = com.catmap.dubai.ai.MatchEngine.isLost(post) || com.catmap.dubai.ai.MatchEngine.isSighting(post)
 
     Scaffold { padding ->
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + 32.dp)) {
@@ -250,6 +251,7 @@ private fun PostDetail(nav: NavHostController, post: Post) {
                             if (post.color.isNotBlank()) InfoChip(CatMapIcons.COLOUR, post.color)
                             if (post.breed.isNotBlank()) InfoChip(CatMapIcons.BREED, post.breed)
                         }
+                        com.catmap.dubai.ui.matches.ReunionBanner(post, creditedMatch)
                     }
                 }
             }
@@ -273,17 +275,12 @@ private fun PostDetail(nav: NavHostController, post: Post) {
                 }
             }
 
+            // ---- Possible matches (lost report <-> sightings), for the two people involved ----
+            if (searchPost) item { com.catmap.dubai.ui.matches.PostMatchesSection(nav, post) }
+            // Someone who posted a sighting can link it to this lost report themselves.
+            if (category == PostCategory.LOST && !isOwner && post.status == PostStatus.OPEN.key) item { LinkSightingButton(nav, post) }
+
             // ---- Adoption details and requests ----
-            if (possibleMatches.isNotEmpty()) item {
-                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SectionHeader(stringResource(R.string.possible_post_matches))
-                    possibleMatches.forEach { match ->
-                        OutlinedButton(onClick = { nav.navigate(Routes.post(match.post.id)) }, modifier = Modifier.fillMaxWidth()) {
-                            Text(postTitle(match.post) + " · " + if(match.photoBased) stringResource(R.string.match_confidence, (match.score*100).toInt()) else stringResource(R.string.metadata_match))
-                        }
-                    }
-                }
-            }
             if (category == PostCategory.ADOPTION) item {
                 AdoptionSection(nav, post, isOwner, myRequest, onRequest = { dialog = "adopt" })
             }
@@ -433,6 +430,7 @@ private fun PostDetail(nav: NavHostController, post: Post) {
                     runner.run(R.string.deleted) { container.posts.deleteUpdate(post, u, container.images) }
                 }
             }
+            if (category.isSearch && list != null) item { com.catmap.dubai.ui.matches.ReportHistory(post, list, myMatches) }
         }
     }
 
@@ -441,11 +439,8 @@ private fun PostDetail(nav: NavHostController, post: Post) {
         "update" -> AddUpdateDialog(post) { dialog = null }
         "adopt" -> AdoptionRequestDialog(post) { dialog = null }
         "video" -> VideoDialog(post.videoPath) { dialog = null }
-        "reunited" -> ConfirmDialog(
-            stringResource(R.string.mark_reunited), stringResource(R.string.mark_reunited_body), stringResource(R.string.confirm),
-            onConfirm = { runner.run(R.string.reunited_thanks) { container.posts.setStatus(post, PostStatus.REUNITED, me ?: return@run) } },
-            onDismiss = { dialog = null },
-        )
+        "reunited" -> com.catmap.dubai.ui.matches.ReuniteDialog(post, myMatches, onDismiss = { dialog = null }, onDone = { dialog = "celebrate" })
+        "celebrate" -> com.catmap.dubai.ui.matches.ReunitedCelebration(post) { dialog = null }
         "delete" -> ConfirmDialog(
             stringResource(R.string.delete_post), stringResource(R.string.delete_post_body), stringResource(R.string.delete),
             onConfirm = {
@@ -469,6 +464,40 @@ private fun PostDetail(nav: NavHostController, post: Post) {
             }, onDismiss = { dialog = null },
         )
     }
+}
+
+/** "I posted a sighting of this animal": links one of the person's own open sightings to this lost report. */
+@Composable
+private fun LinkSightingButton(nav: NavHostController, lost: Post) {
+    val container = LocalContainer.current
+    val runner = rememberRunner()
+    val me by container.session.profile.collectAsStateWithLifecycle()
+    val uid = container.session.uid.orEmpty()
+    val mine by remember(uid) { container.posts.postsBy(uid) }.collectAsStateWithLifecycle(emptyList())
+    val sightings = mine.filter { com.catmap.dubai.ai.MatchEngine.isSighting(it) && it.status == PostStatus.OPEN.key && it.animalType == lost.animalType }
+    var open by remember { mutableStateOf(false) }
+    if (sightings.isEmpty()) return
+    OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) { Text(stringResource(R.string.link_my_sighting)) }
+    if (open) AlertDialog(
+        onDismissRequest = { open = false },
+        title = { Text(stringResource(R.string.link_my_sighting)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.link_my_sighting_body), style = MaterialTheme.typography.bodyMedium)
+                sightings.forEach { s ->
+                    OutlinedButton(onClick = {
+                        runner.run(R.string.match_told_owner, onSuccess = { open = false }) {
+                            val id = container.matches.linkSighting(lost, s, me ?: return@run)
+                            nav.navigate(Routes.match(id))
+                        }
+                    }, enabled = !runner.busy, modifier = Modifier.fillMaxWidth()) {
+                        Text(postTitle(s) + " · " + Dubai.nameOf(s.neighborhood), maxLines = 1)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { open = false }) { Text(stringResource(R.string.cancel)) } },
+    )
 }
 
 private fun openOnMap(nav: NavHostController, post: Post) {

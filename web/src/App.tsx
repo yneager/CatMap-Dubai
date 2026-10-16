@@ -25,6 +25,7 @@ const Auth = lazy(() => import('./ui/auth/AuthScreens')),
   Explore = lazy(() => import('./ui/explore/ExploreScreen')),
   Editor = lazy(() => import('./ui/posts/PostEditorScreen')),
   Detail = lazy(() => import('./ui/posts/PostDetailScreen')),
+  MatchReview = lazy(() => import('./ui/matches/MatchScreens')),
   Poster = lazy(() => import('./ui/posts/PosterScreen')),
   Lists = lazy(() => import('./ui/posts/PostLists')),
   Messages = lazy(() => import('./ui/messages/MessagesScreens')),
@@ -54,7 +55,7 @@ function Gate({
   if (!ready) return <Loading />;
   const raw = location.pathname;
   const detail =
-    /^\/(post|post-edit|poster|cat|cat-edit|cat-merge|photo|sighting|sighting-edit|rescue|station|sitter|book|user|chat|chat-with)\//.test(
+    /^\/(post|match|post-edit|poster|cat|cat-edit|cat-merge|photo|sighting|sighting-edit|rescue|station|sitter|book|user|chat|chat-with)\//.test(
       raw,
     );
   if (
@@ -220,6 +221,7 @@ export default function App() {
             <Route key={path} path={'/' + path} element={gate(<Explore />)} />
           ))}
           <Route path="/post/:id" element={gate(<Detail />)} />
+          <Route path="/match/:id" element={gate(<MatchReview />)} />
           <Route path="/post-new" element={gate(<Editor key="new" />)} />
           <Route path="/post-edit/:id" element={gate(<Editor key="edit" />)} />
           <Route path="/poster/:id" element={gate(<Poster />)} />

@@ -23,6 +23,8 @@ export interface MapPoint {
   animalType?: string;
   coat?: string;
   pulse?: boolean;
+  /** A lost pet reunited in the last week: green, with a tick. */
+  reunited?: boolean;
 }
 export function circlePolygon(lat: number, lng: number, radius: number) {
   const ring = Array.from({ length: 65 }, (_, i) => {
@@ -103,8 +105,9 @@ async function marker(point: MapPoint) {
     ctx.fill();
     return ctx.getImageData(0, 0, 76, 96);
   }
-  const ring =
-    point.kind === 'post'
+  const ring = point.reunited
+    ? '#2E7D32'
+    : point.kind === 'post'
       ? (enums.PostCategory.find((c) => c.key === point.category)?.color ?? '#546E7A')
       : point.kind === 'station'
         ? '#00897B'
@@ -136,6 +139,22 @@ async function marker(point: MapPoint) {
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(catMapSvg(name, true));
   await img.decode();
   ctx.drawImage(img, 11, 11, 24, 24);
+  if (point.reunited) {
+    ctx.fillStyle = '#2E7D32';
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(37, 9, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(34, 9);
+    ctx.lineTo(36.5, 11.5);
+    ctx.lineTo(40.5, 6.5);
+    ctx.stroke();
+  }
   return ctx.getImageData(0, 0, 92, 108);
 }
 export default function CommunityMap({
@@ -328,7 +347,7 @@ export default function CommunityMap({
     void (async () => {
       const features = [];
       for (const p of points) {
-        const icon = `${p.kind}:${p.category ?? p.coat ?? ''}:${p.animalType ?? ''}:${p.pulse ?? false}`;
+        const icon = `${p.kind}:${p.category ?? p.coat ?? ''}:${p.animalType ?? ''}:${p.pulse ?? false}:${p.reunited ?? false}`;
         if (!map.hasImage(icon)) {
           const bitmap = await marker(p);
           if (!alive || !map.getSource('points')) return;

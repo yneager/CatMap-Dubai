@@ -492,7 +492,10 @@ class PostEditorViewModel(
             )
             val current = existing
             val id = if (current == null) {
-                container.posts.create(draft, me)
+                container.posts.create(draft, me).also { newId ->
+                    // Look for matching lost reports / sightings in the background; it outlives this screen.
+                    container.scope.launch { runCatching { container.matches.afterPublish(newId, me) }.onFailure { AppErrors.report(it) } }
+                }
             } else {
                 container.posts.update(current, draft, me)
                 current.id

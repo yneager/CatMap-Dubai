@@ -40,6 +40,8 @@ export interface Post {
   lastActivityAt: number;
   fingerprint: number[];
   microchip: string;
+  resolution: string;
+  resolvedMatchId: string;
 }
 export const PostDefaults: Post = {
   id: "",
@@ -81,6 +83,8 @@ export const PostDefaults: Post = {
   lastActivityAt: 0,
   fingerprint: [],
   microchip: "unknown",
+  resolution: "",
+  resolvedMatchId: "",
 };
 export function PostFromDoc(id: string, data: Record<string, unknown>): Post {
   return Object.assign(Object.fromEntries(Object.entries(PostDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as Post;
@@ -125,6 +129,93 @@ export function PostToDoc(value: Post): Record<string, unknown> {
     lastActivityAt: Math.round(value.lastActivityAt),
     fingerprint: value.fingerprint,
     microchip: value.microchip,
+    resolution: value.resolution,
+    resolvedMatchId: value.resolvedMatchId,
+  };
+}
+export interface PostMatch {
+  id: string;
+  lostPostId: string;
+  sightingPostId: string;
+  lostOwnerId: string;
+  sightingOwnerId: string;
+  members: string[];
+  animalType: string;
+  score: number;
+  visual: number;
+  tier: string;
+  method: string;
+  model: string;
+  distanceKm: number;
+  daysApart: number;
+  reasons: string[];
+  source: string;
+  ownerState: string;
+  reporterState: string;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+  reviewedAt: number;
+  notified: boolean;
+  verifiedBy: string;
+  verifiedAt: number;
+}
+export const PostMatchDefaults: PostMatch = {
+  id: "",
+  lostPostId: "",
+  sightingPostId: "",
+  lostOwnerId: "",
+  sightingOwnerId: "",
+  members: [],
+  animalType: "",
+  score: 0.0,
+  visual: -1.0,
+  tier: "none",
+  method: "details",
+  model: "",
+  distanceKm: 0.0,
+  daysApart: 0.0,
+  reasons: [],
+  source: "device",
+  ownerState: "new",
+  reporterState: "new",
+  createdBy: "",
+  createdAt: 0,
+  updatedAt: 0,
+  reviewedAt: 0,
+  notified: false,
+  verifiedBy: "",
+  verifiedAt: 0,
+};
+export function PostMatchFromDoc(id: string, data: Record<string, unknown>): PostMatch {
+  return Object.assign(Object.fromEntries(Object.entries(PostMatchDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as PostMatch;
+}
+export function PostMatchToDoc(value: PostMatch): Record<string, unknown> {
+  return {
+    lostPostId: value.lostPostId,
+    sightingPostId: value.sightingPostId,
+    lostOwnerId: value.lostOwnerId,
+    sightingOwnerId: value.sightingOwnerId,
+    members: value.members,
+    animalType: value.animalType,
+    score: value.score,
+    visual: value.visual,
+    tier: value.tier,
+    method: value.method,
+    model: value.model,
+    distanceKm: value.distanceKm,
+    daysApart: value.daysApart,
+    reasons: value.reasons,
+    source: value.source,
+    ownerState: value.ownerState,
+    reporterState: value.reporterState,
+    createdBy: value.createdBy,
+    createdAt: Math.round(value.createdAt),
+    updatedAt: Math.round(value.updatedAt),
+    reviewedAt: Math.round(value.reviewedAt),
+    notified: value.notified,
+    verifiedBy: value.verifiedBy,
+    verifiedAt: Math.round(value.verifiedAt),
   };
 }
 export interface PostUpdate {
@@ -420,6 +511,8 @@ export interface Message {
   postId: string;
   postTitle: string;
   postPhotoId: string;
+  matchId: string;
+  matchPhotoId: string;
   createdAt: number;
 }
 export const MessageDefaults: Message = {
@@ -430,6 +523,8 @@ export const MessageDefaults: Message = {
   postId: "",
   postTitle: "",
   postPhotoId: "",
+  matchId: "",
+  matchPhotoId: "",
   createdAt: 0,
 };
 export function MessageFromDoc(id: string, data: Record<string, unknown>): Message {
@@ -443,6 +538,8 @@ export function MessageToDoc(value: Message): Record<string, unknown> {
     postId: value.postId,
     postTitle: value.postTitle,
     postPhotoId: value.postPhotoId,
+    matchId: value.matchId,
+    matchPhotoId: value.matchPhotoId,
     createdAt: Math.round(value.createdAt),
   };
 }

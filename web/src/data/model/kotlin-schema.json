@@ -155,6 +155,116 @@
     "microchip": {
       "type": "String",
       "documentId": false
+    },
+    "resolution": {
+      "type": "String",
+      "documentId": false
+    },
+    "resolvedMatchId": {
+      "type": "String",
+      "documentId": false
+    }
+  },
+  "PostMatch": {
+    "id": {
+      "type": "String",
+      "documentId": true
+    },
+    "lostPostId": {
+      "type": "String",
+      "documentId": false
+    },
+    "sightingPostId": {
+      "type": "String",
+      "documentId": false
+    },
+    "lostOwnerId": {
+      "type": "String",
+      "documentId": false
+    },
+    "sightingOwnerId": {
+      "type": "String",
+      "documentId": false
+    },
+    "members": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "animalType": {
+      "type": "String",
+      "documentId": false
+    },
+    "score": {
+      "type": "Double",
+      "documentId": false
+    },
+    "visual": {
+      "type": "Double",
+      "documentId": false
+    },
+    "tier": {
+      "type": "String",
+      "documentId": false
+    },
+    "method": {
+      "type": "String",
+      "documentId": false
+    },
+    "model": {
+      "type": "String",
+      "documentId": false
+    },
+    "distanceKm": {
+      "type": "Double",
+      "documentId": false
+    },
+    "daysApart": {
+      "type": "Double",
+      "documentId": false
+    },
+    "reasons": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "source": {
+      "type": "String",
+      "documentId": false
+    },
+    "ownerState": {
+      "type": "String",
+      "documentId": false
+    },
+    "reporterState": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdBy": {
+      "type": "String",
+      "documentId": false
+    },
+    "createdAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "updatedAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "reviewedAt": {
+      "type": "Long",
+      "documentId": false
+    },
+    "notified": {
+      "type": "Boolean",
+      "documentId": false
+    },
+    "verifiedBy": {
+      "type": "String",
+      "documentId": false
+    },
+    "verifiedAt": {
+      "type": "Long",
+      "documentId": false
     }
   },
   "PostUpdate": {
@@ -495,6 +605,14 @@
       "documentId": false
     },
     "postPhotoId": {
+      "type": "String",
+      "documentId": false
+    },
+    "matchId": {
+      "type": "String",
+      "documentId": false
+    },
+    "matchPhotoId": {
       "type": "String",
       "documentId": false
     },

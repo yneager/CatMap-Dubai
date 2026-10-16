@@ -66,7 +66,8 @@ private val MapLayer.category: PostCategory?
 fun FeedFilters.matches(post: Post, fix: Fix?, now: Long = System.currentTimeMillis(), includeClosed: Boolean = false): Boolean {
     if (!includeOlder && com.catmap.dubai.data.PostStaleness.hiddenByDefault(post, now)) return false
     if(microchip!=null && microchip!=post.microchip) return false
-    if (!includeClosed && post.status != PostStatus.OPEN.key) return false
+    // Closed cases stay off the map, except a lost pet reunited in the last week, shown as good news.
+    if (!includeClosed && post.status != PostStatus.OPEN.key && !recentlyReunited(post, now)) return false
     if (layers.isNotEmpty()) {
         val categories = layers.mapNotNull { it.category?.key }
         if (post.category !in categories) return false
@@ -167,3 +168,8 @@ fun FilterSheet(
 }
 
 fun <T> Set<T>.toggle(item: T): Set<T> = if (item in this) this - item else this + item
+
+/** A lost or found report marked reunited within the last [days] days (shown on the map with a green marker). */
+fun recentlyReunited(post: Post, now: Long = System.currentTimeMillis(), days: Int = 7): Boolean =
+    post.status == PostStatus.REUNITED.key && post.category in setOf(PostCategory.LOST.key, PostCategory.FOUND.key) &&
+        post.resolvedAt > 0 && now - post.resolvedAt <= days * 24L * 3600 * 1000

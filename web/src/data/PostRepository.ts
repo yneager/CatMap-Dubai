@@ -148,25 +148,7 @@ export const PostRepository = {
         `lost_${target.id}`,
       );
     }
-    if (['found', 'spotted'].includes(post.category)) {
-      const owners = (await PostRepository.feedOnce(300).catch(() => []))
-        .filter(
-          (p) =>
-            p.category === 'lost' &&
-            p.status === 'open' &&
-            p.animalType === post.animalType &&
-            p.ownerId !== me.uid &&
-            distanceKm(p.lat, p.lng, post.lat, post.lng) <= 5,
-        )
-        .map((p) => p.ownerId);
-      await notifications.send(
-        owners,
-        'possible_match',
-        params,
-        `post/${target.id}`,
-        `match_${target.id}`,
-      );
-    }
+    // Possible matches are found by MatchRepository.afterPublish (the PC's AI model, or this device offline).
     return target.id;
   },
   edit: async (existing: Post, draft: Post, me: UserProfile) => {
@@ -182,6 +164,8 @@ export const PostRepository = {
       'hidden',
       'updatesCount',
       'resolvedAt',
+      'resolution',
+      'resolvedMatchId',
     ])
       delete data[key];
     data.lastActivityAt = p.updatedAt;
@@ -195,6 +179,8 @@ export const PostRepository = {
       resolvedAt: status === 'open' ? 0 : now,
       updatedAt: now,
       lastActivityAt: now,
+      // Reopening forgets how it ended; the match history itself is kept.
+      ...(status === 'open' ? { resolution: '', resolvedMatchId: '' } : {}),
     });
     if (status === 'reunited' && post.status !== 'reunited' && post.ownerId === me.uid)
       UserRepository.addStats(b, me.uid, { reunited: 1 }, 25);

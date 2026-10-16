@@ -34,6 +34,12 @@ class AdminRepository(
     private val moderation: ModerationRepository,
     private val notifications: NotificationRepository,
 ) {
+    /** A moderator records that a reunion credited to [match] was checked independently (e.g. with both people). */
+    suspend fun verifyReunion(match: com.catmap.dubai.data.model.PostMatch, moderator: com.catmap.dubai.data.model.UserProfile) {
+        db.collection(Col.MATCHES).document(match.id).update(mapOf("verifiedBy" to moderator.uid, "verifiedAt" to now())).await()
+        moderation.log(moderator, "reunion_verified", "match", match.id, match.lostPostId, "")
+    }
+
     private suspend fun count(q: Query): Long = runCatching { q.count().get(AggregateSource.SERVER).await().count }.getOrDefault(0)
 
     suspend fun stats(): AppStats = coroutineScope {

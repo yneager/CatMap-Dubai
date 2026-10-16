@@ -7,8 +7,6 @@ S = [
 ("post_location_approximate","The location is approximate.","الموقع تقريبي."),
 ("message_owner","Message the owner","راسل صاحب المنشور"),("call_x","Call %1$s","اتصل بـ %1$s"),("email_x","Email %1$s","راسل %1$s"),
 ("manage_post","Manage your post","إدارة منشورك"),("mark_reunited","Mark as reunited","تحديد كعائد إلى أهله"),
-("mark_reunited_body","Great news! This closes the case and thanks everyone who helped.","أخبار رائعة! سيُغلق هذا الحالة ويشكر كل من ساعد."),
-("reunited_thanks","Wonderful – thank you for letting everyone know! ","رائع – شكراً لإبلاغ الجميع! "),
 ("reopen","Reopen","إعادة الفتح"),
 ("updates_and_sightings","Sightings & updates","المشاهدات والتحديثات"),
 ("i_saw_this_animal","I saw this animal","رأيت هذا الحيوان"),

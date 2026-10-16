@@ -6,6 +6,15 @@ lost animals nearby, on-device AI for cat photos, Ehsan feeding stations, an adm
 English/Arabic support (RTL). New strings from the 13 October work temporarily use English in Arabic;
 their `# TODO-AR` entries await the owner's translation pass. Updates are delivered from GitHub Releases.
 
+## Lost to reunited, with AI matching (16 October 2026)
+
+A lost report and a sighting (found, Animal Spotted or street post) are matched in both directions by the
+pet-recognition-base model on the owner's PC (with a DETR animal detector), or by the phone's colour fingerprint
+when the PC is off. The owner and the person who saw the animal get one alert, compare the photos side by side,
+answer (might be mine / not mine / more info), talk in the existing chat, and the owner marks the pet reunited,
+crediting the sighting. Design: [docs/MATCHING.md](docs/MATCHING.md). Measured accuracy, calibrated thresholds and
+limits: [docs/AI_EVALUATION.md](docs/AI_EVALUATION.md).
+
 ## Improvements added on 13 October 2026
 
 * Original CatMap vector icons, shared screen components and readable Explore status-bar insets.

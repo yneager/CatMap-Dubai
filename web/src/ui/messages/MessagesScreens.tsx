@@ -159,11 +159,24 @@ export default function MessagesScreens() {
           <div className={'message-bubble ' + (m.senderId === uid ? 'mine' : '')} key={m.id}>
             {m.text && <p dir="auto">{m.text}</p>}
             {m.imageId && <Photo id={m.imageId} thumb={false} />}{' '}
-            {m.postId && (
-              <Link className="shared-post" to={'/post/' + m.postId}>
-                <Photo id={m.postPhotoId} />
-                <strong dir="auto">{m.postTitle || t('post_new')}</strong>
+            {m.matchId ? (
+              <Link className="shared-post match-message" to={'/match/' + m.matchId}>
+                <span className="match-pair">
+                  <Photo id={m.postPhotoId} alt={t('match_lost_photo')} />
+                  <Photo id={m.matchPhotoId} alt={t('match_sighting_photo')} />
+                </span>
+                <strong dir="auto">
+                  {t('match_card_chat') + (m.postTitle ? ': ' + m.postTitle : '')}
+                </strong>
+                <small>{t('match_card_open')}</small>
               </Link>
+            ) : (
+              m.postId && (
+                <Link className="shared-post" to={'/post/' + m.postId}>
+                  <Photo id={m.postPhotoId} />
+                  <strong dir="auto">{m.postTitle || t('post_new')}</strong>
+                </Link>
+              )
             )}
             <small>{dateTime(m.createdAt)}</small>
             {m.senderId === uid && (

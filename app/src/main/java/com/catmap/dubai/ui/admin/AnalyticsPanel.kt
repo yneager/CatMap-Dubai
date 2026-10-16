@@ -33,6 +33,11 @@ fun AnalyticsPanel() {
             else -> analytics?.let { data ->
                 Text(stringResource(R.string.reunion_rate,"%.1f".format(data.reunionRate)),style=MaterialTheme.typography.titleSmall)
                 Text(stringResource(R.string.reunion_rate_basis),style=MaterialTheme.typography.bodySmall)
+                data.matches?.let { m ->
+                    Text(stringResource(R.string.analytics_matches),style=MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.analytics_matches_body,m.total,m.strong,m.possible,m.weak,m.maybe,m.notMine),style=MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.analytics_reunions_body,data.reunited.toInt(),m.viaCatmap,m.confirmed,m.verified),style=MaterialTheme.typography.bodySmall)
+                }
                 val postsColor=MaterialTheme.colorScheme.primary
                 val membersColor=MaterialTheme.colorScheme.secondary
                 val axis=MaterialTheme.colorScheme.onSurfaceVariant

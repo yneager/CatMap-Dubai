@@ -84,8 +84,12 @@ test('lost photo wizard, Explore/map, detail update, reunited, favourites and se
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Seen near the entrance', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Mark as reunited', exact: true }).click();
-  await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+  // No match to credit: the owner says how it ended (came home on its own), then sees the confirmation.
+  await page.locator('.dialog').getByRole('button', { name: 'Mark as reunited', exact: true }).click();
+  await expect(page.locator('.celebrate')).toBeVisible();
+  await page.locator('.celebrate').getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByText('Reunited', { exact: true })).toBeVisible();
+  await expect(page.locator('.reunion-banner')).toContainText('Came home on their own');
   await navigate(page, '/settings');
   await page.getByRole('button', { name: 'Dark', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');

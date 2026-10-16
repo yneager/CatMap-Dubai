@@ -2,13 +2,27 @@ import { PostDetailHeader, postTitle } from '../components/PostDetailHeader';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { lazy, Suspense, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { PostFromDoc, PostUpdateFromDoc, AdoptionRequestFromDoc } from '../../data/model';
+import {
+  PostFromDoc,
+  PostUpdateFromDoc,
+  AdoptionRequestFromDoc,
+  PostMatchFromDoc,
+} from '../../data/model';
+import { MatchRepository } from '../../data/MatchRepository';
+import {
+  PostMatchesSection,
+  ReunionBanner,
+  ReuniteDialog,
+  ReunitedCelebration,
+  LinkSightingButton,
+  ReportHistory,
+} from '../matches/MatchScreens';
+import * as MatchEngine from '../../ai/MatchEngine';
 import { PostRepository } from '../../data/PostRepository';
 import { ImageRepository } from '../../data/ImageRepository';
 import { ModerationRepository } from '../../data/ModerationRepository';
 import { AdoptionRepository } from '../../data/AdoptionRepository';
 import { enums } from '../../data/model/Enums';
-import { PostAppearance } from '../../ai/PostAppearance';
 import { processPhoto } from '../../util/images';
 import { sharePost } from '../../util/share';
 import { dateTime, t } from '../../i18n';
@@ -33,10 +47,15 @@ const Map = lazy(() => import('../map/CommunityMap'));
 export default function PostDetailScreen() {
   const { id = '' } = useParams(),
     navigate = useNavigate(),
-    { profile, posts, toast } = useApp(),
+    { profile, toast } = useApp(),
     action = useAction();
   const post = useDoc(() => PostRepository.postFlow(id), PostFromDoc, 'post-' + id),
-    updates = useList(() => PostRepository.updates(id), PostUpdateFromDoc, 'updates-' + id);
+    updates = useList(() => PostRepository.updates(id), PostUpdateFromDoc, 'updates-' + id),
+    myMatches = useList(
+      () => (profile ? MatchRepository.mine(profile.uid) : null),
+      PostMatchFromDoc,
+      'matches-' + profile?.uid,
+    );
   const myRequest = useDoc(
     () =>
       profile && post?.category === 'adoption' && post.ownerId !== profile.uid
@@ -63,7 +82,8 @@ export default function PostDetailScreen() {
     );
   const own = post.ownerId === profile?.uid,
     mod = profile && ['admin', 'moderator'].includes(profile.role),
-    matches = PostAppearance.matches(post, posts ?? []);
+    postMatches = (myMatches ?? []).filter((m) => m.lostPostId === id || m.sightingPostId === id),
+    searchPost = MatchEngine.isLost(post) || MatchEngine.isSighting(post);
   const open = (value: string) => {
     setText('');
     setFile(null);
@@ -130,6 +150,10 @@ export default function PostDetailScreen() {
       <div className="screen detail">
         <VideoPlayer path={post.videoPath} />
         <PostDetailHeader post={post} />
+        <ReunionBanner
+          post={post}
+          credited={postMatches.find((m) => m.id === post.resolvedMatchId)}
+        />
         <div className="chips facts">
           {[
             enumLabel('AnimalType', post.animalType),
@@ -350,18 +374,12 @@ export default function PostDetailScreen() {
         ) : (
           <EmptyState text={t('no_updates_yet')} />
         )}{' '}
-        {matches.length > 0 && (
-          <>
-            <SectionHeader>{t('possible_post_matches')}</SectionHeader>
-            {matches.map((m) => (
-              <Link className="outlined" key={m.post.id} to={'/post/' + m.post.id}>
-                {m.post.name || enumLabel('AnimalType', m.post.animalType)} ·{' '}
-                {m.photoBased
-                  ? t('match_confidence', Math.trunc(m.score * 100))
-                  : t('metadata_match')}
-              </Link>
-            ))}
-          </>
+        {searchPost && <PostMatchesSection post={post} />}
+        {post.category === 'lost' && !own && post.status === 'open' && (
+          <LinkSightingButton lost={post} />
+        )}
+        {['lost', 'found', 'spotted'].includes(post.category) && updates && (
+          <ReportHistory post={post} updates={updates} matches={postMatches} />
         )}
       </div>
       {modal === 'update' && (
@@ -444,22 +462,26 @@ export default function PostDetailScreen() {
           </button>
         </Dialog>
       )}
-      {['delete', 'reunited'].includes(modal) && (
-        <Dialog
-          title={t(modal === 'delete' ? 'delete_post' : 'mark_reunited')}
+      {modal === 'reunited' && (
+        <ReuniteDialog
+          post={post}
+          matches={postMatches}
           onClose={() => setModal('')}
-        >
-          <p>{t(modal === 'delete' ? 'delete_post_body' : 'mark_reunited_body')}</p>
+          onDone={() => setModal('celebrate')}
+        />
+      )}
+      {modal === 'celebrate' && <ReunitedCelebration post={post} onClose={() => setModal('')} />}
+      {modal === 'delete' && (
+        <Dialog title={t('delete_post')} onClose={() => setModal('')}>
+          <p>{t('delete_post_body')}</p>
           <ErrorText text={action.error} />
           <button
             className="primary"
             disabled={action.busy}
             onClick={() =>
               void action.run(async () => {
-                if (modal === 'delete') {
-                  await PostRepository.delete(post);
-                  navigate('/my-posts');
-                } else await PostRepository.setStatus(post, 'reunited', profile!);
+                await PostRepository.delete(post);
+                navigate('/my-posts');
                 setModal('');
               })
             }

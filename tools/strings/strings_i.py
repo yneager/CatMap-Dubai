@@ -6,7 +6,6 @@ S = [
 ('demo_entry_label','Demo','Demo'), # TODO-AR
 ('demo_contact','Demo entry','Demo entry'), # TODO-AR
 ('distance_from_map_center','Distances from the map center until GPS is available.','Distances from the map center until GPS is available.'), # TODO-AR
-('metadata_match','Similar type, location and time','Similar type, location and time'), # TODO-AR
 ('deleted_member','Deleted member','Deleted member'), # TODO-AR
 ('unknown','Unknown','Unknown'), # TODO-AR
 ('microchip','Microchip','Microchip'), # TODO-AR
@@ -38,7 +37,6 @@ S = [
 ('show_map_view','Map view','Map view'), # TODO-AR
 ('show_list_view','List view','List view'), # TODO-AR
 ('possible_post_matches','Possible matches','Possible matches'), # TODO-AR
-('match_confidence','Match score: %1$d%%','Match score: %1$d%%'), # TODO-AR
 ('stale_post_title','Still missing?','Still missing?'), # TODO-AR
 ('stale_post_body','Please update %1$s: mark reunited/resolved or confirm you are still looking.','Please update %1$s: mark reunited/resolved or confirm you are still looking.'), # TODO-AR
 ('include_older_posts','Include older posts','Include older posts'), # TODO-AR

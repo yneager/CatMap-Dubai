@@ -37,6 +37,8 @@ data class MapFeature(
 /** Builds marker icon keys; the factory turns a key back into a bitmap on demand. */
 object MarkerIcons {
     fun post(category: String, animal: String) = "p:$category:$animal"
+    /** A lost pet that was reunited in the last few days: green, with a tick. */
+    fun reunited(animal: String) = "r:$animal"
     fun cat(coat: CoatColor, alert: Boolean) = "c:${coat.key}:$alert"
     const val STATION = "station"
     const val SITTER = "sitter"
@@ -60,6 +62,7 @@ class MarkerFactory(context: Context) {
                 labeledFrom(parts.getOrNull(2), AnimalType.OTHER).icon,
             )
             "c" -> catPin(labeledFrom(parts.getOrNull(1), CoatColor.UNKNOWN), parts.getOrNull(2) == "true")
+            "r" -> bubble(Color.rgb(46, 125, 50), labeledFrom(parts.getOrNull(1), AnimalType.OTHER).icon).also { tick(it) }
             MarkerIcons.STATION -> bubble(Color.rgb(0, 137, 123), CatMapIcons.STATION)
             MarkerIcons.SITTER -> bubble(Color.rgb(94, 53, 177), CatMapIcons.SITTER)
             MarkerIcons.RESCUE -> bubble(Color.rgb(198, 40, 40), CatMapIcons.RESCUE)
@@ -92,6 +95,18 @@ class MarkerFactory(context: Context) {
             drawable.draw(c)
         }
         return bmp
+    }
+
+    /** A small green tick badge in the top corner of a reunited marker. */
+    private fun tick(bmp: Bitmap) {
+        val c = Canvas(bmp)
+        val r = 8 * d
+        val cx = bmp.width - r - 1 * d
+        val cy = r + 1 * d
+        c.drawCircle(cx, cy, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(46, 125, 50) })
+        c.drawCircle(cx, cy, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1.5f * d; color = Color.WHITE })
+        val check = Path().apply { moveTo(cx - r * 0.45f, cy); lineTo(cx - r * 0.1f, cy + r * 0.35f); lineTo(cx + r * 0.5f, cy - r * 0.35f) }
+        c.drawPath(check, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2 * d; color = Color.WHITE; strokeCap = Paint.Cap.ROUND })
     }
 
     /** A cat head (with ears) painted in the cat's coat colours, inside a map pin. */

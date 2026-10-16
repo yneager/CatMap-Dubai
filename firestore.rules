@@ -63,7 +63,11 @@ service cloud.firestore {
         allow read, delete: if signedIn() && uid() == userId;
         allow update: if signedIn() && uid() == userId && onlyChanging(['read']);
         allow create: if (signedIn() && uid() == userId)
-          || (verified() && incoming().fromUid == uid());
+          || (verified() && !aiWorker() && incoming().fromUid == uid())
+          // The AI worker may only announce a match it found, once per match (fixed ids pm_/pr_ + match id).
+          || (aiWorker() && incoming().fromUid == uid()
+              && incoming().type in ['match_found', 'match_reporter']
+              && notificationId.matches('p[mr]_.+') && incoming().route == 'match/' + notificationId[3:]);
       }
 
       // Saved posts and blocked people are private to their owner.
@@ -250,7 +254,10 @@ service cloud.firestore {
         && d.get('lastActivityAt', 0) is int && d.get('lastActivityAt', 0) >= 0
         && d.get('microchip', 'unknown') in ['yes','no','unknown']
         && validFingerprint(d.get('fingerprint', []))
-        && d.keys().hasOnly(['ownerId', 'ownerName', 'ownerPhotoId', 'animalType', 'category', 'status', 'name', 'description', 'color', 'breed', 'features', 'sex', 'ageGroup', 'photoIds', 'videoPath', 'lat', 'lng', 'approximate', 'areaRadiusM', 'neighborhood', 'lastSeenAt', 'reward', 'contactMethod', 'contactPhone', 'contactEmail', 'adoptionStatus', 'health', 'vaccinated', 'neutered', 'updatesCount', 'hidden', 'keywords', 'createdAt', 'updatedAt', 'resolvedAt', 'lastActivityAt', 'fingerprint', 'microchip']);
+        // How a lost/found report was closed: through a CatMap match, the animal came home by itself, or other.
+        && d.get('resolution', '') in ['', 'catmap', 'home', 'other']
+        && d.get('resolvedMatchId', '') is string && d.get('resolvedMatchId', '').size() <= 300
+        && d.keys().hasOnly(['ownerId', 'ownerName', 'ownerPhotoId', 'animalType', 'category', 'status', 'name', 'description', 'color', 'breed', 'features', 'sex', 'ageGroup', 'photoIds', 'videoPath', 'lat', 'lng', 'approximate', 'areaRadiusM', 'neighborhood', 'lastSeenAt', 'reward', 'contactMethod', 'contactPhone', 'contactEmail', 'adoptionStatus', 'health', 'vaccinated', 'neutered', 'updatesCount', 'hidden', 'keywords', 'createdAt', 'updatedAt', 'resolvedAt', 'lastActivityAt', 'fingerprint', 'microchip', 'resolution', 'resolvedMatchId']);
     }
 
     match /posts/{postId} {
@@ -442,6 +449,81 @@ service cloud.firestore {
         && changed().hasOnly(['status', 'results', 'embeddings', 'classification', 'model', 'provider', 'ms', 'error', 'doneAt', 'answeredRequestId'])
         && incoming().status in ['done', 'error'];
       allow delete: if signedIn() && (uid() == ownerId || aiWorker());
+    }
+
+    // ---------- lost report <-> sighting matches (see docs/MATCHING.md) ----------
+    // One document per pair, id "{lostPostId}__{sightingPostId}", so a pair can't be suggested twice. Only the two
+    // people involved (and moderators, and the AI worker) can see it. The AI worker writes the scores from the photo
+    // model; a phone writes them from its colour fingerprint while the PC is off and can never claim "strong". Only
+    // the owner answers for the lost animal, only the reporter for their sighting, and nobody can merge or close
+    // anything through a match.
+    function postAt(id) { return get(/databases/$(database)/documents/posts/$(id)).data; }
+    function postAfter(id) { return getAfter(/databases/$(database)/documents/posts/$(id)).data; }
+    function validMatchScores(d) {
+      return d.score is number && d.score >= 0 && d.score <= 1
+        && d.visual is number && d.visual >= -1 && d.visual <= 1
+        && d.tier in ['strong', 'possible', 'weak', 'none']
+        && d.method in ['embedding', 'fingerprint', 'details']
+        && d.model is string && d.model.size() <= 80
+        && d.distanceKm is number && d.distanceKm >= 0
+        && d.daysApart is number
+        && d.reasons is list && d.reasons.size() <= 10
+        && d.source in ['worker', 'device']
+        && d.updatedAt is int;
+    }
+    match /matches/{matchId} {
+      allow get: if signedIn() && (resource == null || uid() in resource.data.members || isMod() || aiWorker());
+      allow list: if signedIn() && (uid() in resource.data.members || isMod() || aiWorker());
+      allow create: if incoming().keys().hasOnly(['lostPostId', 'sightingPostId', 'lostOwnerId', 'sightingOwnerId', 'members',
+            'animalType', 'score', 'visual', 'tier', 'method', 'model', 'distanceKm', 'daysApart', 'reasons', 'source',
+            'ownerState', 'reporterState', 'createdBy', 'createdAt', 'updatedAt', 'notified'])
+        && matchId == incoming().lostPostId + '__' + incoming().sightingPostId
+        && incoming().members == [incoming().lostOwnerId, incoming().sightingOwnerId]
+        && incoming().lostOwnerId != incoming().sightingOwnerId
+        && postAt(incoming().lostPostId).ownerId == incoming().lostOwnerId
+        && postAt(incoming().lostPostId).category == 'lost'
+        && postAt(incoming().sightingPostId).ownerId == incoming().sightingOwnerId
+        && postAt(incoming().sightingPostId).category in ['found', 'spotted', 'street']
+        && postAt(incoming().lostPostId).animalType == incoming().animalType
+        && postAt(incoming().sightingPostId).animalType == incoming().animalType
+        && incoming().ownerState == 'new' && incoming().notified is bool && incoming().createdAt is int
+        && validMatchScores(incoming())
+        && ((aiWorker() && incoming().source == 'worker' && incoming().createdBy == 'worker' && incoming().reporterState == 'new')
+          || (verified() && uid() in incoming().members && incoming().createdBy == uid() && incoming().source == 'device'
+              && incoming().method in ['fingerprint', 'details'] && incoming().tier in ['possible', 'weak', 'none']
+              // The person who saw the animal may link their sighting to the report themselves.
+              && (incoming().reporterState == 'new' || (incoming().reporterState == 'confirmed' && uid() == incoming().sightingOwnerId))));
+      allow update: if
+        // The owner's answer. "reunited" only together with marking this report reunited through this match.
+        (verified() && uid() == resource.data.lostOwnerId
+          && onlyChanging(['ownerState', 'reviewedAt', 'updatedAt'])
+          && incoming().ownerState in ['new', 'maybe', 'not_mine', 'need_info', 'reunited']
+          && (incoming().ownerState != 'reunited'
+              || (postAfter(resource.data.lostPostId).status == 'reunited' && postAfter(resource.data.lostPostId).get('resolvedMatchId', '') == matchId)))
+        // The reporter's answer about their own sighting.
+        || (verified() && uid() == resource.data.sightingOwnerId
+          && onlyChanging(['reporterState', 'updatedAt'])
+          && incoming().reporterState in ['new', 'confirmed', 'not_same'])
+        // The AI worker re-scores, but never touches people's answers and never revives a rejected pair.
+        || (aiWorker() && onlyChanging(['score', 'visual', 'tier', 'method', 'model', 'distanceKm', 'daysApart', 'reasons', 'source', 'updatedAt', 'notified'])
+          && resource.data.ownerState != 'not_mine' && incoming().source == 'worker' && validMatchScores(incoming()))
+        // A moderator can record that a reunion was checked independently.
+        || (isMod() && onlyChanging(['verifiedBy', 'verifiedAt']) && incoming().verifiedBy in ['', uid()] && incoming().verifiedAt is int);
+      // Kept while both posts exist, so a rejected pair is remembered; cleaned up after either post is deleted.
+      allow delete: if isAdmin() || (signedIn() && uid() in resource.data.members
+        && (!exists(/databases/$(database)/documents/posts/$(resource.data.lostPostId))
+            || !exists(/databases/$(database)/documents/posts/$(resource.data.sightingPostId))));
+    }
+
+    // The AI worker's photo embeddings of each post (one 512-number vector per photo). Only the worker writes them,
+    // so nobody can plant a fake vector to force a match.
+    match /postEmbeddings/{postId} {
+      allow read: if aiWorker() || isMod();
+      allow create, update: if aiWorker() && incoming().postId == postId
+        && incoming().keys().hasOnly(['postId', 'ownerId', 'animalType', 'model', 'signature', 'photoIds', 'vectors', 'detected', 'animals', 'lowQuality', 'createdAt'])
+        && incoming().vectors is list && incoming().vectors.size() <= 6;
+      allow delete: if aiWorker() || isMod()
+        || (signedIn() && (!exists(/databases/$(database)/documents/posts/$(postId)) || postAt(postId).ownerId == uid()));
     }
 
     match /helpDirectory/{contactId} {

@@ -160,7 +160,70 @@ data class Post(
     var lastActivityAt: Long = 0,
     var fingerprint: List<Double> = emptyList(),
     var microchip: String = "unknown",
+    /** How a closed lost/found report ended: [Resolution] key, "" while open or for older posts. */
+    var resolution: String = "",
+    /** The match (matches/{id}) the owner credited for the reunion, "" when none. */
+    var resolvedMatchId: String = "",
 )
+
+/** How a lost or found report was closed. The owner says so; a moderator can later mark the match as checked. */
+enum class Resolution(@StringRes override val label: Int) : Labeled {
+    CATMAP(R.string.resolution_catmap),
+    HOME(R.string.resolution_home),
+    OTHER(R.string.resolution_other);
+
+    override val key: String get() = name.lowercase()
+}
+
+/** Strength of a match suggestion. Never a percentage: the scores aren't calibrated probabilities. */
+enum class MatchTier(@StringRes override val label: Int, val color: Long) : Labeled {
+    STRONG(R.string.tier_strong, 0xFF2E7D32),
+    POSSIBLE(R.string.tier_possible, 0xFFE68A00),
+    WEAK(R.string.tier_weak, 0xFF757575),
+    NONE(R.string.tier_none, 0xFF9E9E9E);
+
+    override val key: String get() = name.lowercase()
+}
+
+/**
+ * A suggested connection between a lost report and a sighting (matches/{lostPostId}__{sightingPostId}), seen only
+ * by the two people involved. The AI worker or a phone suggests it; only people answer it (see docs/MATCHING.md).
+ */
+data class PostMatch(
+    @DocumentId var id: String = "",
+    var lostPostId: String = "",
+    var sightingPostId: String = "",
+    var lostOwnerId: String = "",
+    var sightingOwnerId: String = "",
+    var members: List<String> = emptyList(),
+    var animalType: String = "",
+    var score: Double = 0.0,
+    var visual: Double = -1.0,
+    var tier: String = MatchTier.NONE.key,
+    /** embedding (AI model on the PC), fingerprint (colour, on a phone) or details (no photos). */
+    var method: String = "details",
+    var model: String = "",
+    var distanceKm: Double = 0.0,
+    var daysApart: Double = 0.0,
+    var reasons: List<String> = emptyList(),
+    var source: String = "device",
+    /** The owner's answer: new, maybe, not_mine, need_info or reunited. */
+    var ownerState: String = "new",
+    /** The reporter's answer: new, confirmed or not_same. */
+    var reporterState: String = "new",
+    var createdBy: String = "",
+    var createdAt: Long = 0,
+    var updatedAt: Long = 0,
+    var reviewedAt: Long = 0,
+    var notified: Boolean = false,
+    var verifiedBy: String = "",
+    var verifiedAt: Long = 0,
+) {
+    val tierEnum: MatchTier get() = labeledFrom(tier, MatchTier.NONE)
+    val rejected: Boolean get() = ownerState == "not_mine"
+    /** Worth showing: a real suggestion the owner hasn't turned down. */
+    val visible: Boolean get() = tier != MatchTier.NONE.key || ownerState in setOf("maybe", "need_info", "reunited") || reporterState == "confirmed"
+}
 
 /** A sighting or progress note added to a post by anyone (posts/{id}/updates). */
 data class PostUpdate(
@@ -274,6 +337,9 @@ data class Message(
     var postId: String = "",
     var postTitle: String = "",
     var postPhotoId: String = "",
+    /** A possible match shows as a card with both photos (the lost animal's is [postPhotoId]). */
+    var matchId: String = "",
+    var matchPhotoId: String = "",
     var createdAt: Long = 0,
 )
 

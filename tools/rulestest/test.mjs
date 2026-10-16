@@ -617,6 +617,91 @@ await check("own update removal decrements the surviving post",assertSucceeds(ru
   tx.delete(source.ref);tx.update(parent,{updatesCount:Math.max(0,post.data().updatesCount-1)});
 })));
 
+console.log("Lost report <-> sighting matches");
+{
+  const W = env.authenticatedContext("worker", { email: "ai-worker@demo.catmap.test", email_verified: true, catmapAiWorker: true }).firestore();
+  for (const u of ["owner1", "seer1", "seer2", "nosy1"]) await register(u, true);
+  await env.withSecurityRulesDisabled(async (c) => {
+    const f = c.firestore();
+    await setDoc(doc(f, "posts", "L1"), postDoc("owner1", { animalType: "cat", name: "Simba" }));
+    await setDoc(doc(f, "posts", "L2"), postDoc("owner1", { animalType: "dog", name: "Rex2" }));
+    await setDoc(doc(f, "posts", "S1"), postDoc("seer1", { animalType: "cat", category: "spotted", name: "", reward: 0 }));
+    await setDoc(doc(f, "posts", "S2"), postDoc("seer2", { animalType: "cat", category: "street", name: "", reward: 0 }));
+    await setDoc(doc(f, "posts", "S3"), postDoc("seer1", { animalType: "cat", category: "found", name: "", reward: 0 }));
+    await setDoc(doc(f, "posts", "S4"), postDoc("owner1", { animalType: "cat", category: "spotted", name: "", reward: 0 }));
+    await setDoc(doc(f, "posts", "S5"), postDoc("seer2", { animalType: "cat", category: "spotted", name: "", reward: 0 }));
+  });
+  const O = ctx("owner1"), R = ctx("seer1"), R2 = ctx("seer2"), N = ctx("nosy1");
+  const m = (lost, sighting, lo, so, extra = {}) => ({
+    lostPostId: lost, sightingPostId: sighting, lostOwnerId: lo, sightingOwnerId: so, members: [lo, so], animalType: "cat",
+    score: 0.8, visual: 0.62, tier: "strong", method: "embedding", model: "pet-recognition-base+detr-resnet-50/v1",
+    distanceKm: 1.2, daysApart: 2, reasons: ["photo_very_similar", "near", "recent"], source: "worker",
+    ownerState: "new", reporterState: "new", createdBy: "worker", createdAt: now(), updatedAt: now(), notified: false, ...extra,
+  });
+  const device = (uid, extra = {}) => ({ source: "device", createdBy: uid, method: "fingerprint", model: "fingerprint27/v1", tier: "possible", ...extra });
+  await check("worker suggests a match", assertSucceeds(setDoc(doc(W, "matches", "L1__S1"), m("L1", "S1", "owner1", "seer1"))));
+  await check("match id must name the pair", assertFails(setDoc(doc(W, "matches", "L1__x"), m("L1", "S2", "owner1", "seer2"))));
+  await check("match members must be the two post owners", assertFails(setDoc(doc(W, "matches", "L1__S2"), m("L1", "S2", "owner1", "nosy1"))));
+  await check("a lost report can't match a different animal type", assertFails(setDoc(doc(W, "matches", "L2__S2"), m("L2", "S2", "owner1", "seer2", { animalType: "dog" }))));
+  await check("two lost reports can't be paired", assertFails(setDoc(doc(W, "matches", "L1__L2"), m("L1", "L2", "owner1", "owner1"))));
+  await check("own posts are never paired", assertFails(setDoc(doc(W, "matches", "L1__S4"), m("L1", "S4", "owner1", "owner1"))));
+  await check("match rejects unknown fields", assertFails(setDoc(doc(W, "matches", "L1__S2"), m("L1", "S2", "owner1", "seer2", { probability: 0.99 }))));
+  await check("phone (PC offline) suggests a colour match", assertSucceeds(setDoc(doc(R2, "matches", "L1__S2"), m("L1", "S2", "owner1", "seer2", device("seer2")))));
+  await check("phone can't claim a strong match", assertFails(setDoc(doc(R, "matches", "L1__S3"), m("L1", "S3", "owner1", "seer1", device("seer1", { tier: "strong" })))));
+  await check("phone can't claim the AI model", assertFails(setDoc(doc(R, "matches", "L1__S3"), m("L1", "S3", "owner1", "seer1", device("seer1", { method: "embedding" })))));
+  await check("phone can't pretend to be the worker", assertFails(setDoc(doc(R, "matches", "L1__S3"), m("L1", "S3", "owner1", "seer1"))));
+  await check("outsider can't pair other people's posts", assertFails(setDoc(doc(N, "matches", "L1__S3"), m("L1", "S3", "owner1", "seer1", device("nosy1")))));
+  await check("reporter links their own sighting", assertSucceeds(setDoc(doc(R, "matches", "L1__S3"), m("L1", "S3", "owner1", "seer1", device("seer1", { reporterState: "confirmed" })))));
+  await check("owner can't confirm on the reporter's behalf", assertFails(setDoc(doc(O, "matches", "L1__S5"), m("L1", "S5", "owner1", "seer2", device("owner1", { reporterState: "confirmed" })))));
+  await check("an existing match can't be overwritten by a phone", assertFails(setDoc(doc(R, "matches", "L1__S1"), m("L1", "S1", "owner1", "seer1", device("seer1")))));
+  await check("owner reads the match", assertSucceeds(getDoc(doc(O, "matches", "L1__S1"))));
+  await check("reporter reads the match", assertSucceeds(getDoc(doc(R, "matches", "L1__S1"))));
+  await check("outsider can't read a match", assertFails(getDoc(doc(N, "matches", "L1__S1"))));
+  await check("owner lists their matches", assertSucceeds(getDocs(query(collection(O, "matches"), where("members", "array-contains", "owner1")))));
+  await check("outsider can't list everyone's matches", assertFails(getDocs(query(collection(N, "matches"), where("lostPostId", "==", "L1")))));
+  await check("missing match reads as missing (phone checks before creating)", assertSucceeds(getDoc(doc(N, "matches", "L9__S9"))));
+  await check("owner says it might be theirs", assertSucceeds(updateDoc(doc(O, "matches", "L1__S1"), { ownerState: "maybe", reviewedAt: now(), updatedAt: now() })));
+  await check("reporter can't answer for the owner", assertFails(updateDoc(doc(R, "matches", "L1__S1"), { ownerState: "not_mine" })));
+  await check("owner can't change the AI's score", assertFails(updateDoc(doc(O, "matches", "L1__S1"), { tier: "strong", score: 1 })));
+  await check("owner can't mark reunited without closing the report", assertFails(updateDoc(doc(O, "matches", "L1__S1"), { ownerState: "reunited" })));
+  await check("reporter says it's a different animal", assertSucceeds(updateDoc(doc(R2, "matches", "L1__S2"), { reporterState: "not_same", updatedAt: now() })));
+  await check("owner can't answer for the reporter", assertFails(updateDoc(doc(O, "matches", "L1__S2"), { reporterState: "confirmed" })));
+  await check("worker re-scores a phone's match", assertSucceeds(updateDoc(doc(W, "matches", "L1__S2"), { tier: "weak", score: 0.3, visual: 0.4, method: "embedding", model: "m", source: "worker", updatedAt: now() })));
+  await check("worker can't touch people's answers", assertFails(updateDoc(doc(W, "matches", "L1__S1"), { ownerState: "not_mine", updatedAt: now() })));
+  await check("owner rejects a look-alike", assertSucceeds(updateDoc(doc(O, "matches", "L1__S2"), { ownerState: "not_mine", reviewedAt: now(), updatedAt: now() })));
+  await check("a rejected pair can't be revived by the worker", assertFails(updateDoc(doc(W, "matches", "L1__S2"), { tier: "strong", score: 0.9, source: "worker", updatedAt: now() })));
+  await check("member can't delete a match while both posts exist", assertFails(deleteDoc(doc(O, "matches", "L1__S2"))));
+  await check("worker announces a match to the owner", assertSucceeds(setDoc(doc(W, "users", "owner1", "notifications", "pm_L1__S1"),
+    { type: "match_found", params: { name: "Simba" }, route: "match/L1__S1", fromUid: "worker", read: false, createdAt: now() })));
+  await check("worker can't send other alerts", assertFails(setDoc(doc(W, "users", "owner1", "notifications", "pm_L1__S3"),
+    { type: "message", params: {}, route: "match/L1__S3", fromUid: "worker", read: false, createdAt: now() })));
+  await check("worker alert must point at its match", assertFails(setDoc(doc(W, "users", "owner1", "notifications", "pm_L1__S3"),
+    { type: "match_found", params: {}, route: "chat/x", fromUid: "worker", read: false, createdAt: now() })));
+  await check("the same match alert can't be sent twice", assertFails(setDoc(doc(W, "users", "owner1", "notifications", "pm_L1__S1"),
+    { type: "match_found", params: { name: "Simba" }, route: "match/L1__S1", fromUid: "worker", read: false, createdAt: now() })));
+  const emb = { postId: "L1", ownerId: "owner1", animalType: "cat", model: "m", signature: "s", photoIds: ["img1"],
+    vectors: [Bytes.fromUint8Array(new Uint8Array(2048))], detected: [true], animals: [1], lowQuality: [false], createdAt: serverTimestamp() };
+  await check("worker stores photo embeddings", assertSucceeds(setDoc(doc(W, "postEmbeddings", "L1"), emb)));
+  await check("members can't plant embeddings", assertFails(setDoc(doc(O, "postEmbeddings", "S9"), { ...emb, postId: "S9" })));
+  await check("members can't read embeddings", assertFails(getDoc(doc(R, "postEmbeddings", "L1"))));
+  await check("moderators can read embeddings", assertSucceeds(getDoc(doc(ctx("mod"), "postEmbeddings", "L1"))));
+  await check("post owner removes their post's embeddings", assertSucceeds(deleteDoc(doc(O, "postEmbeddings", "L1"))));
+  // Reunion: the report closes and the helping match is marked in one batch.
+  await check("unknown resolution rejected", assertFails(updateDoc(doc(O, "posts", "L1"), { status: "reunited", resolution: "magic" })));
+  {
+    const b = writeBatch(O);
+    b.update(doc(O, "posts", "L1"), { status: "reunited", resolution: "catmap", resolvedMatchId: "L1__S1", resolvedAt: now(), updatedAt: now() });
+    b.update(doc(O, "matches", "L1__S1"), { ownerState: "reunited", reviewedAt: now(), updatedAt: now() });
+    await check("owner marks reunited through the match", assertSucceeds(b.commit()));
+  }
+  await check("reunion can't be credited to another match", assertFails(updateDoc(doc(O, "matches", "L1__S3"), { ownerState: "reunited" })));
+  await check("reporter can't close the owner's report", assertFails(updateDoc(doc(R, "posts", "L1"), { status: "open", resolution: "" })));
+  await check("moderator records an independent check", assertSucceeds(updateDoc(doc(ctx("mod"), "matches", "L1__S1"), { verifiedBy: "mod", verifiedAt: now() })));
+  await check("members can't mark their own reunion verified", assertFails(updateDoc(doc(O, "matches", "L1__S1"), { verifiedBy: "owner1", verifiedAt: now() })));
+  await env.withSecurityRulesDisabled((c) => deleteDoc(doc(c.firestore(), "posts", "S2")));
+  await check("match cleaned up after a post is deleted", assertSucceeds(deleteDoc(doc(O, "matches", "L1__S2"))));
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 await env.cleanup();
 process.exit(failed ? 1 : 0);

@@ -197,8 +197,9 @@ fun MapScreen(nav: NavHostController) {
                 val category = labeledFrom(p.category, PostCategory.OTHER)
                 add(
                     MapFeature(
-                        p.id, PointKind.POST, p.lat, p.lng, MarkerIcons.post(p.category, p.animalType),
-                        pulse = category == PostCategory.LOST || category == PostCategory.NEEDS_HELP,
+                        p.id, PointKind.POST, p.lat, p.lng,
+                        if (p.status == com.catmap.dubai.data.model.PostStatus.REUNITED.key) MarkerIcons.reunited(p.animalType) else MarkerIcons.post(p.category, p.animalType),
+                        pulse = p.status == com.catmap.dubai.data.model.PostStatus.OPEN.key && (category == PostCategory.LOST || category == PostCategory.NEEDS_HELP),
                     ),
                 )
             }

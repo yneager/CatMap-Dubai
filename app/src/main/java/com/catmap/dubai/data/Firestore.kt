@@ -60,6 +60,7 @@ object Col {
     const val BLOCKED = "blocked"
     const val FAVORITES = "favorites"
     const val AREA_FOLLOWS = "areaFollows"
+    const val MATCHES = "matches"
 }
 
 fun now() = System.currentTimeMillis()

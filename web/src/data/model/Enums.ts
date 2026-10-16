@@ -232,6 +232,42 @@ export const enums = {
       "label": "rate_per_night"
     }
   ],
+  "Resolution": [
+    {
+      "key": "catmap",
+      "label": "resolution_catmap"
+    },
+    {
+      "key": "home",
+      "label": "resolution_home"
+    },
+    {
+      "key": "other",
+      "label": "resolution_other"
+    }
+  ],
+  "MatchTier": [
+    {
+      "key": "strong",
+      "label": "tier_strong",
+      "color": "#2E7D32"
+    },
+    {
+      "key": "possible",
+      "label": "tier_possible",
+      "color": "#E68A00"
+    },
+    {
+      "key": "weak",
+      "label": "tier_weak",
+      "color": "#757575"
+    },
+    {
+      "key": "none",
+      "label": "tier_none",
+      "color": "#9E9E9E"
+    }
+  ],
   "CoatColor": [
     {
       "key": "black",

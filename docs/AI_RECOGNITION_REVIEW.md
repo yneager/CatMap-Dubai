@@ -1,5 +1,8 @@
 # CatMap Dubai – AI recognition review
 
+> **Update, 16 Oct 2026:** superseded for posts by the lost-to-reunited matcher: `docs/MATCHING.md` (design) and
+> `docs/AI_EVALUATION.md` (measured results, calibrated per-species thresholds, PetFace licence decision).
+
 > **Update, 13 Oct 2026:** the owner decided to use the PC (proposal B) for the demo, scoped to **street-animal
 > posts**. It runs pet-recognition-base on the RX 9070 XT. Since v0.0.6, phone and PC exchange jobs through
 > **Firestore** (outgoing connections only; no tunnel or open port), with a desktop window on the PC. Details are in

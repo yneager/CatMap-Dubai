@@ -25,7 +25,8 @@ export function matches(
 ) {
   if (!f.includeOlder && PostStaleness.hiddenByDefault(p, now)) return false;
   if (f.microchip && f.microchip !== p.microchip) return false;
-  if (!includeClosed && p.status !== 'open') return false;
+  // Closed cases stay off the map, except a lost pet reunited in the last week, shown as good news.
+  if (!includeClosed && p.status !== 'open' && !recentlyReunited(p, now)) return false;
   if (
     f.layers.length &&
     !f.layers.map((l) => (l === 'street_cats' ? 'street' : l)).includes(p.category)
@@ -123,3 +124,9 @@ export function FilterSheet({
     </Sheet>
   );
 }
+/** A lost or found report marked reunited within the last [days] days (green marker on the map). */
+export const recentlyReunited = (p: Post, now = Date.now(), days = 7) =>
+  p.status === 'reunited' &&
+  ['lost', 'found'].includes(p.category) &&
+  p.resolvedAt > 0 &&
+  now - p.resolvedAt <= days * 86400000;

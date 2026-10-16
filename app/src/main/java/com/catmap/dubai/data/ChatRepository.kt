@@ -84,6 +84,35 @@ class ChatRepository(
         notifications.send(listOf(other), NotifType.MESSAGE, mapOf("user" to me.username, "text" to preview), "chat/${chat.id}", dedupeKey = "msg_${chat.id}")
     }
 
+    /** Whether this chat already has the card of [matchId] (so a match is introduced once per chat). */
+    suspend fun hasMatchCard(chatId: String, matchId: String): Boolean =
+        chats.document(chatId).collection(Col.MESSAGES).whereEqualTo("matchId", matchId).limit(1).get().await().isEmpty.not()
+
+    /** A card with the lost animal's photo and the sighting's photo, which opens the match review. */
+    suspend fun sendMatchCard(chatId: String, me: UserProfile, matchId: String, lost: Post?, sighting: Post?) {
+        val chat = chats.document(chatId).get().await().toObject(Chat::class.java)?.apply { id = chatId } ?: return
+        val other = chat.other(me.uid)
+        val title = lost?.name.orEmpty()
+        val messageRef = chats.document(chatId).collection(Col.MESSAGES).document()
+        db.runBatch { b ->
+            b.set(
+                messageRef,
+                Message(
+                    senderId = me.uid, postId = lost?.id.orEmpty(), postTitle = title,
+                    postPhotoId = lost?.photoIds?.firstOrNull().orEmpty(), matchId = matchId,
+                    matchPhotoId = sighting?.photoIds?.firstOrNull().orEmpty(), createdAt = now(),
+                ),
+            )
+            b.update(
+                chats.document(chatId),
+                mapOf(
+                    "lastText" to "Possible match: $title".trim(), "lastSender" to me.uid, "lastAt" to now(),
+                    "unread.$other" to FieldValue.increment(1), "names.${me.uid}" to me.username, "photos.${me.uid}" to me.photoId,
+                ),
+            )
+        }.await()
+    }
+
     suspend fun markRead(chatId: String, uid: String) {
         runCatching { chats.document(chatId).update("unread.$uid", 0L).await() }
         notifications.dismiss(uid, "msg_$chatId")

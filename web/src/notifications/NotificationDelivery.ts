@@ -34,6 +34,10 @@ export const NotificationText = {
         lost_nearby: 'lost_nearby',
         post_update: 'post_updates',
         possible_match: 'post_updates',
+        match_found: 'post_updates',
+        match_reporter: 'post_updates',
+        match_info: 'post_updates',
+        match_reunited: 'post_updates',
         adoption_request: 'adoption',
         adoption_decision: 'adoption',
         booking_request: 'sitting',
@@ -101,6 +105,21 @@ export const NotificationText = {
           t('n_match_title'),
           t('n_match_body', label('PostCategory', p.category), animal, area),
         ];
+      // Lost-pet matches: only the animal's name, type and neighbourhood names; never an exact place or a contact.
+      case 'match_found':
+        return [
+          t('n_match_found_title', p.name || t('your_pet')),
+          t('n_match_found_body', animal.toLowerCase(), area),
+        ];
+      case 'match_reporter':
+        return [
+          t('n_match_reporter_title', p.name || animal.toLowerCase()),
+          t('n_match_reporter_body', animal.toLowerCase(), area, Dubai.nameOf(p.lostArea ?? '')),
+        ];
+      case 'match_info':
+        return [t('n_match_info_title', p.name || animal), t('n_match_info_body', p.user ?? '')];
+      case 'match_reunited':
+        return [t('n_match_reunited_title', p.name || animal), t('n_match_reunited_body')];
       case 'post_update':
         return [
           t('n_post_update_title', p.name || animal),

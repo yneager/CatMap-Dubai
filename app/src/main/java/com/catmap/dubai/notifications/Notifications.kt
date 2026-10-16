@@ -49,7 +49,8 @@ object NotificationText {
         NotifType.MODERATION, NotifType.VOLUNTEER_DECISION, NotifType.MAINTENANCE_UPDATE -> NotifCategory.MODERATION
         NotifType.MESSAGE -> NotifCategory.MESSAGES
         NotifType.LOST_NEARBY -> NotifCategory.LOST_NEARBY
-        NotifType.POST_UPDATE, NotifType.POSSIBLE_MATCH -> NotifCategory.POST_UPDATES
+        NotifType.POST_UPDATE, NotifType.POSSIBLE_MATCH, NotifType.MATCH_FOUND, NotifType.MATCH_REPORTER,
+        NotifType.MATCH_INFO, NotifType.MATCH_REUNITED -> NotifCategory.POST_UPDATES
         NotifType.ADOPTION_REQUEST, NotifType.ADOPTION_DECISION -> NotifCategory.ADOPTION
         NotifType.BOOKING_REQUEST, NotifType.BOOKING_UPDATE, NotifType.REVIEW -> NotifCategory.SITTING
         else -> null
@@ -85,6 +86,15 @@ object NotificationText {
                 s(R.string.n_lost_nearby_body, p["name"].orEmpty().ifBlank { animal(context, p["type"]) }, area())
             NotifType.POSSIBLE_MATCH -> s(R.string.n_match_title) to
                 s(R.string.n_match_body, s(labeledFrom(p["category"], com.catmap.dubai.data.model.PostCategory.SPOTTED).label), animal(context, p["type"]), area())
+            // Lost-pet matches: only the animal's name, its type and neighbourhood names; never an exact place or a contact.
+            NotifType.MATCH_FOUND -> s(R.string.n_match_found_title, p["name"].orEmpty().ifBlank { s(R.string.your_pet) }) to
+                s(R.string.n_match_found_body, animal(context, p["type"]).lowercase(), area())
+            NotifType.MATCH_REPORTER -> s(R.string.n_match_reporter_title, p["name"].orEmpty().ifBlank { animal(context, p["type"]).lowercase() }) to
+                s(R.string.n_match_reporter_body, animal(context, p["type"]).lowercase(), area(), Dubai.nameOf(p["lostArea"]))
+            NotifType.MATCH_INFO -> s(R.string.n_match_info_title, p["name"].orEmpty().ifBlank { animal(context, p["type"]) }) to
+                s(R.string.n_match_info_body, p["user"].orEmpty())
+            NotifType.MATCH_REUNITED -> s(R.string.n_match_reunited_title, p["name"].orEmpty().ifBlank { animal(context, p["type"]) }) to
+                s(R.string.n_match_reunited_body)
             NotifType.POST_UPDATE -> s(R.string.n_post_update_title, p["name"].orEmpty().ifBlank { animal(context, p["type"]) }) to
                 s(if (p["kind"] == "sighting") R.string.n_post_sighting_body else R.string.n_post_update_body, p["user"] ?: "")
             NotifType.ADOPTION_REQUEST -> s(R.string.n_adoption_request_title) to s(R.string.n_adoption_request_body, p["user"] ?: "", p["name"] ?: "")

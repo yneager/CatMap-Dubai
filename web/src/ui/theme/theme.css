@@ -1870,3 +1870,123 @@ input[type='range'] {
   border-end-start-radius: 18px;
   border-end-end-radius: 4px;
 }
+
+/* ---------- lost-to-reunited workflow (ui/matches) ---------- */
+.match-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0;
+}
+.match-pair figure {
+  margin: 0;
+  min-width: 0;
+}
+.match-pair img,
+.match-pair .photo {
+  width: 100%;
+  aspect-ratio: 1.2;
+  object-fit: cover;
+  border-radius: var(--small);
+}
+.match-card {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+.match-card .row {
+  gap: 8px;
+  align-items: center;
+}
+.match-card .link,
+.primary-text {
+  color: var(--primary);
+}
+.strong {
+  font-weight: 600;
+}
+.reunion-banner {
+  background: color-mix(in srgb, #2e7d32 14%, var(--surface));
+  border-inline-start: 4px solid #2e7d32;
+  margin: 10px 0;
+}
+.match-review {
+  display: grid;
+  gap: 12px;
+}
+.match-review .column {
+  display: grid;
+  gap: 8px;
+}
+.match-thumb {
+  width: 84px;
+  height: 84px;
+  border-radius: var(--small);
+  object-fit: cover;
+}
+table.compare {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+table.compare th,
+table.compare td {
+  text-align: start;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--outline-variant);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+table.compare th[scope='row'] {
+  color: var(--on-surface-variant);
+  font-weight: 500;
+  width: 28%;
+}
+.radio-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+}
+fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0 0 8px;
+}
+.celebrate {
+  display: grid;
+  gap: 12px;
+  text-align: center;
+}
+.celebrate img {
+  width: 100%;
+  border-radius: var(--medium);
+  object-fit: cover;
+  max-height: 240px;
+}
+ol.history {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-inline-start: 2px solid var(--outline-variant);
+}
+ol.history li {
+  display: grid;
+  padding: 4px 0 8px 12px;
+  position: relative;
+}
+ol.history li::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: -5px;
+  top: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+.match-message .match-pair {
+  width: 200px;
+}

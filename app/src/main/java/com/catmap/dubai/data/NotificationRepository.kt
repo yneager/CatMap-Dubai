@@ -31,6 +31,14 @@ object NotifType {
     const val POST_UPDATE = "post_update"
     const val LOST_NEARBY = "lost_nearby"
     const val POSSIBLE_MATCH = "possible_match"
+    /** A sighting may be the owner's lost animal (to the owner). */
+    const val MATCH_FOUND = "match_found"
+    /** The person's sighting may be a lost animal (to the reporter). */
+    const val MATCH_REPORTER = "match_reporter"
+    /** The owner asked the reporter for more details. */
+    const val MATCH_INFO = "match_info"
+    /** The owner marked the animal reunited thanks to the reporter's sighting. */
+    const val MATCH_REUNITED = "match_reunited"
 }
 
 class NotificationRepository(private val db: FirebaseFirestore, private val auth: FirebaseAuth) {

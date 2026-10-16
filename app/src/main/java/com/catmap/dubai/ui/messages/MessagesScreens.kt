@@ -331,7 +331,7 @@ fun ChatScreen(nav: NavHostController, chatId: String, sharePostId: String?) {
                             Text(dateTime(m.createdAt), Modifier.fillMaxWidth().padding(vertical = 6.dp), style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         }
-                        Bubble(m, mine, onPost = { nav.navigate(Routes.post(it)) }, onDelete = { runner.run { container.chats.deleteMessage(chatId, m) } })
+                        Bubble(m, mine, onPost = { nav.navigate(Routes.post(it)) }, onMatch = { nav.navigate(Routes.match(it)) }, onDelete = { runner.run { container.chats.deleteMessage(chatId, m) } })
                     }
                 }
             }
@@ -355,7 +355,7 @@ fun ChatScreen(nav: NavHostController, chatId: String, sharePostId: String?) {
 }
 
 @Composable
-private fun Bubble(m: Message, mine: Boolean, onPost: (String) -> Unit, onDelete: () -> Unit) {
+private fun Bubble(m: Message, mine: Boolean, onPost: (String) -> Unit, onMatch: (String) -> Unit, onDelete: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
         Box {
@@ -370,7 +370,24 @@ private fun Bubble(m: Message, mine: Boolean, onPost: (String) -> Unit, onDelete
                 if (m.imageId.isNotBlank()) {
                     RemoteImage(m.imageId, Modifier.size(220.dp).clip(RoundedCornerShape(16.dp)), thumb = false)
                 }
-                if (m.postId.isNotBlank()) {
+                if (m.matchId.isNotBlank()) {
+                    // A possible match: both photos, opening the side-by-side review (both people can see it).
+                    Card(
+                        onClick = { onMatch(m.matchId) },
+                        modifier = Modifier.padding(4.dp).width(240.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface),
+                    ) {
+                        Column(Modifier.padding(8.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                RemoteImage(m.postPhotoId, Modifier.weight(1f).height(90.dp).clip(RoundedCornerShape(10.dp)), contentDescription = stringResource(R.string.match_lost_photo))
+                                RemoteImage(m.matchPhotoId, Modifier.weight(1f).height(90.dp).clip(RoundedCornerShape(10.dp)), contentDescription = stringResource(R.string.match_sighting_photo))
+                            }
+                            Text(stringResource(R.string.match_card_chat) + if (m.postTitle.isNotBlank()) ": " + m.postTitle else "", Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                            Text(stringResource(R.string.match_card_open), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                } else if (m.postId.isNotBlank()) {
                     Card(
                         onClick = { onPost(m.postId) },
                         modifier = Modifier.padding(4.dp).width(230.dp),

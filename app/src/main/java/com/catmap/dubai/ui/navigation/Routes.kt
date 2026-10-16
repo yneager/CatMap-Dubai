@@ -55,6 +55,8 @@ object Routes {
     }
     const val EDIT_POST = "post-edit/{id}"
     fun editPost(id: String) = "post-edit/$id"
+    const val MATCH = "match/{id}"
+    fun match(id: String) = "match/$id"
     const val POSTER = "poster/{id}"
     fun poster(id: String) = "poster/$id"
     const val MY_POSTS = "my-posts"

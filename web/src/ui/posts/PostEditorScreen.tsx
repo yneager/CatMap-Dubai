@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PostDefaults, type Post } from '../../data/model';
 import { enums } from '../../data/model/Enums';
 import { PostRepository, toPost, likelyDuplicates } from '../../data/PostRepository';
+import { MatchRepository } from '../../data/MatchRepository';
 import { PostDraftStore, type SavedDraft } from '../../data/PostDraftStore';
 import { ImageRepository } from '../../data/ImageRepository';
 import { VideoRepository } from '../../data/VideoRepository';
@@ -265,6 +266,8 @@ export default function PostEditorScreen() {
         editing && existing
           ? (await PostRepository.edit(existing, prepared, profile), existing.id)
           : await PostRepository.create(prepared, profile);
+      // Look for matching lost reports / sightings in the background (the PC when online, this device otherwise).
+      if (!editing) void MatchRepository.afterPublish(target, profile).catch(() => 0);
       if (existing)
         await Promise.allSettled(
           existing.photoIds.filter((id) => !photoIds.includes(id)).map(ImageRepository.delete),

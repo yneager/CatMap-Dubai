@@ -86,6 +86,7 @@ class AppContainer(context: Context) {
     val connectivity by lazy { Connectivity(appContext) }
     val updater by lazy { com.catmap.dubai.update.Updater(appContext, settings) }
     val aiServer by lazy { com.catmap.dubai.data.AiServer(db, auth) }
+    val matches by lazy { com.catmap.dubai.data.MatchRepository(db, posts, users, notifications, chats, aiServer) }
 
     val session by lazy { Session(this) }
 }

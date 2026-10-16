@@ -14,7 +14,7 @@ RES = os.path.join(PROJECT, "app", "src", "main", "res")
 SRC = os.path.join(PROJECT, "app", "src", "main", "java")
 
 entries = []
-for part in "abcdefghi":
+for part in "abcdefghij":
     spec = importlib.util.spec_from_file_location(f"strings_{part}", os.path.join(HERE, f"strings_{part}.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

@@ -102,16 +102,8 @@ class PostRepository(
             }.getOrDefault(emptyList()) - me.uid
             notifications.send(followers, NotifType.LOST_NEARBY, params, "post/${ref.id}", dedupeKey = "lost_${ref.id}")
         }
-        if (category == PostCategory.FOUND || category == PostCategory.SPOTTED) {
-            // Owners of open lost posts for the same kind of animal close by get a "possible match" alert.
-            val owners = runCatching { feedOnce(300) }.getOrDefault(emptyList())
-                .filter {
-                    it.category == PostCategory.LOST.key && it.status == PostStatus.OPEN.key && it.animalType == post.animalType &&
-                        it.ownerId != me.uid && distanceKm(it.lat, it.lng, post.lat, post.lng) <= MATCH_RADIUS_KM
-                }
-                .map { it.ownerId }
-            notifications.send(owners, NotifType.POSSIBLE_MATCH, params, "post/${ref.id}", dedupeKey = "match_${ref.id}")
-        }
+        // Possible matches with lost reports (and, for a lost report, with earlier sightings) are found by
+        // MatchRepository.afterPublish: the PC's AI model when it's online, the phone's fingerprint otherwise.
         return ref.id
     }
 
@@ -156,7 +148,10 @@ class PostRepository(
 
     suspend fun setStatus(post: Post, status: PostStatus, me: UserProfile) {
         db.runBatch { b ->
-            b.update(ref(post.id), mapOf("status" to status.key, "resolvedAt" to if (status == PostStatus.OPEN) 0L else now(), "updatedAt" to now(), "lastActivityAt" to now()))
+            val changes = mutableMapOf<String, Any>("status" to status.key, "resolvedAt" to if (status == PostStatus.OPEN) 0L else now(), "updatedAt" to now(), "lastActivityAt" to now())
+            // Reopening forgets how it ended; the match history itself is kept.
+            if (status == PostStatus.OPEN) changes += mapOf("resolution" to "", "resolvedMatchId" to "")
+            b.update(ref(post.id), changes)
             if (status == PostStatus.REUNITED && post.status != PostStatus.REUNITED.key && post.ownerId == me.uid) {
                 users.addStats(b, me.uid, mapOf(Stats.REUNITED to 1), points = 25)
             }

@@ -50,7 +50,8 @@ export default function MapScreen() {
         lng: p.lng,
         category: p.category,
         animalType: p.animalType,
-        pulse: ['lost', 'needs_help'].includes(p.category),
+        pulse: p.status === 'open' && ['lost', 'needs_help'].includes(p.category),
+        reunited: p.status === 'reunited',
       }));
     if (!settings.filters.layers.length || settings.filters.layers.includes('street_cats'))
       result.push(

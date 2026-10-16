@@ -297,6 +297,7 @@ fun AppNavHost(pendingRoute: MutableState<String?>) {
                 }
 
                 composable(Routes.POST) { PostDetailScreen(nav, it.arg("id")) }
+                composable(Routes.MATCH) { com.catmap.dubai.ui.matches.MatchReviewScreen(nav, it.arg("id")) }
                 composable(
                     Routes.NEW_POST,
                     arguments = listOf(optionalString("category"), optionalString("type")),
