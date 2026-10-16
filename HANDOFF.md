@@ -1,7 +1,7 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 16 Oct 2026 (lost-to-reunited workflow with AI matching on Android, web and the PC worker; local only: uncommitted, nothing deployed or pushed. **Deploy the rules before releasing** (see below). Last release v0.0.8 at `2b07278`; next is v0.0.9).**
+and what's left. **Last updated: 16 Oct 2026 (lost-to-reunited workflow with AI matching on Android, web and the PC worker; committed locally as `c7918a6`, not pushed, nothing deployed. **Deploy the rules before releasing** (see below). Last release v0.0.8 at `2b07278`; next is v0.0.9).**
 
 ## 16 October 2026 - lost → sighting → AI match → chat → reunion (Claude)
 
