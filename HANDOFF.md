@@ -1,7 +1,15 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 16 Oct 2026 (lost-to-reunited workflow with AI matching on Android, web and the PC worker; committed locally as `c7918a6`, not pushed, nothing deployed. **Deploy the rules before releasing** (see below). Last release v0.0.8 at `2b07278`; next is v0.0.9).**
+and what's left. **Last updated: 17 Oct 2026 (v0.0.9 released at `c83dae4`: the lost-to-reunited workflow. The owner says the rules are deployed. Next release is v0.0.10).**
+
+## 17 October 2026 - v0.0.9 released (Claude)
+
+* `main` was already pushed (`c83dae4`). Tagged `v0.0.9` after the owner confirmed the production rules were deployed.
+* CI on main and "Release APK v0.0.9" both passed; the release has `CatMap-0.0.9.apk` and its `.sha256`.
+* No code changes in this step; the checks listed in the 16 Oct section below are the ones this build passed.
+* **Owner still to do:** restart `cat-server\start.cmd` (downloads DETR), run `web\publish.cmd` for the web app,
+  install the update on a real phone and try a lost report + sighting.
 
 ## 16 October 2026 - lost → sighting → AI match → chat → reunion (Claude)
 
