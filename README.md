@@ -3,7 +3,6 @@
 **A free community app that helps Dubai's animals: find lost pets, help street cats, and find homes for animals
 that need one.** It works in English and Arabic, on Android, and on iPhone as a web app.
 
-![CatMap icons](docs/icons-preview.png)
 
 ## What you can do with it
 
