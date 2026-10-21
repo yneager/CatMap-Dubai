@@ -362,6 +362,7 @@ function AdminPosts() {
             onClick={() =>
               void action.run(async () => {
                 await PostRepository.setHidden(selected, !selected.hidden, profile!, note);
+                page.patch((p) => (p.id === selected.id ? { ...p, hidden: !selected.hidden } : p));
                 setManage('');
               }, t('updated'))
             }
@@ -374,6 +375,7 @@ function AdminPosts() {
             onClick={() =>
               void action.run(async () => {
                 await PostRepository.moderatorDelete(selected, profile!, note);
+                page.patch((p) => (p.id === selected.id ? null : p));
                 setManage('');
               }, t('updated'))
             }
@@ -455,6 +457,7 @@ function AdminUsers() {
             onClick={() =>
               void action.run(async () => {
                 await AdminRepository.setSuspended(manage, !manage.suspended, profile!, note);
+                page.patch((u) => (u.uid === manage.uid ? { ...u, suspended: !manage.suspended } : u));
                 setManage(null);
               }, t('updated'))
             }
@@ -471,6 +474,7 @@ function AdminUsers() {
                 onClick={() =>
                   void action.run(async () => {
                     await ModerationRepository.changeRole(manage, role, profile!);
+                    page.patch((u) => (u.uid === manage.uid ? { ...u, role } : u));
                     setManage(null);
                   }, t('updated'))
                 }
@@ -515,10 +519,10 @@ function AdminSitters() {
                   className="outlined"
                   disabled={action.busy}
                   onClick={() =>
-                    void action.run(
-                      () => SittingRepository.setVerified(s, !s.verified, profile),
-                      t('updated'),
-                    )
+                    void action.run(async () => {
+                      await SittingRepository.setVerified(s, !s.verified, profile);
+                      page.patch((x) => (x.uid === s.uid ? { ...x, verified: !s.verified } : x));
+                    }, t('updated'))
                   }
                 >
                   {t(s.verified ? 'remove_verification' : 'verify_sitter')}
@@ -528,10 +532,10 @@ function AdminSitters() {
                 className="text-button danger"
                 disabled={action.busy}
                 onClick={() =>
-                  void action.run(
-                    () => SittingRepository.moderatorRemove(s, profile!, ''),
-                    t('updated'),
-                  )
+                  void action.run(async () => {
+                    await SittingRepository.moderatorRemove(s, profile!, '');
+                    page.patch((x) => (x.uid === s.uid ? null : x));
+                  }, t('updated'))
                 }
               >
                 {t('remove_sitter')}

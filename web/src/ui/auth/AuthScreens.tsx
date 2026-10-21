@@ -93,6 +93,14 @@ export default function AuthScreens() {
         </div>
       </>
     );
+  // A logout is still wiping this browser (it reloads to the login page when done): don't offer a form whose input
+  // that reload would throw away.
+  if (localStorage.getItem('catmap_pending_wipe'))
+    return (
+      <main className="auth-column" role="status">
+        <p className="center muted">{t('web_loading')}</p>
+      </main>
+    );
   return (
     <>
       {route !== 'login' && (

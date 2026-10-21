@@ -199,9 +199,9 @@ fun AdminPostsScreen(nav: NavHostController) {
                 val m = me ?: return@TextInputDialog
                 runner.run(R.string.updated) {
                     when (action) {
-                        "hide" -> container.posts.setHidden(post, true, m, note)
-                        "unhide" -> container.posts.setHidden(post, false, m, note)
-                        else -> container.posts.moderatorDelete(post, m, container.images, note)
+                        "hide" -> container.posts.setHidden(post, true, m, note).also { pager.update(post.id) { it.copy(hidden = true) } }
+                        "unhide" -> container.posts.setHidden(post, false, m, note).also { pager.update(post.id) { it.copy(hidden = false) } }
+                        else -> container.posts.moderatorDelete(post, m, container.images, note).also { pager.remove(post.id) }
                     }
                 }
             },
@@ -282,14 +282,14 @@ fun AdminUsersScreen(nav: NavHostController) {
                                         listOf(Roles.USER, Roles.VOLUNTEER, Roles.MODERATOR, Roles.ADMIN).filter { it != u.role }.forEach { role ->
                                             DropdownMenuItem(
                                                 { Text(stringResource(R.string.make_x, stringResource(roleLabel(role)))) },
-                                                { menu = false; runner.run(R.string.updated) { container.moderation.changeRole(u, role, me ?: return@run) } },
+                                                { menu = false; runner.run(R.string.updated) { container.moderation.changeRole(u, role, me ?: return@run); pager.update(u.uid) { it.copy(role = role) } } },
                                             )
                                         }
                                         DropdownMenuItem(
                                             { Text(stringResource(if (u.suspended) R.string.restore_account else R.string.suspend_account), color = MaterialTheme.colorScheme.error) },
                                             {
                                                 menu = false
-                                                if (u.suspended) runner.run(R.string.updated) { container.admin.setSuspended(u, false, me ?: return@run, "") } else suspending = u
+                                                if (u.suspended) runner.run(R.string.updated) { container.admin.setSuspended(u, false, me ?: return@run, ""); pager.update(u.uid) { it.copy(suspended = false) } } else suspending = u
                                             },
                                         )
                                     }
@@ -307,7 +307,7 @@ fun AdminUsersScreen(nav: NavHostController) {
         TextInputDialog(
             stringResource(R.string.suspend_account), stringResource(R.string.reason), stringResource(R.string.suspend_account),
             required = true,
-            onConfirm = { note -> runner.run(R.string.updated) { container.admin.setSuspended(u, true, me ?: return@run, note) } },
+            onConfirm = { note -> runner.run(R.string.updated) { container.admin.setSuspended(u, true, me ?: return@run, note); pager.update(u.uid) { it.copy(suspended = true) } } },
             onDismiss = { suspending = null },
         )
     }
@@ -344,7 +344,7 @@ fun AdminSittersScreen(nav: NavHostController) {
                                 }
                                 if (!s.active) StatusPill(stringResource(R.string.inactive), Color(0xFF757575))
                                 if (me?.role == "admin") TextButton(enabled=!runner.busy,onClick={
-                                    runner.run(R.string.saved) { container.sitting.setVerified(s,!s.verified,me ?: return@run) }
+                                    runner.run(R.string.saved) { container.sitting.setVerified(s,!s.verified,me ?: return@run); pager.update(s.uid) { it.copy(verified = !s.verified) } }
                                 }) { Text(stringResource(if(s.verified) R.string.remove_verification else R.string.verify_sitter)) }
                             }
                             TextButton(onClick = { removing = s }) { Text(stringResource(R.string.remove), color = MaterialTheme.colorScheme.error) }
@@ -357,7 +357,7 @@ fun AdminSittersScreen(nav: NavHostController) {
     removing?.let { s ->
         TextInputDialog(
             stringResource(R.string.remove_sitter), stringResource(R.string.reason), stringResource(R.string.remove),
-            onConfirm = { note -> runner.run(R.string.updated) { container.sitting.moderatorRemove(s, me ?: return@run, note) } },
+            onConfirm = { note -> runner.run(R.string.updated) { container.sitting.moderatorRemove(s, me ?: return@run, note); pager.remove(s.uid) } },
             onDismiss = { removing = null },
         )
     }

@@ -48,6 +48,9 @@ test('lost and street posts carry Android geoCells and searchTerms accepted by t
   }
 });
 
+/** A map spot only the map spec uses (Jebel Ali), away from the posts other specs make near the centre. */
+const SPOT = { lat: 24.9866, lng: 55.0612 };
+
 test('map area pins survive reopening with zero repeated cell queries; Explore reads cursor pages', async ({
   page,
 }) => {
@@ -68,9 +71,9 @@ test('map area pins survive reopening with zero repeated cell queries; Explore r
         name: 'Ultramarine ' + suffix + ' ' + i,
         keywords: ['ultramarine', suffix],
         searchTerms: SearchTerms.of(['ultramarine', suffix]),
-        lat: 25.2048,
-        lng: 55.2708,
-        geoCells: Geohash.cells(25.2048, 55.2708),
+        lat: SPOT.lat,
+        lng: SPOT.lng,
+        geoCells: Geohash.cells(SPOT.lat, SPOT.lng),
         createdAt: now - i,
         updatedAt: now - i,
         lastActivityAt: Date.now(),
@@ -81,27 +84,29 @@ test('map area pins survive reopening with zero repeated cell queries; Explore r
     CatToDoc({
       ...CatDefaults,
       name: 'Area cat ' + suffix,
-      lat: 25.2048,
-      lng: 55.2708,
-      geoCells: Geohash.cells(25.2048, 55.2708),
+      lat: SPOT.lat,
+      lng: SPOT.lng,
+      geoCells: Geohash.cells(SPOT.lat, SPOT.lng),
       updatedAt: now,
       lastSeen: now,
     }),
   );
   await login(page, a);
   await navigate(page, '/settings');
-  const measured = await page.evaluate(async (uid) => {
+  const measured = await page.evaluate(async ({ uid, spot, ids }) => {
     const { MapRepository: map } = await import('/src/data/MapRepository.ts' /* @vite-ignore */);
     const idb = await import('/src/util/idb.ts' /* @vite-ignore */);
     await map.clear();
     await idb.remove('map_' + uid);
     map.resetMetrics();
     await map.start(uid);
-    const box = { south: 25.2, west: 55.265, north: 25.21, east: 55.28 };
+    // A small box: at most four fine cells, so each cell's share of the per-screen budget (300 / cells) covers all 55
+    // posts. A larger box splits the budget further and, as designed, shows the newest posts of each cell first.
+    const box = { south: spot.lat - 0.002, west: spot.lng - 0.003, north: spot.lat + 0.002, east: spot.lng + 0.003 };
     await map.viewport(box);
     await map.flush();
     const cold = map.metrics(),
-      pins = Object.keys(map.get().posts).length;
+      pins = ids.filter((id) => id in map.get().posts).length;
     map.stop();
     map.resetMetrics();
     await map.start(uid);
@@ -110,7 +115,7 @@ test('map area pins survive reopening with zero repeated cell queries; Explore r
     const warm = map.metrics();
     map.stop();
     return { cold, warm, pins };
-  }, a.uid);
+  }, { uid: a.uid, spot: SPOT, ids });
   expect(measured.pins).toBeGreaterThanOrEqual(55);
   expect(measured.cold.areaQueries).toBeGreaterThan(0);
   expect(measured.warm.areaQueries).toBe(0);
@@ -234,7 +239,10 @@ for (const offline of [false, true])
         .catch((e) => {
           if (!String(e).includes('Execution context was destroyed')) throw e;
         });
-      if (offline) await context.setOffline(false);
+      if (offline) {
+        await context.setOffline(false);
+        if (!page.url().startsWith('http')) await navigate(page, '/login');
+      }
       await expect(page).toHaveURL(/\/login$/);
       const keys = await page.evaluate(async () => {
         return new Promise<IDBValidKey[]>((resolve, reject) => {

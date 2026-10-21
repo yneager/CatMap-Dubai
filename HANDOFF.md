@@ -3,6 +3,32 @@
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
 and what's left. **Last updated: 21 Oct 2026 (major update done; **v0.1.0 released**; see the top section).**
 
+## 21 October 2026 - Web round 3 reviewed and verified (Claude)
+
+* **Reviewed Codex's round 3** (`docs/done/work done (web round 3).txt`, brief `docs/done/CLAUDE_TO_CODEX.txt`): the
+  web code matches Android for map areas (`geoCells`), search (`searchTerms`), paging, nearby/by-id reads, photo
+  limits, alert writes, logout wipe and in-app routes. Codex couldn't start the emulators, so the full suite had
+  never run.
+* **Found and fixed** (the full suite found them):
+  * *Logout race (web):* the login form appeared before the logout wipe finished; the reload at the end then threw
+    away what was typed. The login screen now waits (`AuthScreens.tsx`), and a failed wipe reloads so start-up
+    finishes it (`AuthRepository.logout`).
+  * *Admin lists didn't update after an action (web and Android, audit A35):* paged lists are read once, so hiding a
+    post, suspending or changing a role, or verifying/removing a sitter left the old row. Rows now update in place
+    (`usePager.patch`, `Pager.update` + `remove`, the admin screens). **The Android part ships with the next APK
+    (v0.1.1).**
+  * *Test fixes:* the map spec now uses its own spot and a small box (with 6 cells on screen each cell gets 50 of
+    the 300 budget, by design); the offline-logout spec reopens /login when the dev server can't serve the reload.
+  * *Vite 8.3.1 → 8.3.3* (dev tool; 3 high advisories in launch-editor, fixed from 8.3.3). `npm audit`: 0.
+* **Checks (isolated emulators, current rules):** Chromium + WebKit 44 passed, 8 opt-in skipped; preview + install
+  projects 10 passed; PWA spec 2 passed; rules suite 486 passed; probes only F4 and F13 open; web lint, typecheck,
+  93 unit tests, build, strings check; Android unit tests + lintDebug. The Firestore emulator needs
+  `JAVA_TOOL_OPTIONS=-Xmx2048m` for a full run (it ran out of memory at 1 GB on the third run).
+* **Measured:** cold map open 8 area queries / 62–83 reads + 2 change reads; warm reopen 0; Explore 25 → 50 posts in
+  3 queries / 75 reads.
+* **Owner:** the web app is ready to publish (`web\publish.cmd`, which rebuilds from scratch without test settings),
+  then check it on a real iPhone. `WEB_TODO.txt` is empty.
+
 ## 21 October 2026 - Tidy-up and v0.1.0 (Claude)
 
 * **Folder tidy-up (owner's request):** finished notes moved to `docs/done/` (the Phase 1–10 plan, the web round 3

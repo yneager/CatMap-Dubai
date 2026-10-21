@@ -99,10 +99,21 @@ export function usePager<T>(
       document.removeEventListener('touchend', up);
     };
   }, []);
+  // Lists read once (no listener), so an action taken on a row updates that row here; null removes it.
+  const patch = (update: (item: T) => T | null) => {
+    const holder = current.current;
+    if (!holder) return;
+    holder.pager.items = holder.pager.items.flatMap((item) => {
+      const next = update(item);
+      return next === null ? [] : [next];
+    });
+    setState((s) => (s.key === holder.key ? { ...s, items: [...holder.pager.items] } : s));
+  };
   return {
     ...(state.key === key ? state : { items: undefined, hasMore: true, busy: true, error: '' }),
     load,
     refresh,
+    patch,
   };
 }
 export function PagingFooter({

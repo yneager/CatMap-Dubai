@@ -92,6 +92,9 @@ class Pager<T : Any>(
     /** Removes an item that was deleted or hidden while the list was open. */
     fun remove(id: String) = _state.update { s -> s.copy(items = s.items.filterNot { key(it) == id }) }
 
+    /** Changes one loaded item after an action on it (lists are read once, so they don't see the change themselves). */
+    fun update(id: String, change: (T) -> T) = _state.update { s -> s.copy(items = s.items.map { if (key(it) == id) change(it) else it }) }
+
     companion object {
         inline fun <reified T : Any> of(
             scope: CoroutineScope,

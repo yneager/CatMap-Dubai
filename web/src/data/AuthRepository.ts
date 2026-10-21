@@ -11,7 +11,7 @@ import {
 } from 'firebase/auth';
 import { writeBatch, updateDoc } from 'firebase/firestore';
 import { authentication, database } from '../firebase';
-import { ref, read, AppException } from './Firestore';
+import { ref, read, AppException, AppErrors } from './Firestore';
 import { UserRepository as users } from './UserRepository';
 import { UserProfileDefaults, UserProfileToDoc } from './model';
 import { NotificationRepository } from './NotificationRepository';
@@ -110,9 +110,15 @@ export const AuthRepository = {
   },
   logout: async () => {
     localStorage.setItem('catmap_pending_wipe', '1');
-    await DemoVault.clear();
-    await signOut(authentication());
-    await wipeAndReload();
+    try {
+      await DemoVault.clear();
+      await signOut(authentication());
+      await wipeAndReload();
+    } catch (error) {
+      // The pending flag stays set: the reload finishes the wipe at start-up (firebase.ts) before anything else.
+      AppErrors.report(error);
+      location.replace('/login');
+    }
   },
   switchDemoAccount: async (account: (typeof DemoAccounts.ALL)[number]) => {
     const password = await DemoVault.password();
