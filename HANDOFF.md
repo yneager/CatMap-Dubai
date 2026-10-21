@@ -1,7 +1,7 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 21 Oct 2026 (major update done; v0.1.0 committed and pushed, tag waiting for the rules deploy; see the top section).**
+and what's left. **Last updated: 21 Oct 2026 (major update done; **v0.1.0 released**; see the top section).**
 
 ## 21 October 2026 - Tidy-up and v0.1.0 (Claude)
 
@@ -14,9 +14,9 @@ and what's left. **Last updated: 21 Oct 2026 (major update done; v0.1.0 committe
   and `tools/rulestest/phase1-findings.mjs` (security notes and test probes; the owner decides when to publish
   them).
 * **README** rewritten for everyday readers; developer details are in SETUP.md and this file.
-* **v0.1.0:** committed and `main` pushed with the owner's OK. **The tag waits for the owner to deploy the rules and
-  indexes**: the live rules only allow the old post fields, so v0.1.0 couldn't create or edit posts (and search
-  wouldn't work) before that.
+* **v0.1.0 released** (21 Oct 2026, commit `fd2e828`): the owner deployed the rules and indexes first (all
+  indexes "Enabled"), then the tag was pushed. CI on main passed (Android, web, rules, CodeQL); "Release APK" passed
+  (check, build, publish) with `CatMap-0.1.0.apk`, `.sha256`, the dependency list and the SBOM. Next release: v0.1.1.
 * **Still open:** review of Codex's web round 3 (`work done.txt`; its own browser e2e run is incomplete, see
   `WEB_TODO.txt`) before `web\publish.cmd`; the follow-up work in the local audit report.
 
