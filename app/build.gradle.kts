@@ -235,5 +235,5 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
 
     // Vector maps (OpenFreeMap tiles, no key); replaces osmdroid's blurry raster tiles.
-    implementation("org.maplibre.gl:android-sdk:13.6.1")
+    implementation("org.maplibre.gl:android-sdk:13.7.1")
 }
