@@ -1,5 +1,5 @@
 // Generated from Android Kotlin models. Run npm run models:generate.
-import type { Timestamp } from 'firebase/firestore';
+import { Timestamp } from 'firebase/firestore';
 export interface Post {
   id: string;
   ownerId: string;
@@ -42,6 +42,8 @@ export interface Post {
   microchip: string;
   resolution: string;
   resolvedMatchId: string;
+  geoCells: string[];
+  searchTerms: string[];
 }
 export const PostDefaults: Post = {
   id: "",
@@ -85,9 +87,55 @@ export const PostDefaults: Post = {
   microchip: "unknown",
   resolution: "",
   resolvedMatchId: "",
+  geoCells: [],
+  searchTerms: [],
 };
 export function PostFromDoc(id: string, data: Record<string, unknown>): Post {
-  return Object.assign(Object.fromEntries(Object.entries(PostDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as Post;
+  return {
+    id: id,
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    ownerName: typeof data.ownerName === "string" ? data.ownerName : "",
+    ownerPhotoId: typeof data.ownerPhotoId === "string" ? data.ownerPhotoId : "",
+    animalType: typeof data.animalType === "string" ? data.animalType : "cat",
+    category: typeof data.category === "string" ? data.category : "spotted",
+    status: typeof data.status === "string" ? data.status : "open",
+    name: typeof data.name === "string" ? data.name : "",
+    description: typeof data.description === "string" ? data.description : "",
+    color: typeof data.color === "string" ? data.color : "",
+    breed: typeof data.breed === "string" ? data.breed : "",
+    features: typeof data.features === "string" ? data.features : "",
+    sex: typeof data.sex === "string" ? data.sex : "unknown",
+    ageGroup: typeof data.ageGroup === "string" ? data.ageGroup : "unknown",
+    photoIds: Array.isArray(data.photoIds) ? data.photoIds.filter((v): v is string => typeof v === "string") : [],
+    videoPath: typeof data.videoPath === "string" ? data.videoPath : "",
+    lat: typeof data.lat === "number" && Number.isFinite(data.lat) ? data.lat : 0.0,
+    lng: typeof data.lng === "number" && Number.isFinite(data.lng) ? data.lng : 0.0,
+    approximate: typeof data.approximate === "boolean" ? data.approximate : false,
+    areaRadiusM: typeof data.areaRadiusM === "number" && Number.isFinite(data.areaRadiusM) ? data.areaRadiusM : 0,
+    neighborhood: typeof data.neighborhood === "string" ? data.neighborhood : "",
+    lastSeenAt: typeof data.lastSeenAt === "number" && Number.isFinite(data.lastSeenAt) ? data.lastSeenAt : 0,
+    reward: typeof data.reward === "number" && Number.isFinite(data.reward) ? data.reward : 0,
+    contactMethod: typeof data.contactMethod === "string" ? data.contactMethod : "in_app",
+    contactPhone: typeof data.contactPhone === "string" ? data.contactPhone : "",
+    contactEmail: typeof data.contactEmail === "string" ? data.contactEmail : "",
+    adoptionStatus: typeof data.adoptionStatus === "string" ? data.adoptionStatus : "available",
+    health: typeof data.health === "string" ? data.health : "",
+    vaccinated: typeof data.vaccinated === "boolean" ? data.vaccinated : false,
+    neutered: typeof data.neutered === "boolean" ? data.neutered : false,
+    updatesCount: typeof data.updatesCount === "number" && Number.isFinite(data.updatesCount) ? data.updatesCount : 0,
+    hidden: typeof data.hidden === "boolean" ? data.hidden : false,
+    keywords: Array.isArray(data.keywords) ? data.keywords.filter((v): v is string => typeof v === "string") : [],
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+    updatedAt: typeof data.updatedAt === "number" && Number.isFinite(data.updatedAt) ? data.updatedAt : 0,
+    resolvedAt: typeof data.resolvedAt === "number" && Number.isFinite(data.resolvedAt) ? data.resolvedAt : 0,
+    lastActivityAt: typeof data.lastActivityAt === "number" && Number.isFinite(data.lastActivityAt) ? data.lastActivityAt : 0,
+    fingerprint: Array.isArray(data.fingerprint) ? data.fingerprint.filter((v): v is number => typeof v === "number" && Number.isFinite(v)) : [],
+    microchip: typeof data.microchip === "string" ? data.microchip : "unknown",
+    resolution: typeof data.resolution === "string" ? data.resolution : "",
+    resolvedMatchId: typeof data.resolvedMatchId === "string" ? data.resolvedMatchId : "",
+    geoCells: Array.isArray(data.geoCells) ? data.geoCells.filter((v): v is string => typeof v === "string") : [],
+    searchTerms: Array.isArray(data.searchTerms) ? data.searchTerms.filter((v): v is string => typeof v === "string") : [],
+  };
 }
 export function PostToDoc(value: Post): Record<string, unknown> {
   return {
@@ -131,6 +179,8 @@ export function PostToDoc(value: Post): Record<string, unknown> {
     microchip: value.microchip,
     resolution: value.resolution,
     resolvedMatchId: value.resolvedMatchId,
+    geoCells: value.geoCells,
+    searchTerms: value.searchTerms,
   };
 }
 export interface PostMatch {
@@ -188,7 +238,33 @@ export const PostMatchDefaults: PostMatch = {
   verifiedAt: 0,
 };
 export function PostMatchFromDoc(id: string, data: Record<string, unknown>): PostMatch {
-  return Object.assign(Object.fromEntries(Object.entries(PostMatchDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as PostMatch;
+  return {
+    id: id,
+    lostPostId: typeof data.lostPostId === "string" ? data.lostPostId : "",
+    sightingPostId: typeof data.sightingPostId === "string" ? data.sightingPostId : "",
+    lostOwnerId: typeof data.lostOwnerId === "string" ? data.lostOwnerId : "",
+    sightingOwnerId: typeof data.sightingOwnerId === "string" ? data.sightingOwnerId : "",
+    members: Array.isArray(data.members) ? data.members.filter((v): v is string => typeof v === "string") : [],
+    animalType: typeof data.animalType === "string" ? data.animalType : "",
+    score: typeof data.score === "number" && Number.isFinite(data.score) ? data.score : 0.0,
+    visual: typeof data.visual === "number" && Number.isFinite(data.visual) ? data.visual : -1.0,
+    tier: typeof data.tier === "string" ? data.tier : "none",
+    method: typeof data.method === "string" ? data.method : "details",
+    model: typeof data.model === "string" ? data.model : "",
+    distanceKm: typeof data.distanceKm === "number" && Number.isFinite(data.distanceKm) ? data.distanceKm : 0.0,
+    daysApart: typeof data.daysApart === "number" && Number.isFinite(data.daysApart) ? data.daysApart : 0.0,
+    reasons: Array.isArray(data.reasons) ? data.reasons.filter((v): v is string => typeof v === "string") : [],
+    source: typeof data.source === "string" ? data.source : "device",
+    ownerState: typeof data.ownerState === "string" ? data.ownerState : "new",
+    reporterState: typeof data.reporterState === "string" ? data.reporterState : "new",
+    createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+    updatedAt: typeof data.updatedAt === "number" && Number.isFinite(data.updatedAt) ? data.updatedAt : 0,
+    reviewedAt: typeof data.reviewedAt === "number" && Number.isFinite(data.reviewedAt) ? data.reviewedAt : 0,
+    notified: typeof data.notified === "boolean" ? data.notified : false,
+    verifiedBy: typeof data.verifiedBy === "string" ? data.verifiedBy : "",
+    verifiedAt: typeof data.verifiedAt === "number" && Number.isFinite(data.verifiedAt) ? data.verifiedAt : 0,
+  };
 }
 export function PostMatchToDoc(value: PostMatch): Record<string, unknown> {
   return {
@@ -245,7 +321,19 @@ export const PostUpdateDefaults: PostUpdate = {
   createdAt: 0,
 };
 export function PostUpdateFromDoc(id: string, data: Record<string, unknown>): PostUpdate {
-  return Object.assign(Object.fromEntries(Object.entries(PostUpdateDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as PostUpdate;
+  return {
+    id: id,
+    postId: typeof data.postId === "string" ? data.postId : "",
+    kind: typeof data.kind === "string" ? data.kind : "sighting",
+    text: typeof data.text === "string" ? data.text : "",
+    photoId: typeof data.photoId === "string" ? data.photoId : "",
+    lat: typeof data.lat === "number" && Number.isFinite(data.lat) ? data.lat : 0.0,
+    lng: typeof data.lng === "number" && Number.isFinite(data.lng) ? data.lng : 0.0,
+    neighborhood: typeof data.neighborhood === "string" ? data.neighborhood : "",
+    byUid: typeof data.byUid === "string" ? data.byUid : "",
+    byName: typeof data.byName === "string" ? data.byName : "",
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+  };
 }
 export function PostUpdateToDoc(value: PostUpdate): Record<string, unknown> {
   return {
@@ -292,7 +380,21 @@ export const AdoptionRequestDefaults: AdoptionRequest = {
   decidedAt: 0,
 };
 export function AdoptionRequestFromDoc(id: string, data: Record<string, unknown>): AdoptionRequest {
-  return Object.assign(Object.fromEntries(Object.entries(AdoptionRequestDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as AdoptionRequest;
+  return {
+    id: id,
+    postId: typeof data.postId === "string" ? data.postId : "",
+    postName: typeof data.postName === "string" ? data.postName : "",
+    postPhotoId: typeof data.postPhotoId === "string" ? data.postPhotoId : "",
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    requesterId: typeof data.requesterId === "string" ? data.requesterId : "",
+    requesterName: typeof data.requesterName === "string" ? data.requesterName : "",
+    message: typeof data.message === "string" ? data.message : "",
+    home: typeof data.home === "string" ? data.home : "",
+    status: typeof data.status === "string" ? data.status : "pending",
+    ownerNote: typeof data.ownerNote === "string" ? data.ownerNote : "",
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+    decidedAt: typeof data.decidedAt === "number" && Number.isFinite(data.decidedAt) ? data.decidedAt : 0,
+  };
 }
 export function AdoptionRequestToDoc(value: AdoptionRequest): Record<string, unknown> {
   return {
@@ -357,7 +459,29 @@ export const SitterProfileDefaults: SitterProfile = {
   updatedAt: 0,
 };
 export function SitterProfileFromDoc(id: string, data: Record<string, unknown>): SitterProfile {
-  return Object.assign(Object.fromEntries(Object.entries(SitterProfileDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { uid: id }) as unknown as SitterProfile;
+  return {
+    uid: id,
+    name: typeof data.name === "string" ? data.name : "",
+    photoId: typeof data.photoId === "string" ? data.photoId : "",
+    headline: typeof data.headline === "string" ? data.headline : "",
+    description: typeof data.description === "string" ? data.description : "",
+    experience: typeof data.experience === "string" ? data.experience : "",
+    petTypes: Array.isArray(data.petTypes) ? data.petTypes.filter((v): v is string => typeof v === "string") : [],
+    services: Array.isArray(data.services) ? data.services.filter((v): v is string => typeof v === "string") : [],
+    availability: typeof data.availability === "string" ? data.availability : "",
+    rate: typeof data.rate === "number" && Number.isFinite(data.rate) ? data.rate : 0,
+    rateUnit: typeof data.rateUnit === "string" ? data.rateUnit : "visit",
+    lat: typeof data.lat === "number" && Number.isFinite(data.lat) ? data.lat : 0.0,
+    lng: typeof data.lng === "number" && Number.isFinite(data.lng) ? data.lng : 0.0,
+    neighborhood: typeof data.neighborhood === "string" ? data.neighborhood : "",
+    active: typeof data.active === "boolean" ? data.active : true,
+    ratingSum: typeof data.ratingSum === "number" && Number.isFinite(data.ratingSum) ? data.ratingSum : 0,
+    verified: typeof data.verified === "boolean" ? data.verified : false,
+    ratingCount: typeof data.ratingCount === "number" && Number.isFinite(data.ratingCount) ? data.ratingCount : 0,
+    lastReviewId: typeof data.lastReviewId === "string" ? data.lastReviewId : "",
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+    updatedAt: typeof data.updatedAt === "number" && Number.isFinite(data.updatedAt) ? data.updatedAt : 0,
+  };
 }
 export function SitterProfileToDoc(value: SitterProfile): Record<string, unknown> {
   return {
@@ -418,7 +542,23 @@ export const BookingDefaults: Booking = {
   updatedAt: 0,
 };
 export function BookingFromDoc(id: string, data: Record<string, unknown>): Booking {
-  return Object.assign(Object.fromEntries(Object.entries(BookingDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as Booking;
+  return {
+    id: id,
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    ownerName: typeof data.ownerName === "string" ? data.ownerName : "",
+    sitterId: typeof data.sitterId === "string" ? data.sitterId : "",
+    sitterName: typeof data.sitterName === "string" ? data.sitterName : "",
+    petTypes: Array.isArray(data.petTypes) ? data.petTypes.filter((v): v is string => typeof v === "string") : [],
+    petCount: typeof data.petCount === "number" && Number.isFinite(data.petCount) ? data.petCount : 1,
+    startAt: typeof data.startAt === "number" && Number.isFinite(data.startAt) ? data.startAt : 0,
+    endAt: typeof data.endAt === "number" && Number.isFinite(data.endAt) ? data.endAt : 0,
+    notes: typeof data.notes === "string" ? data.notes : "",
+    sitterNote: typeof data.sitterNote === "string" ? data.sitterNote : "",
+    status: typeof data.status === "string" ? data.status : "requested",
+    reviewed: typeof data.reviewed === "boolean" ? data.reviewed : false,
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+    updatedAt: typeof data.updatedAt === "number" && Number.isFinite(data.updatedAt) ? data.updatedAt : 0,
+  };
 }
 export function BookingToDoc(value: Booking): Record<string, unknown> {
   return {
@@ -457,7 +597,15 @@ export const ReviewDefaults: Review = {
   createdAt: 0,
 };
 export function ReviewFromDoc(id: string, data: Record<string, unknown>): Review {
-  return Object.assign(Object.fromEntries(Object.entries(ReviewDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as Review;
+  return {
+    id: id,
+    sitterId: typeof data.sitterId === "string" ? data.sitterId : "",
+    authorId: typeof data.authorId === "string" ? data.authorId : "",
+    authorName: typeof data.authorName === "string" ? data.authorName : "",
+    rating: typeof data.rating === "number" && Number.isFinite(data.rating) ? data.rating : 5,
+    text: typeof data.text === "string" ? data.text : "",
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+  };
 }
 export function ReviewToDoc(value: Review): Record<string, unknown> {
   return {
@@ -490,7 +638,16 @@ export const ChatDefaults: Chat = {
   unread: {},
 };
 export function ChatFromDoc(id: string, data: Record<string, unknown>): Chat {
-  return Object.assign(Object.fromEntries(Object.entries(ChatDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as Chat;
+  return {
+    id: id,
+    members: Array.isArray(data.members) ? data.members.filter((v): v is string => typeof v === "string") : [],
+    names: data.names && typeof data.names === "object" && !Array.isArray(data.names) ? Object.fromEntries(Object.entries(data.names).filter(([, v]) => typeof v === "string")) as Record<string, string> : {},
+    photos: data.photos && typeof data.photos === "object" && !Array.isArray(data.photos) ? Object.fromEntries(Object.entries(data.photos).filter(([, v]) => typeof v === "string")) as Record<string, string> : {},
+    lastText: typeof data.lastText === "string" ? data.lastText : "",
+    lastSender: typeof data.lastSender === "string" ? data.lastSender : "",
+    lastAt: typeof data.lastAt === "number" && Number.isFinite(data.lastAt) ? data.lastAt : 0,
+    unread: data.unread && typeof data.unread === "object" && !Array.isArray(data.unread) ? Object.fromEntries(Object.entries(data.unread).filter(([, v]) => typeof v === "number" && Number.isFinite(v))) as Record<string, number> : {},
+  };
 }
 export function ChatToDoc(value: Chat): Record<string, unknown> {
   return {
@@ -528,7 +685,18 @@ export const MessageDefaults: Message = {
   createdAt: 0,
 };
 export function MessageFromDoc(id: string, data: Record<string, unknown>): Message {
-  return Object.assign(Object.fromEntries(Object.entries(MessageDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as Message;
+  return {
+    id: id,
+    senderId: typeof data.senderId === "string" ? data.senderId : "",
+    text: typeof data.text === "string" ? data.text : "",
+    imageId: typeof data.imageId === "string" ? data.imageId : "",
+    postId: typeof data.postId === "string" ? data.postId : "",
+    postTitle: typeof data.postTitle === "string" ? data.postTitle : "",
+    postPhotoId: typeof data.postPhotoId === "string" ? data.postPhotoId : "",
+    matchId: typeof data.matchId === "string" ? data.matchId : "",
+    matchPhotoId: typeof data.matchPhotoId === "string" ? data.matchPhotoId : "",
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+  };
 }
 export function MessageToDoc(value: Message): Record<string, unknown> {
   return {
@@ -560,7 +728,14 @@ export const AreaFollowDefaults: AreaFollow = {
   updatedAt: 0,
 };
 export function AreaFollowFromDoc(id: string, data: Record<string, unknown>): AreaFollow {
-  return Object.assign(Object.fromEntries(Object.entries(AreaFollowDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { uid: id }) as unknown as AreaFollow;
+  return {
+    uid: id,
+    neighborhoods: Array.isArray(data.neighborhoods) ? data.neighborhoods.filter((v): v is string => typeof v === "string") : [],
+    lat: typeof data.lat === "number" && Number.isFinite(data.lat) ? data.lat : 0.0,
+    lng: typeof data.lng === "number" && Number.isFinite(data.lng) ? data.lng : 0.0,
+    radiusKm: typeof data.radiusKm === "number" && Number.isFinite(data.radiusKm) ? data.radiusKm : 0.0,
+    updatedAt: typeof data.updatedAt === "number" && Number.isFinite(data.updatedAt) ? data.updatedAt : 0,
+  };
 }
 export function AreaFollowToDoc(value: AreaFollow): Record<string, unknown> {
   return {
@@ -582,7 +757,11 @@ export const FavoriteDefaults: Favorite = {
   savedAt: 0,
 };
 export function FavoriteFromDoc(id: string, data: Record<string, unknown>): Favorite {
-  return Object.assign(Object.fromEntries(Object.entries(FavoriteDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as Favorite;
+  return {
+    id: id,
+    postId: typeof data.postId === "string" ? data.postId : "",
+    savedAt: typeof data.savedAt === "number" && Number.isFinite(data.savedAt) ? data.savedAt : 0,
+  };
 }
 export function FavoriteToDoc(value: Favorite): Record<string, unknown> {
   return {
@@ -627,7 +806,24 @@ export const UserProfileDefaults: UserProfile = {
   createdAt: 0,
 };
 export function UserProfileFromDoc(id: string, data: Record<string, unknown>): UserProfile {
-  return Object.assign(Object.fromEntries(Object.entries(UserProfileDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { uid: id }) as unknown as UserProfile;
+  return {
+    uid: id,
+    username: typeof data.username === "string" ? data.username : "",
+    displayName: typeof data.displayName === "string" ? data.displayName : "",
+    bio: typeof data.bio === "string" ? data.bio : "",
+    photoId: typeof data.photoId === "string" ? data.photoId : "",
+    role: typeof data.role === "string" ? data.role : "user",
+    volunteerStatus: typeof data.volunteerStatus === "string" ? data.volunteerStatus : "none",
+    stats: data.stats && typeof data.stats === "object" && !Array.isArray(data.stats) ? Object.fromEntries(Object.entries(data.stats).filter(([, v]) => typeof v === "number" && Number.isFinite(v))) as Record<string, number> : {},
+    points: typeof data.points === "number" && Number.isFinite(data.points) ? data.points : 0,
+    neighborhoods: Array.isArray(data.neighborhoods) ? data.neighborhoods.filter((v): v is string => typeof v === "string") : [],
+    badges: Array.isArray(data.badges) ? data.badges.filter((v): v is string => typeof v === "string") : [],
+    followedCats: Array.isArray(data.followedCats) ? data.followedCats.filter((v): v is string => typeof v === "string") : [],
+    showStatsPublicly: typeof data.showStatsPublicly === "boolean" ? data.showStatsPublicly : true,
+    suspended: typeof data.suspended === "boolean" ? data.suspended : false,
+    lastPostAt: data.lastPostAt instanceof Timestamp ? data.lastPostAt : null,
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+  };
 }
 export function UserProfileToDoc(value: UserProfile): Record<string, unknown> {
   return {
@@ -680,6 +876,8 @@ export interface Cat {
   hidden: boolean;
   createdAt: number;
   updatedAt: number;
+  geoCells: string[];
+  searchTerms: string[];
 }
 export const CatDefaults: Cat = {
   id: "",
@@ -713,9 +911,45 @@ export const CatDefaults: Cat = {
   hidden: false,
   createdAt: 0,
   updatedAt: 0,
+  geoCells: [],
+  searchTerms: [],
 };
 export function CatFromDoc(id: string, data: Record<string, unknown>): Cat {
-  return Object.assign(Object.fromEntries(Object.entries(CatDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as Cat;
+  return {
+    id: id,
+    name: typeof data.name === "string" ? data.name : "",
+    aliases: Array.isArray(data.aliases) ? data.aliases.filter((v): v is string => typeof v === "string") : [],
+    description: typeof data.description === "string" ? data.description : "",
+    distinctiveMarks: typeof data.distinctiveMarks === "string" ? data.distinctiveMarks : "",
+    coatColor: typeof data.coatColor === "string" ? data.coatColor : "unknown",
+    pattern: typeof data.pattern === "string" ? data.pattern : "unknown",
+    size: typeof data.size === "string" ? data.size : "unknown",
+    sex: typeof data.sex === "string" ? data.sex : "unknown",
+    breedHints: Array.isArray(data.breedHints) ? data.breedHints.filter((v): v is string => typeof v === "string") : [],
+    photoIds: Array.isArray(data.photoIds) ? data.photoIds.filter((v): v is string => typeof v === "string") : [],
+    coverPhotoId: typeof data.coverPhotoId === "string" ? data.coverPhotoId : "",
+    createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
+    createdByName: typeof data.createdByName === "string" ? data.createdByName : "",
+    contributors: Array.isArray(data.contributors) ? data.contributors.filter((v): v is string => typeof v === "string") : [],
+    followers: Array.isArray(data.followers) ? data.followers.filter((v): v is string => typeof v === "string") : [],
+    firstSeen: typeof data.firstSeen === "number" && Number.isFinite(data.firstSeen) ? data.firstSeen : 0,
+    lastSeen: typeof data.lastSeen === "number" && Number.isFinite(data.lastSeen) ? data.lastSeen : 0,
+    sightingCount: typeof data.sightingCount === "number" && Number.isFinite(data.sightingCount) ? data.sightingCount : 0,
+    lat: typeof data.lat === "number" && Number.isFinite(data.lat) ? data.lat : 0.0,
+    lng: typeof data.lng === "number" && Number.isFinite(data.lng) ? data.lng : 0.0,
+    neighborhood: typeof data.neighborhood === "string" ? data.neighborhood : "",
+    neighborhoods: Array.isArray(data.neighborhoods) ? data.neighborhoods.filter((v): v is string => typeof v === "string") : [],
+    tnrStatus: typeof data.tnrStatus === "string" ? data.tnrStatus : "unknown",
+    tnrVerified: typeof data.tnrVerified === "boolean" ? data.tnrVerified : false,
+    healthStatus: typeof data.healthStatus === "string" ? data.healthStatus : "unknown",
+    features: Array.isArray(data.features) ? data.features.filter((v): v is number => typeof v === "number" && Number.isFinite(v)) : [],
+    mergedInto: typeof data.mergedInto === "string" ? data.mergedInto : "",
+    hidden: typeof data.hidden === "boolean" ? data.hidden : false,
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+    updatedAt: typeof data.updatedAt === "number" && Number.isFinite(data.updatedAt) ? data.updatedAt : 0,
+    geoCells: Array.isArray(data.geoCells) ? data.geoCells.filter((v): v is string => typeof v === "string") : [],
+    searchTerms: Array.isArray(data.searchTerms) ? data.searchTerms.filter((v): v is string => typeof v === "string") : [],
+  };
 }
 export function CatToDoc(value: Cat): Record<string, unknown> {
   return {
@@ -749,6 +983,8 @@ export function CatToDoc(value: Cat): Record<string, unknown> {
     hidden: value.hidden,
     createdAt: Math.round(value.createdAt),
     updatedAt: Math.round(value.updatedAt),
+    geoCells: value.geoCells,
+    searchTerms: value.searchTerms,
   };
 }
 export interface Sighting {
@@ -812,7 +1048,36 @@ export const SightingDefaults: Sighting = {
   updatedAt: 0,
 };
 export function SightingFromDoc(id: string, data: Record<string, unknown>): Sighting {
-  return Object.assign(Object.fromEntries(Object.entries(SightingDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as Sighting;
+  return {
+    id: id,
+    catId: typeof data.catId === "string" ? data.catId : "",
+    catName: typeof data.catName === "string" ? data.catName : "",
+    userId: typeof data.userId === "string" ? data.userId : "",
+    username: typeof data.username === "string" ? data.username : "",
+    photoIds: Array.isArray(data.photoIds) ? data.photoIds.filter((v): v is string => typeof v === "string") : [],
+    seenAt: typeof data.seenAt === "number" && Number.isFinite(data.seenAt) ? data.seenAt : 0,
+    lat: typeof data.lat === "number" && Number.isFinite(data.lat) ? data.lat : 0.0,
+    lng: typeof data.lng === "number" && Number.isFinite(data.lng) ? data.lng : 0.0,
+    neighborhood: typeof data.neighborhood === "string" ? data.neighborhood : "",
+    locationSource: typeof data.locationSource === "string" ? data.locationSource : "gps",
+    coatColor: typeof data.coatColor === "string" ? data.coatColor : "unknown",
+    pattern: typeof data.pattern === "string" ? data.pattern : "unknown",
+    size: typeof data.size === "string" ? data.size : "unknown",
+    healthTags: Array.isArray(data.healthTags) ? data.healthTags.filter((v): v is string => typeof v === "string") : [],
+    behaviorTags: Array.isArray(data.behaviorTags) ? data.behaviorTags.filter((v): v is string => typeof v === "string") : [],
+    earTipped: typeof data.earTipped === "string" ? data.earTipped : "unsure",
+    possiblyNotNeutered: typeof data.possiblyNotNeutered === "boolean" ? data.possiblyNotNeutered : false,
+    needsMedical: typeof data.needsMedical === "boolean" ? data.needsMedical : false,
+    notes: typeof data.notes === "string" ? data.notes : "",
+    newCat: typeof data.newCat === "boolean" ? data.newCat : false,
+    matchScore: typeof data.matchScore === "number" && Number.isFinite(data.matchScore) ? data.matchScore : 0.0,
+    aiSummary: typeof data.aiSummary === "string" ? data.aiSummary : "",
+    suggestedCatIds: Array.isArray(data.suggestedCatIds) ? data.suggestedCatIds.filter((v): v is string => typeof v === "string") : [],
+    rejectedCatIds: Array.isArray(data.rejectedCatIds) ? data.rejectedCatIds.filter((v): v is string => typeof v === "string") : [],
+    status: typeof data.status === "string" ? data.status : "pending",
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+    updatedAt: typeof data.updatedAt === "number" && Number.isFinite(data.updatedAt) ? data.updatedAt : 0,
+  };
 }
 export function SightingToDoc(value: Sighting): Record<string, unknown> {
   return {
@@ -860,7 +1125,13 @@ export const PrivateLocationDefaults: PrivateLocation = {
   accuracy: 0.0,
 };
 export function PrivateLocationFromDoc(id: string, data: Record<string, unknown>): PrivateLocation {
-  return Object.assign(Object.fromEntries(Object.entries(PrivateLocationDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as PrivateLocation;
+  return {
+    id: id,
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    lat: typeof data.lat === "number" && Number.isFinite(data.lat) ? data.lat : 0.0,
+    lng: typeof data.lng === "number" && Number.isFinite(data.lng) ? data.lng : 0.0,
+    accuracy: typeof data.accuracy === "number" && Number.isFinite(data.accuracy) ? data.accuracy : 0.0,
+  };
 }
 export function PrivateLocationToDoc(value: PrivateLocation): Record<string, unknown> {
   return {
@@ -889,7 +1160,15 @@ export const MedicalRecordDefaults: MedicalRecord = {
   at: 0,
 };
 export function MedicalRecordFromDoc(id: string, data: Record<string, unknown>): MedicalRecord {
-  return Object.assign(Object.fromEntries(Object.entries(MedicalRecordDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as MedicalRecord;
+  return {
+    id: id,
+    catId: typeof data.catId === "string" ? data.catId : "",
+    type: typeof data.type === "string" ? data.type : "note",
+    note: typeof data.note === "string" ? data.note : "",
+    byUid: typeof data.byUid === "string" ? data.byUid : "",
+    byName: typeof data.byName === "string" ? data.byName : "",
+    at: typeof data.at === "number" && Number.isFinite(data.at) ? data.at : 0,
+  };
 }
 export function MedicalRecordToDoc(value: MedicalRecord): Record<string, unknown> {
   return {
@@ -916,7 +1195,13 @@ export const RescueUpdateDefaults: RescueUpdate = {
   at: 0,
 };
 export function RescueUpdateFromDoc(id: string, data: Record<string, unknown>): RescueUpdate {
-  return Object.assign(Object.fromEntries(Object.entries(RescueUpdateDefaults).map(([key, value]) => [key, key in data ? data[key] : value]))) as unknown as RescueUpdate;
+  return {
+    status: typeof data.status === "string" ? data.status : "",
+    note: typeof data.note === "string" ? data.note : "",
+    byUid: typeof data.byUid === "string" ? data.byUid : "",
+    byName: typeof data.byName === "string" ? data.byName : "",
+    at: typeof data.at === "number" && Number.isFinite(data.at) ? data.at : 0,
+  };
 }
 export function RescueUpdateToDoc(value: RescueUpdate): Record<string, unknown> {
   return {
@@ -970,7 +1255,27 @@ export const RescueReportDefaults: RescueReport = {
   updatedAt: 0,
 };
 export function RescueReportFromDoc(id: string, data: Record<string, unknown>): RescueReport {
-  return Object.assign(Object.fromEntries(Object.entries(RescueReportDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as RescueReport;
+  return {
+    id: id,
+    type: typeof data.type === "string" ? data.type : "injured",
+    urgency: typeof data.urgency === "string" ? data.urgency : "medium",
+    description: typeof data.description === "string" ? data.description : "",
+    landmark: typeof data.landmark === "string" ? data.landmark : "",
+    photoIds: Array.isArray(data.photoIds) ? data.photoIds.filter((v): v is string => typeof v === "string") : [],
+    lat: typeof data.lat === "number" && Number.isFinite(data.lat) ? data.lat : 0.0,
+    lng: typeof data.lng === "number" && Number.isFinite(data.lng) ? data.lng : 0.0,
+    neighborhood: typeof data.neighborhood === "string" ? data.neighborhood : "",
+    catId: typeof data.catId === "string" ? data.catId : "",
+    catName: typeof data.catName === "string" ? data.catName : "",
+    reporterId: typeof data.reporterId === "string" ? data.reporterId : "",
+    reporterName: typeof data.reporterName === "string" ? data.reporterName : "",
+    status: typeof data.status === "string" ? data.status : "submitted",
+    assignedTo: typeof data.assignedTo === "string" ? data.assignedTo : "",
+    assignedName: typeof data.assignedName === "string" ? data.assignedName : "",
+    updates: Array.isArray(data.updates) ? data.updates.filter(v => v && typeof v === "object" && !Array.isArray(v)).map(v => RescueUpdateFromDoc("", v)) : [],
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+    updatedAt: typeof data.updatedAt === "number" && Number.isFinite(data.updatedAt) ? data.updatedAt : 0,
+  };
 }
 export function RescueReportToDoc(value: RescueReport): Record<string, unknown> {
   return {
@@ -1035,7 +1340,26 @@ export const FeedingStationDefaults: FeedingStation = {
   updatedAt: 0,
 };
 export function FeedingStationFromDoc(id: string, data: Record<string, unknown>): FeedingStation {
-  return Object.assign(Object.fromEntries(Object.entries(FeedingStationDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as FeedingStation;
+  return {
+    id: id,
+    name: typeof data.name === "string" ? data.name : "",
+    description: typeof data.description === "string" ? data.description : "",
+    operatorName: typeof data.operatorName === "string" ? data.operatorName : "",
+    schedule: typeof data.schedule === "string" ? data.schedule : "",
+    foodType: typeof data.foodType === "string" ? data.foodType : "",
+    hasWater: typeof data.hasWater === "boolean" ? data.hasWater : true,
+    lat: typeof data.lat === "number" && Number.isFinite(data.lat) ? data.lat : 0.0,
+    lng: typeof data.lng === "number" && Number.isFinite(data.lng) ? data.lng : 0.0,
+    neighborhood: typeof data.neighborhood === "string" ? data.neighborhood : "",
+    verified: typeof data.verified === "boolean" ? data.verified : true,
+    active: typeof data.active === "boolean" ? data.active : true,
+    sample: typeof data.sample === "boolean" ? data.sample : false,
+    checkinCount: typeof data.checkinCount === "number" && Number.isFinite(data.checkinCount) ? data.checkinCount : 0,
+    lastCheckinAt: typeof data.lastCheckinAt === "number" && Number.isFinite(data.lastCheckinAt) ? data.lastCheckinAt : 0,
+    lastCheckinBy: typeof data.lastCheckinBy === "string" ? data.lastCheckinBy : "",
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+    updatedAt: typeof data.updatedAt === "number" && Number.isFinite(data.updatedAt) ? data.updatedAt : 0,
+  };
 }
 export function FeedingStationToDoc(value: FeedingStation): Record<string, unknown> {
   return {
@@ -1085,7 +1409,19 @@ export const StationCheckinDefaults: StationCheckin = {
   at: 0,
 };
 export function StationCheckinFromDoc(id: string, data: Record<string, unknown>): StationCheckin {
-  return Object.assign(Object.fromEntries(Object.entries(StationCheckinDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as StationCheckin;
+  return {
+    id: id,
+    stationId: typeof data.stationId === "string" ? data.stationId : "",
+    stationName: typeof data.stationName === "string" ? data.stationName : "",
+    userId: typeof data.userId === "string" ? data.userId : "",
+    username: typeof data.username === "string" ? data.username : "",
+    catsSeen: typeof data.catsSeen === "number" && Number.isFinite(data.catsSeen) ? data.catsSeen : 0,
+    catIds: Array.isArray(data.catIds) ? data.catIds.filter((v): v is string => typeof v === "string") : [],
+    foodLevel: typeof data.foodLevel === "string" ? data.foodLevel : "unknown",
+    waterLevel: typeof data.waterLevel === "string" ? data.waterLevel : "unknown",
+    note: typeof data.note === "string" ? data.note : "",
+    at: typeof data.at === "number" && Number.isFinite(data.at) ? data.at : 0,
+  };
 }
 export function StationCheckinToDoc(value: StationCheckin): Record<string, unknown> {
   return {
@@ -1130,7 +1466,20 @@ export const MaintenanceReportDefaults: MaintenanceReport = {
   updatedAt: 0,
 };
 export function MaintenanceReportFromDoc(id: string, data: Record<string, unknown>): MaintenanceReport {
-  return Object.assign(Object.fromEntries(Object.entries(MaintenanceReportDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as MaintenanceReport;
+  return {
+    id: id,
+    stationId: typeof data.stationId === "string" ? data.stationId : "",
+    stationName: typeof data.stationName === "string" ? data.stationName : "",
+    userId: typeof data.userId === "string" ? data.userId : "",
+    username: typeof data.username === "string" ? data.username : "",
+    issue: typeof data.issue === "string" ? data.issue : "other",
+    description: typeof data.description === "string" ? data.description : "",
+    status: typeof data.status === "string" ? data.status : "open",
+    resolutionNote: typeof data.resolutionNote === "string" ? data.resolutionNote : "",
+    resolvedBy: typeof data.resolvedBy === "string" ? data.resolvedBy : "",
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+    updatedAt: typeof data.updatedAt === "number" && Number.isFinite(data.updatedAt) ? data.updatedAt : 0,
+  };
 }
 export function MaintenanceReportToDoc(value: MaintenanceReport): Record<string, unknown> {
   return {
@@ -1182,7 +1531,23 @@ export const MergeRequestDefaults: MergeRequest = {
   reviewedAt: 0,
 };
 export function MergeRequestFromDoc(id: string, data: Record<string, unknown>): MergeRequest {
-  return Object.assign(Object.fromEntries(Object.entries(MergeRequestDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as MergeRequest;
+  return {
+    id: id,
+    primaryCatId: typeof data.primaryCatId === "string" ? data.primaryCatId : "",
+    primaryName: typeof data.primaryName === "string" ? data.primaryName : "",
+    duplicateCatId: typeof data.duplicateCatId === "string" ? data.duplicateCatId : "",
+    duplicateName: typeof data.duplicateName === "string" ? data.duplicateName : "",
+    requestedBy: typeof data.requestedBy === "string" ? data.requestedBy : "",
+    requestedByName: typeof data.requestedByName === "string" ? data.requestedByName : "",
+    reason: typeof data.reason === "string" ? data.reason : "",
+    similarity: typeof data.similarity === "number" && Number.isFinite(data.similarity) ? data.similarity : 0.0,
+    status: typeof data.status === "string" ? data.status : "pending",
+    reviewedBy: typeof data.reviewedBy === "string" ? data.reviewedBy : "",
+    reviewedByName: typeof data.reviewedByName === "string" ? data.reviewedByName : "",
+    reviewNote: typeof data.reviewNote === "string" ? data.reviewNote : "",
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+    reviewedAt: typeof data.reviewedAt === "number" && Number.isFinite(data.reviewedAt) ? data.reviewedAt : 0,
+  };
 }
 export function MergeRequestToDoc(value: MergeRequest): Record<string, unknown> {
   return {
@@ -1231,7 +1596,20 @@ export const ContentReportDefaults: ContentReport = {
   createdAt: 0,
 };
 export function ContentReportFromDoc(id: string, data: Record<string, unknown>): ContentReport {
-  return Object.assign(Object.fromEntries(Object.entries(ContentReportDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as ContentReport;
+  return {
+    id: id,
+    targetType: typeof data.targetType === "string" ? data.targetType : "",
+    targetId: typeof data.targetId === "string" ? data.targetId : "",
+    targetLabel: typeof data.targetLabel === "string" ? data.targetLabel : "",
+    reason: typeof data.reason === "string" ? data.reason : "other",
+    details: typeof data.details === "string" ? data.details : "",
+    reporterId: typeof data.reporterId === "string" ? data.reporterId : "",
+    reporterName: typeof data.reporterName === "string" ? data.reporterName : "",
+    status: typeof data.status === "string" ? data.status : "open",
+    resolution: typeof data.resolution === "string" ? data.resolution : "",
+    resolvedBy: typeof data.resolvedBy === "string" ? data.resolvedBy : "",
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+  };
 }
 export function ContentReportToDoc(value: ContentReport): Record<string, unknown> {
   return {
@@ -1267,7 +1645,15 @@ export const AppNotificationDefaults: AppNotification = {
   createdAt: 0,
 };
 export function AppNotificationFromDoc(id: string, data: Record<string, unknown>): AppNotification {
-  return Object.assign(Object.fromEntries(Object.entries(AppNotificationDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as AppNotification;
+  return {
+    id: id,
+    type: typeof data.type === "string" ? data.type : "",
+    params: data.params && typeof data.params === "object" && !Array.isArray(data.params) ? Object.fromEntries(Object.entries(data.params).filter(([, v]) => typeof v === "string")) as Record<string, string> : {},
+    route: typeof data.route === "string" ? data.route : "",
+    fromUid: typeof data.fromUid === "string" ? data.fromUid : "",
+    read: typeof data.read === "boolean" ? data.read : false,
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+  };
 }
 export function AppNotificationToDoc(value: AppNotification): Record<string, unknown> {
   return {
@@ -1302,7 +1688,17 @@ export const ModActionDefaults: ModAction = {
   at: 0,
 };
 export function ModActionFromDoc(id: string, data: Record<string, unknown>): ModAction {
-  return Object.assign(Object.fromEntries(Object.entries(ModActionDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as ModAction;
+  return {
+    id: id,
+    moderatorId: typeof data.moderatorId === "string" ? data.moderatorId : "",
+    moderatorName: typeof data.moderatorName === "string" ? data.moderatorName : "",
+    action: typeof data.action === "string" ? data.action : "",
+    targetType: typeof data.targetType === "string" ? data.targetType : "",
+    targetId: typeof data.targetId === "string" ? data.targetId : "",
+    targetLabel: typeof data.targetLabel === "string" ? data.targetLabel : "",
+    note: typeof data.note === "string" ? data.note : "",
+    at: typeof data.at === "number" && Number.isFinite(data.at) ? data.at : 0,
+  };
 }
 export function ModActionToDoc(value: ModAction): Record<string, unknown> {
   return {
@@ -1339,7 +1735,17 @@ export const VolunteerApplicationDefaults: VolunteerApplication = {
   createdAt: 0,
 };
 export function VolunteerApplicationFromDoc(id: string, data: Record<string, unknown>): VolunteerApplication {
-  return Object.assign(Object.fromEntries(Object.entries(VolunteerApplicationDefaults).map(([key, value]) => [key, key in data ? data[key] : value])), { id: id }) as unknown as VolunteerApplication;
+  return {
+    id: id,
+    userId: typeof data.userId === "string" ? data.userId : "",
+    username: typeof data.username === "string" ? data.username : "",
+    motivation: typeof data.motivation === "string" ? data.motivation : "",
+    experience: typeof data.experience === "string" ? data.experience : "",
+    area: typeof data.area === "string" ? data.area : "",
+    status: typeof data.status === "string" ? data.status : "pending",
+    reviewedBy: typeof data.reviewedBy === "string" ? data.reviewedBy : "",
+    createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
+  };
 }
 export function VolunteerApplicationToDoc(value: VolunteerApplication): Record<string, unknown> {
   return {

@@ -1,5 +1,8 @@
 # Checks every push and pull request: unit tests, lint and a debug build, plus the Firestore
-# security-rules suite against the local emulator. Needs no secrets.
+# security-rules suite against the local emulator. Needs no secrets, and has a read-only token.
+#
+# Every action is pinned to a full commit SHA (the tag is in the comment), so a moved or hijacked tag can't change
+# what runs. Dependabot (.github/dependabot.yml) proposes updates to these pins.
 
 name: CI
 
@@ -16,15 +19,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '25'
-      - uses: android-actions/setup-android@v4
-        with:
-          packages: 'platforms;android-37.0 build-tools;36.0.0'
-      - uses: gradle/actions/setup-gradle@v6
+      # The runner image ships the Android SDK; only the platform and build tools this app needs are added, with
+      # Google's own sdkmanager (the release workflow does the same, so this run also checks that step).
+      - name: Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.0" "build-tools;36.0.0" > /dev/null
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
       # The screenshot tests still run here (rendering, poster QR decode), but pixel comparison
       # (:app:verifyRoborazziDebug) is a local check: the reference images were recorded on Windows, and
       # Linux renders text slightly differently, so a pixel compare on this runner would fail on every run.
@@ -34,25 +42,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '25'
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
       - run: npm --prefix tools/rulestest ci
       - run: >
-          npx -y firebase-tools@latest emulators:exec --config firebase.rules-test.json --only firestore
+          npx -y firebase-tools@15.34.0 emulators:exec --config firebase.rules-test.json --only firestore
           --project demo-catmap-rules-test "npm --prefix tools/rulestest test"
 
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: npm

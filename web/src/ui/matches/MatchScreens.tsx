@@ -140,7 +140,7 @@ function MatchCard({ m, viewerIsOwner }: { m: PostMatch; viewerIsOwner: boolean 
 
 /** "Possible matches" on a lost report or sighting, for the two people involved. */
 export function PostMatchesSection({ post }: { post: Post }) {
-  const { profile, posts } = useApp();
+  const { profile } = useApp();
   const uid = profile?.uid ?? '';
   const all = useList(
     () => (uid ? MatchRepository.mine(uid) : null),
@@ -156,9 +156,11 @@ export function PostMatchesSection({ post }: { post: Post }) {
   }, [post.id]);
   // While the PC is off, the owner's device pairs the report with sightings posted since (sighting first).
   useEffect(() => {
-    if (pcOnline === false && isOwner && profile && posts?.length)
-      void MatchRepository.reconcile(post, posts, profile).catch(() => 0);
-  }, [pcOnline, isOwner, profile, posts, post]);
+    if (pcOnline === false && isOwner && profile)
+      void MatchRepository.candidates(post)
+        .then((feed) => MatchRepository.reconcile(post, feed, profile))
+        .catch(() => 0);
+  }, [pcOnline, isOwner, profile, post]);
   if (!all) return null;
   const visible = all
     .filter((m) => m.lostPostId === post.id || m.sightingPostId === post.id)
@@ -166,7 +168,7 @@ export function PostMatchesSection({ post }: { post: Post }) {
       (m) =>
         visibleMatch(m) &&
         !(m.lostOwnerId === uid && m.ownerState === 'not_mine') &&
-          !(m.sightingOwnerId === uid && m.reporterState === 'not_same'),
+        !(m.sightingOwnerId === uid && m.reporterState === 'not_same'),
     )
     .sort((a, b) => b.score - a.score);
   const shown = visible.filter(

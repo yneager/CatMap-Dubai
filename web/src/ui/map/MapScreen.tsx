@@ -3,8 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useApp, useSettings, useList, useDeviceLocation, toast } from '../../state';
 import { LocationRepository } from '../../data/LocationRepository';
 import { t, relativeTime } from '../../i18n';
-import { CatFromDoc, FeedingStationFromDoc, SitterProfileFromDoc } from '../../data/model';
-import { CatRepository } from '../../data/CatRepository';
+import { FeedingStationFromDoc, SitterProfileFromDoc } from '../../data/model';
+import { useMapArea } from '../../data/useMapArea';
+import { MapRepository } from '../../data/MapRepository';
 import { StationRepository } from '../../data/StationRepository';
 import { SittingRepository } from '../../data/SittingRepository';
 import { SettingsRepository } from '../../data/SettingsRepository';
@@ -26,12 +27,19 @@ import CommunityMap, { type MapPoint } from './CommunityMap';
 import { Dubai, distanceKm } from '../../data/Neighborhoods';
 import { config } from '../../config';
 export default function MapScreen() {
-  const { posts } = useApp(),
+  const { profile } = useApp(),
     settings = useSettings(),
     navigate = useNavigate();
-  const cats = useList(CatRepository.allCats, CatFromDoc, 'map-cats'),
-    stations = useList(StationRepository.stations, FeedingStationFromDoc, 'map-stations'),
-    sitters = useList(SittingRepository.activeSitters, SitterProfileFromDoc, 'map-sitters');
+  const area = useMapArea(profile?.uid ?? '');
+  const posts = Object.values(area.posts).filter((p) => !p.hidden),
+    cats = Object.values(area.cats);
+  const stations = useList(StationRepository.stations, FeedingStationFromDoc, 'map-stations'),
+    sitters = useList(
+      () =>
+        settings.filters.layers.includes('sitting') ? SittingRepository.activeSitters() : null,
+      SitterProfileFromDoc,
+      'map-sitters-' + settings.filters.layers.includes('sitting'),
+    );
   const [filter, setFilter] = useState(false),
     [style, setStyle] = useState(false),
     [listMode, setListMode] = useState(false),
@@ -92,6 +100,7 @@ export default function MapScreen() {
         selected={selected?.id}
         onSelect={setSelected}
         onMove={(lat, lng) => setCenter({ lat, lng })}
+        onViewport={(box) => void MapRepository.viewport(box)}
         location={fix}
         focus={focus}
       />

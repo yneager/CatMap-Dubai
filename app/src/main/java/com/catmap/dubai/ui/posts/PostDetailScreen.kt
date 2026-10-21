@@ -92,6 +92,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.catmap.dubai.data.PostRepository
+import com.catmap.dubai.ui.components.PagingFooter
+import com.catmap.dubai.ui.components.rememberPager
 import com.catmap.dubai.R
 import com.catmap.dubai.data.Dubai
 import com.catmap.dubai.data.loaded
@@ -174,7 +177,14 @@ private fun PostDetail(nav: NavHostController, post: Post) {
     val uid = container.session.uid.orEmpty()
     val isOwner = post.ownerId == uid
     val isMod = isModeratorRole(me?.role)
-    val updates by remember(post.id) { container.posts.updates(post.id) }.collectAsStateWithLifecycle(null)
+    val liveUpdates by remember(post.id) { container.posts.updates(post.id) }.collectAsStateWithLifecycle(null)
+    // Older updates (beyond the newest 30, which stay live) are read a page at a time when asked for.
+    val oldestLive = liveUpdates?.takeIf { it.size >= PostRepository.UPDATES_WINDOW }?.lastOrNull()?.createdAt
+    val olderUpdates = rememberPager<PostUpdate>(post.id, oldestLive != null, key = { it.id }) {
+        oldestLive?.let { container.posts.olderUpdatesQuery(post.id, it) }
+    }
+    val olderPage by olderUpdates.state.collectAsStateWithLifecycle()
+    val updates = liveUpdates?.let { l -> (l + olderPage.items).distinctBy { it.id } }
     val favorites by remember(uid) { container.favorites.ids(uid) }.collectAsStateWithLifecycle(emptySet())
     val myRequest by remember(post.id, uid) {
         if (post.category == PostCategory.ADOPTION.key && !isOwner) container.adoption.myRequestFor(post.id, uid) else flowOf(null)
@@ -430,6 +440,7 @@ private fun PostDetail(nav: NavHostController, post: Post) {
                     runner.run(R.string.deleted) { container.posts.deleteUpdate(post, u, container.images) }
                 }
             }
+            if (oldestLive != null) item(contentType = "footer") { PagingFooter(olderPage, olderUpdates::loadMore) }
             if (category.isSearch && list != null) item { com.catmap.dubai.ui.matches.ReportHistory(post, list, myMatches) }
         }
     }

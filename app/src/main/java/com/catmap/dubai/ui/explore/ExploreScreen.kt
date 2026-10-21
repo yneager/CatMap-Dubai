@@ -61,6 +61,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
+import com.catmap.dubai.data.model.Post
+import com.catmap.dubai.ui.components.PagingEffects
+import com.catmap.dubai.ui.components.PagingFooter
+import com.catmap.dubai.ui.components.rememberPager
 import com.catmap.dubai.R
 import com.catmap.dubai.data.AppSettings
 import com.catmap.dubai.data.FeedFilters
@@ -93,6 +99,9 @@ private val shortcuts = listOf(
 
 private enum class Sort(val label: Int) { NEWEST(R.string.sort_newest), NEAREST(R.string.sort_nearest) }
 
+/** "Nearest" loads the map cells within about 5 km of you (half the box's side, in degrees). */
+private const val NEAR_ME_DEG = 0.045
+
 /** The nearby feed: every report as a scrolling list, with the same filters as the map. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,14 +112,27 @@ fun ExploreScreen(nav: NavHostController) {
     val uid = container.session.uid
     val settings by container.settings.settings.collectAsStateWithLifecycle(AppSettings())
     val filters = settings.filters
-    val posts by remember { container.communityFeed }.collectAsStateWithLifecycle(null)
     val favorites by remember(uid) { if (uid == null) flowOf(emptySet()) else container.favorites.ids(uid) }.collectAsStateWithLifecycle(emptySet())
     val fix by container.location.last.collectAsStateWithLifecycle()
     var sort by rememberSaveable { mutableStateOf(Sort.NEWEST) }
     var showFilters by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
 
     fun setFilters(f: FeedFilters) = scope.launch { container.settings.setFilters(f) }
+
+    // Newest: pages of posts, the category chips asked of Firestore, the other filters checked here.
+    val categories = remember(filters.layers) { filters.layers.mapNotNull { it.category?.key }.sorted() }
+    val pager = rememberPager<Post>(categories, key = { it.id }, fallback = { container.posts.feedQuery() }) { container.posts.feedQuery(categories) }
+    val page by pager.state.collectAsStateWithLifecycle()
+    // Nearest: the map's own data around you (cells near you, then only changes), sorted by distance.
+    val nearMe = sort == Sort.NEAREST && fix != null && uid != null
+    val area by remember(nearMe, uid) { if (nearMe) container.map.area(uid!!) else flowOf(null) }.collectAsStateWithLifecycle(null)
+    LaunchedEffect(nearMe, fix?.lat, fix?.lng) {
+        val f = fix
+        if (nearMe && f != null) container.map.show(f.lat - NEAR_ME_DEG, f.lng - NEAR_ME_DEG, f.lat + NEAR_ME_DEG, f.lng + NEAR_ME_DEG)
+    }
+    val posts = if (nearMe) area?.visiblePosts else page.items.takeIf { page.loaded }
 
     val shown = remember(posts, filters, fix, sort) {
         posts?.filter { filters.copy(layers = filters.layers - MapLayer.SITTING).matches(it, fix) }?.let { list ->
@@ -126,13 +148,14 @@ fun ExploreScreen(nav: NavHostController) {
             scope.launch {
                 refreshing = true
                 container.location.current()
+                pager.refresh()
                 delay(400)
                 refreshing = false
             }
         },
         modifier = Modifier.fillMaxSize(),
     ) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item { Header(nav) }
             item {
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -182,7 +205,7 @@ fun ExploreScreen(nav: NavHostController) {
             val list = shown
             when {
                 list == null -> items(3, contentType = { "loading" }) { SkeletonCard(Modifier.padding(horizontal = 16.dp)) }
-                list.isEmpty() -> item {
+                list.isEmpty() && (nearMe || page.end) -> item {
                     EmptyState(Icons.Outlined.TravelExplore, stringResource(if (filters.isEmpty) R.string.no_posts_yet else R.string.no_posts_filters)) {
                         if (!filters.isEmpty) TextButton(onClick = { setFilters(FeedFilters()) }) { Text(stringResource(R.string.clear_filters)) }
                     }
@@ -196,8 +219,10 @@ fun ExploreScreen(nav: NavHostController) {
                     )
                 }
             }
+            if (!nearMe) item(contentType = "footer") { PagingFooter(page, pager::loadMore) }
         }
     }
+    if (!nearMe) PagingEffects(pager, page, shown?.size ?: 0, list = listState)
 
     // Content scrolls under the transparent status bar; a scrim keeps the clock readable.
     Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(MaterialTheme.colorScheme.background.copy(alpha = 0.92f)))

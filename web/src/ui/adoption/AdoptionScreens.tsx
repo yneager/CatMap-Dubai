@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useApp, useList, useAction } from '../../state';
 import { AdoptionRepository } from '../../data/AdoptionRepository';
-import { AdoptionRequestFromDoc } from '../../data/model';
+import { usePager, PagingFooter } from '../../data/usePager';
+import { PostRepository } from '../../data/PostRepository';
+import { PostFromDoc, AdoptionRequestFromDoc } from '../../data/model';
 import { t, dateTime } from '../../i18n';
 import {
   AppTopBar,
@@ -18,7 +20,7 @@ import {
 } from '../components/Components';
 export default function AdoptionScreens() {
   const path = useLocation().pathname,
-    { posts, profile } = useApp(),
+    { profile } = useApp(),
     action = useAction(),
     [showAdopted, setShowAdopted] = useState(false),
     [sent, setSent] = useState(false),
@@ -35,6 +37,14 @@ export default function AdoptionScreens() {
     AdoptionRequestFromDoc,
     'adoption-requests-' + uid + '-' + sent + '-' + path,
   );
+  const page = usePager(
+    () => (path === '/adoption' ? PostRepository.feedQuery(['adoption']) : null),
+    PostFromDoc,
+    'adoption-' + path,
+    25,
+    PostRepository.feedQuery,
+  );
+  const posts = page.items;
   if (path === '/adoption') {
     const shown = posts?.filter(
       (p) => p.category === 'adoption' && (showAdopted || p.adoptionStatus !== 'adopted'),
@@ -67,6 +77,7 @@ export default function AdoptionScreens() {
           ) : (
             <EmptyState text={t('no_adoption_listings')} />
           )}
+          <PagingFooter page={page} visibleCount={shown?.length} />
         </div>
       </>
     );

@@ -1,0 +1,48 @@
+# Dependabot opens pull requests for outdated or vulnerable dependencies, once a week, grouped so there are few of
+# them. Nothing merges by itself: each pull request runs CI and needs the owner's review.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      android:
+        patterns: ['*']
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    groups:
+      web:
+        patterns: ['*']
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: npm
+    directory: /tools/rulestest
+    schedule:
+      interval: monthly
+    groups:
+      rulestest:
+        patterns: ['*']
+    open-pull-requests-limit: 1
+
+  - package-ecosystem: npm
+    directory: /functions
+    schedule:
+      interval: monthly
+    groups:
+      functions:
+        patterns: ['*']
+    open-pull-requests-limit: 1

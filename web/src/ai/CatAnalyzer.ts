@@ -181,6 +181,8 @@ export function breedHints(coat: string, pattern: string) {
     result.push({ key: 'tortie_female', confidence: 0.95 });
   if (coat === 'white') result.push({ key: 'white_deafness', confidence: 0.4 });
   if (coat === 'gray') result.push({ key: 'gray', confidence: 0.35 });
+  if (coat === 'white') result.push({ key: 'white_deafness', confidence: 0.4 });
+  if (coat === 'gray') result.push({ key: 'gray', confidence: 0.35 });
   return result.sort((a, b) => b.confidence - a.confidence);
 }
 export function describe(image: Pixels) {

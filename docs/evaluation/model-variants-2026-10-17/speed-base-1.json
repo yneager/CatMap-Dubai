@@ -1,0 +1,16 @@
+{
+ "model": "pet-recognition-base+detr-resnet-50/v1+flip",
+ "provider": "DmlExecutionProvider",
+ "onnx_mb": 331.98186206817627,
+ "load_embedder_s": 0.7079202000168152,
+ "load_detector_s": 1.3241910000215285,
+ "rss_start_mb": 1788.64453125,
+ "rss_detector_mb": 1953.09765625,
+ "rss_both_mb": 2212.921875,
+ "rss_peak_mb": 2226.2109375,
+ "gpu_dedicated_start_mb": null,
+ "gpu_dedicated_loaded_mb": 1431.046875,
+ "one_photo_ms_median": 209.28744997945614,
+ "embed_one_ms_median": 155.05485000903718,
+ "embed_batched_ms_per_photo": 18.47426445306155
+}

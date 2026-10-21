@@ -34,12 +34,22 @@ class AdminAnalyticsRepository(private val db:FirebaseFirestore) {
         val search=db.collection(Col.POSTS).whereIn("category",listOf("lost","found")).whereGreaterThanOrEqualTo("createdAt",starts.first())
         val total=async { search.count().get(AggregateSource.SERVER).await().count }
         val reunited=async { search.whereEqualTo("status","reunited").count().get(AggregateSource.SERVER).await().count }
+        // Count queries cost one read per 1,000 matches, where downloading the matches cost one read each (up to 5,000).
         val matches=async { runCatching {
-            val all=db.collection(Col.MATCHES).limit(5000).get().await().toObjects(com.catmap.dubai.data.model.PostMatch::class.java)
-            val reunions=all.filter { it.ownerState=="reunited" }
-            MatchStats(all.count { it.tier!="none" },all.count { it.tier=="strong" },all.count { it.tier=="possible" },all.count { it.tier=="weak" },
-                all.count { it.ownerState=="maybe" },all.count { it.ownerState=="not_mine" },reunions.size,
-                reunions.count { it.reporterState=="confirmed" },reunions.count { it.verifiedBy.isNotBlank() })
+            val col=db.collection(Col.MATCHES)
+            suspend fun count(q:com.google.firebase.firestore.Query)=q.count().get(AggregateSource.SERVER).await().count.toInt()
+            val reunions=col.whereEqualTo("ownerState","reunited")
+            val strong=async { count(col.whereEqualTo("tier","strong")) }
+            val possible=async { count(col.whereEqualTo("tier","possible")) }
+            val weak=async { count(col.whereEqualTo("tier","weak")) }
+            val maybe=async { count(col.whereEqualTo("ownerState","maybe")) }
+            val notMine=async { count(col.whereEqualTo("ownerState","not_mine")) }
+            val viaCatmap=async { count(reunions) }
+            val confirmed=async { count(reunions.whereEqualTo("reporterState","confirmed")) }
+            // Needs the (ownerState, verifiedBy) index in firestore.indexes.json.
+            val verified=async { count(reunions.whereGreaterThan("verifiedBy","")) }
+            MatchStats(strong.await()+possible.await()+weak.await(),strong.await(),possible.await(),weak.await(),maybe.await(),notMine.await(),
+                viaCatmap.await(),confirmed.await(),verified.await())
         }.getOrNull() }
         AdminAnalytics(weeks,total.await(),reunited.await(),matches.await()).also { cached=now() to it }
     }

@@ -27,8 +27,14 @@ class ChatRepository(
 
     fun chatFlow(id: String): Flow<Chat?> = chats.document(id).objectFlow()
 
+    /** The newest [MESSAGE_WINDOW] messages, live; older ones come from [olderMessages]. */
     fun messages(chatId: String): Flow<List<Message>> =
-        chats.document(chatId).collection(Col.MESSAGES).orderBy("createdAt", Query.Direction.ASCENDING).limitToLast(300).listFlow()
+        chats.document(chatId).collection(Col.MESSAGES).orderBy("createdAt", Query.Direction.ASCENDING).limitToLast(MESSAGE_WINDOW).listFlow()
+
+    /** The [MESSAGE_WINDOW] messages before [beforeMillis], oldest first ("Show older messages"). */
+    suspend fun olderMessages(chatId: String, beforeMillis: Long): List<Message> =
+        chats.document(chatId).collection(Col.MESSAGES).orderBy("createdAt", Query.Direction.ASCENDING).endBefore(beforeMillis)
+            .limitToLast(MESSAGE_WINDOW).get().await().safeObjects()
 
     /** Returns the chat between the two people, creating it the first time. */
     suspend fun open(me: UserProfile, otherUid: String): String {
@@ -134,6 +140,11 @@ class ChatRepository(
 
     suspend fun unblock(me: String, other: String) {
         blockedCol(me).document(other).delete().await()
+    }
+
+    companion object {
+        /** How many of the newest messages stay live in an open chat. */
+        const val MESSAGE_WINDOW = 50L
     }
 }
 

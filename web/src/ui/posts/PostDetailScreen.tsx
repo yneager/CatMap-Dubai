@@ -42,7 +42,10 @@ import {
   ErrorText,
   enumLabel,
 } from '../components/Components';
-import { LocationField } from '../components/LocationField';
+import { useOlder } from '../../data/useOlder';
+import { listQuery } from '../../data/Firestore';
+import { orderBy } from 'firebase/firestore';
+import { LocationPrivacy } from '../../data/Neighborhoods';
 const Map = lazy(() => import('../map/CommunityMap'));
 export default function PostDetailScreen() {
   const { id = '' } = useParams(),
@@ -50,12 +53,23 @@ export default function PostDetailScreen() {
     { profile, toast } = useApp(),
     action = useAction();
   const post = useDoc(() => PostRepository.postFlow(id), PostFromDoc, 'post-' + id),
-    updates = useList(() => PostRepository.updates(id), PostUpdateFromDoc, 'updates-' + id),
+    liveUpdates = useList(() => PostRepository.updates(id), PostUpdateFromDoc, 'updates-' + id),
     myMatches = useList(
       () => (profile ? MatchRepository.mine(profile.uid) : null),
       PostMatchFromDoc,
       'matches-' + profile?.uid,
     );
+  const history = useOlder(
+    () => listQuery(`posts/${id}/updates`, orderBy('createdAt', 'desc')),
+    PostUpdateFromDoc,
+    'updates-' + id,
+    30,
+  );
+  const updates = liveUpdates
+    ? [
+        ...new globalThis.Map([...history.items, ...liveUpdates].map((u) => [u.id, u])).values(),
+      ].sort((a, b) => b.createdAt - a.createdAt)
+    : undefined;
   const myRequest = useDoc(
     () =>
       profile && post?.category === 'adoption' && post.ownerId !== profile.uid
@@ -91,22 +105,25 @@ export default function PostDetailScreen() {
     setModal(value);
   };
   const saveUpdate = () =>
-    action.run(async () => {
-      if (!profile) return;
-      const photoId = file
-        ? await ImageRepository.upload(profile.uid, await processPhoto(file))
-        : '';
-      await PostRepository.addUpdate(
-        post,
-        kind,
-        text,
-        photoId,
-        position.lat,
-        position.lng,
-        profile,
-      );
-      setModal('');
-    }, t('saved'));
+    action.run(
+      async () => {
+        if (!profile) return;
+        const photoId = file
+          ? await ImageRepository.upload(profile.uid, await processPhoto(file))
+          : '';
+        await PostRepository.addUpdate(
+          post,
+          kind,
+          text,
+          photoId,
+          position.lat,
+          position.lng,
+          profile,
+        );
+        setModal('');
+      },
+      t(kind === 'sighting' ? 'sighting_thanks' : 'update_added'),
+    );
   return (
     <>
       <AppTopBar title={postTitle(post)}>
@@ -177,7 +194,8 @@ export default function PostDetailScreen() {
             <StatusPill group="AdoptionStatus" value={post.adoptionStatus} />
             <p dir="auto">{post.health}</p>
             <p>
-              {post.vaccinated ? t('vaccinated') : ''} {post.neutered ? t('neutered') : ''}
+              {t(post.vaccinated ? 'vaccinated' : 'not_vaccinated')} ·{' '}
+              {t(post.neutered ? 'neutered' : 'not_neutered')}
             </p>
           </>
         )}
@@ -346,7 +364,31 @@ export default function PostDetailScreen() {
             {t(post.hidden ? 'unhide_post' : 'hide_post')}
           </button>
         )}
+        {own && post.category === 'adoption' && (
+          <Link className="outlined" to="/adoption-requests">
+            {t('view_adoption_requests')}
+          </Link>
+        )}
+        {(post.lat || post.lng) !== 0 && (
+          <a
+            className="outlined"
+            href={'https://www.google.com/maps/dir/?api=1&destination=' + post.lat + ',' + post.lng}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t('directions')}
+          </a>
+        )}
         <SectionHeader>{t('updates_and_sightings')}</SectionHeader>
+        {!history.done && (liveUpdates?.length ?? 0) >= 30 && (
+          <button
+            className="text-button"
+            disabled={history.busy}
+            onClick={() => void history.load(`posts/${id}/updates/${liveUpdates!.at(-1)!.id}`)}
+          >
+            {t('load_more')}
+          </button>
+        )}
         {!updates ? (
           <Loading rows={1} />
         ) : updates.length ? (
@@ -395,7 +437,26 @@ export default function PostDetailScreen() {
             />
           </label>
           {file && <p>{file.name}</p>}
-          <LocationField {...position} onChange={(lat, lng) => setPosition({ lat, lng })} />
+          <label>
+            <input
+              type="checkbox"
+              checked={!!(position.lat || position.lng)}
+              onChange={(e) => {
+                if (!e.target.checked) setPosition({ lat: 0, lng: 0 });
+                else
+                  navigator.geolocation?.getCurrentPosition(
+                    (p) =>
+                      setPosition({
+                        lat: LocationPrivacy.approximate(p.coords.latitude),
+                        lng: LocationPrivacy.approximate(p.coords.longitude),
+                      }),
+                    () => toast(t('web_location_denied')),
+                  );
+              }}
+            />
+            {t('add_my_location')}
+          </label>
+          {!!(position.lat || position.lng) && <p>{t('location_added')}</p>}
           <ErrorText text={action.error} />
           <button
             className="primary"

@@ -1,0 +1,338 @@
+{
+  "measuredAt": "2026-10-20T18:58:24.415Z",
+  "method": "emulator replay of the Android queries; reads = documents returned (min 1 per query); bytes = Firestore storage-size formula",
+  "results": {
+    "today": {
+      "dataset": {
+        "users": 30,
+        "posts": 60,
+        "cats": 40,
+        "myPosts": 3,
+        "notifications": 25,
+        "chats": 4,
+        "messages": 40
+      },
+      "documentsSeeded": 199,
+      "steps": {
+        "profile": {
+          "reads": 1,
+          "bytes": 399,
+          "ms": 160,
+          "where": "Session.profile -> UserRepository.profileFlow"
+        },
+        "stalePosts": {
+          "reads": 3,
+          "bytes": 4022,
+          "ms": 77,
+          "where": "AppNavHost -> PostRepository.remindStalePosts (every launch)"
+        },
+        "chatsBadge": {
+          "reads": 4,
+          "bytes": 893,
+          "ms": 29,
+          "where": "AppNavHost unread badge -> ChatRepository.chatsFor (no limit)"
+        },
+        "inbox": {
+          "reads": 25,
+          "bytes": 4906,
+          "ms": 31,
+          "where": "NotificationBell + CatMapApp -> NotificationRepository.notifications (limit 100)"
+        },
+        "feed": {
+          "reads": 60,
+          "bytes": 79282,
+          "ms": 31,
+          "where": "MapScreen/Explore -> PostRepository.feed (limit 400)"
+        },
+        "cats": {
+          "reads": 40,
+          "bytes": 38371,
+          "ms": 18,
+          "where": "MapScreen/Cats/Search -> CatRepository.allCats (limit 800)"
+        },
+        "workerPoll": {
+          "reads": 25,
+          "bytes": 4906,
+          "ms": 12,
+          "where": "Before Phase 3: NotificationWorker every 15 min -> NotificationRepository.latest (limit 100)"
+        },
+        "workerPollAfter": {
+          "reads": 3,
+          "bytes": 581,
+          "ms": 15,
+          "where": "After Phase 3: NotificationRepository.since (last run - 1 h, limit 50)"
+        },
+        "mapColdOpen": {
+          "reads": 107,
+          "bytes": 119943,
+          "ms": 169,
+          "where": "After Phase 4: first map open, nothing saved (zoom 11.2 over the busy area)"
+        },
+        "mapReopenNoChanges": {
+          "reads": 2,
+          "bytes": 0,
+          "ms": 13,
+          "where": "After Phase 4: map opened again, saved copy, nothing changed"
+        },
+        "mapReopen5Changes": {
+          "reads": 8,
+          "bytes": 10184,
+          "ms": 46,
+          "where": "After Phase 4: map opened again an hour later, 5 posts changed meanwhile"
+        },
+        "mapZoomIn": {
+          "reads": 22,
+          "bytes": 18542,
+          "ms": 183,
+          "where": "After Phase 4: zoom to street level (16) inside the busy area: finer cells"
+        },
+        "exploreFirstPage": {
+          "reads": 25,
+          "bytes": 33027,
+          "ms": 15,
+          "where": "After Phase 5: Explore, first page (PostRepository.feedQuery, 25)"
+        },
+        "searchFirstPage": {
+          "reads": 26,
+          "bytes": 33173,
+          "ms": 30,
+          "where": "After Phase 5: search 'tabby' (searchTerms, 25) + cats (20)"
+        },
+        "catsFirstPage": {
+          "reads": 25,
+          "bytes": 23948,
+          "ms": 15,
+          "where": "After Phase 5: Cats directory, first page (25)"
+        },
+        "favorites10": {
+          "reads": 10,
+          "bytes": 11794,
+          "ms": 52,
+          "where": "After Phase 5: Favourites with 10 saved posts (read one by one)"
+        },
+        "postFormChecks": {
+          "reads": 96,
+          "bytes": 124204,
+          "ms": 133,
+          "where": "After Phase 5: new street post, duplicate (3 km) + same-animal (1 km) checks"
+        },
+        "deviceMatch": {
+          "reads": 8,
+          "bytes": 10564,
+          "ms": 12,
+          "where": "After Phase 5: phone's backup matching for a sighting (newest 200 lost reports)"
+        },
+        "inboxAfter": {
+          "reads": 25,
+          "bytes": 4906,
+          "ms": 15,
+          "where": "After Phase 5: inbox / bell (newest 30 live)"
+        },
+        "openChatAfter": {
+          "reads": 40,
+          "bytes": 6656,
+          "ms": 30,
+          "where": "After Phase 5: open a chat (newest 50 live)"
+        },
+        "openChat": {
+          "reads": 40,
+          "bytes": 6656,
+          "ms": 30,
+          "where": "ChatScreen -> ChatRepository.messages (limitToLast 300)"
+        },
+        "openPost": {
+          "reads": 2,
+          "bytes": 1363,
+          "ms": 30,
+          "where": "PostDetailScreen -> postFlow + updates (limit 200)"
+        },
+        "appOpenTotal": {
+          "reads": 133,
+          "bytes": 127873
+        },
+        "appOpenTotalAfterPhase5": {
+          "reads": 137,
+          "bytes": 126141
+        },
+        "appOpenTotalAfterPhase4": {
+          "reads": 137,
+          "bytes": 126141
+        },
+        "backgroundPerDay": {
+          "reads": 2400,
+          "bytes": 470976
+        },
+        "backgroundPerDayAfter": {
+          "reads": 288,
+          "bytes": 55776
+        }
+      }
+    },
+    "grown": {
+      "dataset": {
+        "users": 300,
+        "posts": 1200,
+        "cats": 1500,
+        "myPosts": 20,
+        "notifications": 150,
+        "chats": 30,
+        "messages": 400
+      },
+      "documentsSeeded": 3580,
+      "steps": {
+        "profile": {
+          "reads": 1,
+          "bytes": 399,
+          "ms": 24,
+          "where": "Session.profile -> UserRepository.profileFlow"
+        },
+        "stalePosts": {
+          "reads": 20,
+          "bytes": 26436,
+          "ms": 31,
+          "where": "AppNavHost -> PostRepository.remindStalePosts (every launch)"
+        },
+        "chatsBadge": {
+          "reads": 30,
+          "bytes": 6775,
+          "ms": 15,
+          "where": "AppNavHost unread badge -> ChatRepository.chatsFor (no limit)"
+        },
+        "inbox": {
+          "reads": 100,
+          "bytes": 19733,
+          "ms": 31,
+          "where": "NotificationBell + CatMapApp -> NotificationRepository.notifications (limit 100)"
+        },
+        "feed": {
+          "reads": 400,
+          "bytes": 530512,
+          "ms": 99,
+          "where": "MapScreen/Explore -> PostRepository.feed (limit 400)"
+        },
+        "cats": {
+          "reads": 800,
+          "bytes": 777325,
+          "ms": 124,
+          "where": "MapScreen/Cats/Search -> CatRepository.allCats (limit 800)"
+        },
+        "workerPoll": {
+          "reads": 100,
+          "bytes": 19733,
+          "ms": 19,
+          "where": "Before Phase 3: NotificationWorker every 15 min -> NotificationRepository.latest (limit 100)"
+        },
+        "workerPollAfter": {
+          "reads": 3,
+          "bytes": 581,
+          "ms": 15,
+          "where": "After Phase 3: NotificationRepository.since (last run - 1 h, limit 50)"
+        },
+        "mapColdOpen": {
+          "reads": 588,
+          "bytes": 667612,
+          "ms": 291,
+          "where": "After Phase 4: first map open, nothing saved (zoom 11.2 over the busy area)"
+        },
+        "mapReopenNoChanges": {
+          "reads": 2,
+          "bytes": 0,
+          "ms": 29,
+          "where": "After Phase 4: map opened again, saved copy, nothing changed"
+        },
+        "mapReopen5Changes": {
+          "reads": 24,
+          "bytes": 25769,
+          "ms": 46,
+          "where": "After Phase 4: map opened again an hour later, 5 posts changed meanwhile"
+        },
+        "mapZoomIn": {
+          "reads": 135,
+          "bytes": 152210,
+          "ms": 215,
+          "where": "After Phase 4: zoom to street level (16) inside the busy area: finer cells"
+        },
+        "exploreFirstPage": {
+          "reads": 25,
+          "bytes": 33005,
+          "ms": 44,
+          "where": "After Phase 5: Explore, first page (PostRepository.feedQuery, 25)"
+        },
+        "searchFirstPage": {
+          "reads": 26,
+          "bytes": 33165,
+          "ms": 75,
+          "where": "After Phase 5: search 'tabby' (searchTerms, 25) + cats (20)"
+        },
+        "catsFirstPage": {
+          "reads": 25,
+          "bytes": 24319,
+          "ms": 26,
+          "where": "After Phase 5: Cats directory, first page (25)"
+        },
+        "favorites10": {
+          "reads": 10,
+          "bytes": 13111,
+          "ms": 38,
+          "where": "After Phase 5: Favourites with 10 saved posts (read one by one)"
+        },
+        "postFormChecks": {
+          "reads": 240,
+          "bytes": 318254,
+          "ms": 124,
+          "where": "After Phase 5: new street post, duplicate (3 km) + same-animal (1 km) checks"
+        },
+        "deviceMatch": {
+          "reads": 150,
+          "bytes": 198113,
+          "ms": 45,
+          "where": "After Phase 5: phone's backup matching for a sighting (newest 200 lost reports)"
+        },
+        "inboxAfter": {
+          "reads": 30,
+          "bytes": 5888,
+          "ms": 10,
+          "where": "After Phase 5: inbox / bell (newest 30 live)"
+        },
+        "openChatAfter": {
+          "reads": 50,
+          "bytes": 8330,
+          "ms": 15,
+          "where": "After Phase 5: open a chat (newest 50 live)"
+        },
+        "openChat": {
+          "reads": 300,
+          "bytes": 50190,
+          "ms": 56,
+          "where": "ChatScreen -> ChatRepository.messages (limitToLast 300)"
+        },
+        "openPost": {
+          "reads": 2,
+          "bytes": 1361,
+          "ms": 20,
+          "where": "PostDetailScreen -> postFlow + updates (limit 200)"
+        },
+        "appOpenTotal": {
+          "reads": 1351,
+          "bytes": 1361180
+        },
+        "appOpenTotalAfterPhase5": {
+          "reads": 649,
+          "bytes": 680674
+        },
+        "appOpenTotalAfterPhase4": {
+          "reads": 719,
+          "bytes": 694519
+        },
+        "backgroundPerDay": {
+          "reads": 9600,
+          "bytes": 1894368
+        },
+        "backgroundPerDayAfter": {
+          "reads": 288,
+          "bytes": 55776
+        }
+      }
+    }
+  }
+}

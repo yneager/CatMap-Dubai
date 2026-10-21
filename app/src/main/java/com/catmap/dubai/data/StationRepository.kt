@@ -96,7 +96,8 @@ class StationRepository(
                 mapOf("checkinCount" to FieldValue.increment(1), "lastCheckinAt" to at, "lastCheckinBy" to me.username),
             )
             val stats = mapOf(Stats.CHECKINS to 1L, Stats.IFTAR_CHECKINS to if (hour in 18..19) 1L else 0L)
-            users.addStats(b, me.uid, stats, Points.CHECKIN, station.neighborhood)
+            // Stamps the posting timer too, so a later rules update can rate-limit check-ins (docs/security/LATER_RULES.md).
+            users.addStats(b, me.uid, stats, Points.CHECKIN, station.neighborhood, rateLimited = true)
         }.await()
     }
 

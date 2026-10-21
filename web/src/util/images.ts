@@ -54,9 +54,10 @@ export async function compressUnder<T>(
   encode: (source: T, quality: number) => Promise<Uint8Array>,
   shrink: (source: T, ratio: number) => T,
   maxBytes = 650000,
+  initialQuality = 85,
 ) {
   let current = source,
-    quality = 85;
+    quality = initialQuality;
   for (let n = 0; n < 100; n++) {
     const bytes = await encode(current, quality);
     if (bytes.byteLength <= maxBytes) return bytes;
@@ -75,7 +76,14 @@ export async function processPhoto(file: Blob): Promise<ProcessedPhoto> {
       full: await compressUnder(scaleToMax(source, 1280), compress, (canvas, ratio) =>
         scaleToMax(canvas, Math.round(Math.max(canvas.width, canvas.height) * ratio)),
       ),
-      thumb: await compress(scaleToMax(source, 360), 72),
+      thumb: await compressUnder(
+        scaleToMax(source, 360),
+        compress,
+        (canvas, ratio) =>
+          scaleToMax(canvas, Math.round(Math.max(canvas.width, canvas.height) * ratio)),
+        190000,
+        72,
+      ),
       analysis: scaleToMax(source, 512),
     };
   } finally {

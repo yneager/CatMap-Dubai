@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release builds: HTTPS only, and only the system's certificate authorities (not ones a user installed).
+     Debug and staging builds replace this file with src/debug/res/xml/network_security_config.xml, which also allows
+     plain HTTP to the local Firebase emulators. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

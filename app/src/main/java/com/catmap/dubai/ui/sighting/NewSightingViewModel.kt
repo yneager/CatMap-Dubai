@@ -19,6 +19,7 @@ import com.catmap.dubai.data.Dubai
 import com.catmap.dubai.data.LocationPrivacy
 import com.catmap.dubai.data.SightingDraft
 import com.catmap.dubai.data.distanceKm
+import com.catmap.dubai.data.safeObjects
 import com.catmap.dubai.data.model.BehaviorTag
 import com.catmap.dubai.data.model.Cat
 import com.catmap.dubai.data.model.CatSex
@@ -35,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 
 class PickedPhoto(val key: Long, val photo: ProcessedPhoto, val analysis: CatAnalysis?)
@@ -204,8 +206,10 @@ class NewSightingViewModel(private val container: AppContainer, presetCatId: Str
             matching = true
             matchesSearched = false
             try {
-                val cats = container.cats.allCatsOnce()
                 val here = if (lat != null && lng != null) lat!! to lng!! else null
+                // Cats seen near here; without a place yet, the most recently seen ones.
+                val cats = if (here != null) container.cats.near(here.first, here.second, CAT_SEARCH_RADIUS_KM)
+                else container.cats.directoryQuery().limit(300).get().await().safeObjects()
                 // Public cat positions are blurred (up to the "high" privacy radius) and GPS has its own error.
                 val uncertaintyKm = (accuracy + LocationPrivacy.approxRadiusMeters(LocationPrivacy.HIGH)) / 1000.0
                 val ranked = withContext(Dispatchers.Default) {
@@ -331,6 +335,8 @@ class NewSightingViewModel(private val container: AppContainer, presetCatId: Str
     companion object {
         const val MAX_PHOTOS = 5
         const val MATCH_THRESHOLD = 0.45
+        /** Cats further than this from a new sighting aren't compared (positions are blurred by well under 1 km). */
+        const val CAT_SEARCH_RADIUS_KM = 3.0
     }
 }
 

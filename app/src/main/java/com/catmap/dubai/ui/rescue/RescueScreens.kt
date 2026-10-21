@@ -131,11 +131,11 @@ fun RescueListScreen(nav: NavHostController, moderationView: Boolean = false) {
     if (tab !in tabs && tabs.isNotEmpty()) tab = tabs.first()
     var statusFilter by rememberSaveable { mutableStateOf<String?>(if (moderationView) RescueStatus.SUBMITTED.key else null) }
 
-    val flow = remember(tab, uid) {
+    val flow = remember(tab, uid, statusFilter) {
         when (tab) {
             RescueTab.MINE -> container.rescues.myReports(uid)
             RescueTab.BOARD -> container.rescues.volunteerBoard()
-            RescueTab.ALL -> container.rescues.allReports()
+            RescueTab.ALL -> container.rescues.allReports(statusFilter)
         }
     }
     val reports by flow.collectAsStateWithLifecycle(null)
@@ -426,7 +426,7 @@ fun RescueDetailScreen(nav: NavHostController, reportId: String) {
             if (r.photoIds.isNotEmpty()) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(r.photoIds, key = { it }, contentType = { "photo" }) { id ->
-                        RemoteImage(id, Modifier.size(150.dp).clip(RoundedCornerShape(12.dp)).clickable { nav.navigate(Routes.photo(id)) }, thumb = false)
+                        RemoteImage(id, Modifier.size(150.dp).clip(RoundedCornerShape(12.dp)).clickable { nav.navigate(Routes.photo(id)) })
                     }
                 }
             }

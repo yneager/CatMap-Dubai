@@ -64,7 +64,10 @@ import com.catmap.dubai.R
 import com.catmap.dubai.ai.Similarity
 import com.catmap.dubai.data.Dubai
 import com.catmap.dubai.data.Loaded
+import com.catmap.dubai.data.SearchTerms
 import com.catmap.dubai.data.distanceKm
+import com.catmap.dubai.data.safeObjects
+import kotlinx.coroutines.tasks.await
 import com.catmap.dubai.data.model.Cat
 import com.catmap.dubai.data.model.CatSex
 import com.catmap.dubai.data.model.CatSize
@@ -124,6 +127,7 @@ fun CatEditScreen(nav: NavHostController, catId: String) {
                             mapOf(
                                 "name" to name.trim(), "description" to description.trim(), "distinctiveMarks" to marks.trim(),
                                 "coatColor" to coat.key, "pattern" to pattern.key, "size" to size.key, "sex" to sex.key,
+                                "searchTerms" to container.cats.searchTerms(name.trim(), c.aliases),
                             ),
                         )
                     }
@@ -136,21 +140,31 @@ fun CatEditScreen(nav: NavHostController, catId: String) {
 
 // ---------------- Suggest merging duplicate profiles ----------------
 
+/** Profiles further apart than this are rarely the same cat; a typed name searches everywhere. */
+private const val MERGE_RADIUS_KM = 5.0
+
 @Composable
 fun MergeSuggestScreen(nav: NavHostController, catId: String) {
     val container = LocalContainer.current
     val runner = rememberRunner()
     val context = LocalContext.current
-    val cats by remember { container.cats.allCats() }.collectAsStateWithLifecycle(null)
     val me by container.session.profile.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
     var chosen by remember { mutableStateOf<Pair<Cat, Double>?>(null) }
-
-    val all = cats
-    val self = all?.firstOrNull { it.id == catId }
+    val loadedSelf by produceState<Cat?>(null, catId) { value = container.cats.cat(catId) }
+    val self = loadedSelf
+    // Duplicates are nearly always nearby; a name typed in the search box finds profiles anywhere.
+    val word = SearchTerms.words(query).maxByOrNull { it.length }.orEmpty()
+    val all by produceState<List<Cat>?>(null, self?.id, word) {
+        val s = self ?: return@produceState
+        value = runCatching {
+            if (word.length >= 2) container.cats.searchQuery(word).limit(60).get().await().safeObjects<Cat>()
+            else container.cats.near(s.lat, s.lng, MERGE_RADIUS_KM)
+        }.getOrDefault(emptyList()) + s
+    }
     val ranked = remember(all, query) {
         if (all == null || self == null) emptyList()
-        else all.filter { it.id != catId }
+        else all!!.filter { it.id != catId }
             .map { other ->
                 val d = distanceKm(self.lat, self.lng, other.lat, other.lng)
                 other to Similarity.score(self.features, self.coatColor, self.pattern, other.features, other.coatColor, other.pattern, d).total

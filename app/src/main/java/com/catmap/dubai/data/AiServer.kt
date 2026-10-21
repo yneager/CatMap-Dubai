@@ -52,8 +52,8 @@ class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth
         val done = run(
             mapOf(
                 "kind" to "compare",
-                "query" to Blob.fromBytes(jpeg(query)),
-                "images" to candidates.take(MAX_CANDIDATES).map { Blob.fromBytes(jpeg(it.second)) },
+                "query" to Blob.fromBytes(cropJpeg(query)),
+                "images" to candidates.take(MAX_CANDIDATES).map { Blob.fromBytes(cropJpeg(it.second)) },
                 "ids" to candidates.take(MAX_CANDIDATES).map { it.first },
                 "labels" to labels.take(MAX_CANDIDATES).map { it.take(60) },
             ),
@@ -78,11 +78,11 @@ class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth
         val fields = mutableMapOf<String, Any>(
             "kind" to "check",
             "photos" to photos.take(MAX_PHOTOS).map { Blob.fromBytes(jpeg(com.catmap.dubai.util.ImageUtils.scaleToMax(it, CHECK_PX))) },
-            "images" to if (compare) candidates.take(MAX_CANDIDATES).map { Blob.fromBytes(jpeg(it.second)) } else emptyList(),
+            "images" to if (compare) candidates.take(MAX_CANDIDATES).map { Blob.fromBytes(cropJpeg(it.second)) } else emptyList(),
             "ids" to if (compare) candidates.take(MAX_CANDIDATES).map { it.first } else emptyList(),
             "labels" to if (compare) labels.take(MAX_CANDIDATES).map { it.take(60) } else emptyList(),
         )
-        if (compare) fields["query"] = Blob.fromBytes(jpeg(query))
+        if (compare) fields["query"] = Blob.fromBytes(cropJpeg(query))
         val done = run(fields) ?: return null
         @Suppress("UNCHECKED_CAST")
         val verdicts = (done.get("classification") as? List<Map<String, Any?>>)?.map { c ->
@@ -105,7 +105,7 @@ class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth
 
     /** Embeddings (unit vectors) for up to 16 crops, for the Recognition test. Null on any failure. */
     suspend fun embed(crops: List<Bitmap>): List<List<Double>>? {
-        val done = run(mapOf("kind" to "embed", "images" to crops.take(16).map { Blob.fromBytes(jpeg(it)) }, "ids" to emptyList<String>())) ?: return null
+        val done = run(mapOf("kind" to "embed", "images" to crops.take(16).map { Blob.fromBytes(cropJpeg(it)) }, "ids" to emptyList<String>())) ?: return null
         @Suppress("UNCHECKED_CAST")
         val vectors = done.get("embeddings") as? List<Map<String, Any?>> ?: return null
         return vectors.map { m -> (m["v"] as? List<*>)?.mapNotNull { (it as? Number)?.toDouble() }.orEmpty() }
@@ -129,8 +129,18 @@ class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth
                     awaitClose { reg.remove() }
                 }.first { it.getString("answeredRequestId") == requestId && it.getString("status") in setOf("done", "error") }
             }?.takeIf { it.getString("status") == "done" }
+        }.also {
+            // The answer is in hand (or never came): remove the job, whose photos would otherwise stay stored in Firestore
+            // (up to about 1 MB per person), and so the next job's "previous job" read finds nothing to download.
+            runCatching { ref.delete().await() }
         }.onFailure { android.util.Log.i("CatMap", "AI server job failed: ${it.message}") }.getOrNull()
     }
+
+    /**
+     * An animal crop for the recognition model, which looks at 224 × 224 pixels: 320 px on the long side keeps the
+     * short side at 224 or more for most crops, and keeps a job with 9 crops far below Firestore's 1 MB per document.
+     */
+    private fun cropJpeg(bitmap: Bitmap): ByteArray = jpeg(com.catmap.dubai.util.ImageUtils.scaleToMax(bitmap, COMPARE_PX))
 
     private fun jpeg(bitmap: Bitmap): ByteArray =
         ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
@@ -140,6 +150,7 @@ class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth
         /** Photos per check job (the rules allow 6, like a post), sent at this size: CLIP looks at 224 px. */
         const val MAX_PHOTOS = 6
         const val CHECK_PX = 320
+        const val COMPARE_PX = 320
         /** The PC refreshes its status every 5 minutes; a little longer than that means it crashed. */
         const val ONLINE_WINDOW_MS = 390_000L
         const val TIMEOUT_MS = 15_000L

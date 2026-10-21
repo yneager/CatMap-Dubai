@@ -3,6 +3,7 @@
 import {
   doc,
   where,
+  orderBy,
   limit,
   getDoc,
   getDocs,
@@ -13,9 +14,10 @@ import {
   runTransaction,
 } from 'firebase/firestore';
 import { database } from '../firebase';
-import { col, ref, listQuery, read } from './Firestore';
+import { col, ref, listQuery, read, list } from './Firestore';
 import {
   PostMatchFromDoc,
+  PostFromDoc,
   MessageDefaults,
   MessageToDoc,
   ChatFromDoc,
@@ -91,11 +93,22 @@ export const MatchRepository = {
   mine: (uid: string) => listQuery('matches', where('members', 'array-contains', uid)),
   matchFlow: (id: string) => ref(`matches/${id}`),
   /** After publishing a lost report or a sighting: the PC does it when online, otherwise this device. */
+  candidates: (post: Post) =>
+    list(
+      listQuery(
+        'posts',
+        where('hidden', '==', false),
+        where('category', 'in', Engine.isLost(post) ? Engine.SIGHTINGS : Engine.LOST),
+        orderBy('createdAt', 'desc'),
+        limit(200),
+      ),
+      PostFromDoc,
+    ),
   afterPublish: async (postId: string, me: UserProfile) => {
     const post = await PostRepository.post(postId);
     if (!post || (!Engine.isLost(post) && !Engine.isSighting(post))) return 0;
     if (await AiServer.health()) return 0;
-    return MatchRepository.matchOnDevice(post, await PostRepository.feedOnce(400), me);
+    return MatchRepository.matchOnDevice(post, await MatchRepository.candidates(post), me);
   },
   /** The owner's open report while the PC is off: pairs it with what was posted since (sighting first). */
   reconcile: async (post: Post, feed: Post[], me: UserProfile) => {
@@ -247,7 +260,7 @@ export const MatchRepository = {
     if (!changed) return false;
     if (post.ownerId === me.uid) {
       const b = writeBatch(database());
-      UserRepository.addStats(b, me.uid, { reunited: 1 }, 25);
+      UserRepository.addStats(b, me.uid, { reunited: 1 }, 25, undefined, true);
       await b.commit().catch(() => {});
     }
     if (credited)

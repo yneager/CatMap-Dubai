@@ -54,7 +54,7 @@ export function usePhotoCheck(
     void (async () => {
       const nearby = !compare
         ? []
-        : (latest.current.posts ?? (await PostRepository.feedOnce(400)))
+        : (await PostRepository.near(post.lat, post.lng, 1))
             .filter(
               (candidate) =>
                 candidate.category === 'street' &&

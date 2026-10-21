@@ -36,7 +36,7 @@ export function errorMessage(error: unknown) {
     'auth/weak-password': 'err_weak_password',
     'auth/email-already-in-use': 'err_email_in_use',
     'auth/invalid-credential': 'err_wrong_credentials',
-    'auth/user-not-found': 'err_no_account',
+    'auth/user-not-found': 'err_wrong_credentials',
     'auth/wrong-password': 'err_wrong_credentials',
     'auth/requires-recent-login': 'err_recent_login',
     'auth/network-request-failed': 'err_network',

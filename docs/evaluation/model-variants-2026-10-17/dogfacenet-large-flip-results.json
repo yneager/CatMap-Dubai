@@ -1,0 +1,436 @@
+{
+  "dataset": {
+    "name": "dogfacenet-large-flip",
+    "path": "eval\\data\\dogfacenet",
+    "photos": 8363,
+    "animals": 1393,
+    "tune_animals": 696,
+    "test_registered": 558,
+    "test_unseen": 139,
+    "test_sightings": 1618,
+    "unseen_sightings": 876,
+    "photos_per_registered_animal": 3,
+    "crop": false,
+    "detected_share": 0.0,
+    "several_animals_share": 0.0,
+    "low_quality_share": 0.00203276336242975
+  },
+  "fusion": {
+    "chosen_beta": 0.0,
+    "sweep_on_tuning_half": [
+      {
+        "beta": 0.0,
+        "recall_at_1pct": 0.9845824411134904
+      },
+      {
+        "beta": 0.1,
+        "recall_at_1pct": 0.9854389721627409
+      },
+      {
+        "beta": 0.2,
+        "recall_at_1pct": 0.9832976445396145
+      },
+      {
+        "beta": 0.3,
+        "recall_at_1pct": 0.9807280513918629
+      },
+      {
+        "beta": 0.5,
+        "recall_at_1pct": 0.9738758029978587
+      },
+      {
+        "beta": 0.8,
+        "recall_at_1pct": 0.9597430406852249
+      },
+      {
+        "beta": 1.2,
+        "recall_at_1pct": 0.926338329764454
+      }
+    ]
+  },
+  "thresholds_from_tuning_half": {
+    "A": {
+      "strong": 0.8790571689605713,
+      "possible": 0.8194266557693481,
+      "weak": 0.752562940120697
+    },
+    "B": {
+      "strong": 0.4651745855808258,
+      "possible": 0.31676071882247925,
+      "weak": 0.2268446832895279
+    },
+    "C-max": {
+      "strong": 0.5034140348434448,
+      "possible": 0.34965285658836365,
+      "weak": 0.25627392530441284
+    },
+    "C-mean": {
+      "strong": 0.5029131174087524,
+      "possible": 0.34412044286727905,
+      "weak": 0.2450939267873764
+    },
+    "C-both": {
+      "strong": 0.5007902383804321,
+      "possible": 0.34523504972457886,
+      "weak": 0.24922093749046326
+    },
+    "F": {
+      "strong": 0.5034140348434448,
+      "possible": 0.34965285658836365,
+      "weak": 0.25627392530441284
+    }
+  },
+  "results_on_test_half": {
+    "A": {
+      "top1": 0.1792336217552534,
+      "top3": 0.2700865265760198,
+      "auc": 0.857457475760635,
+      "eer": 0.22682321071624756,
+      "tiers": {
+        "strong": {
+          "threshold": 0.8791,
+          "recall": 0.10754017305315204,
+          "false_match_rate": 0.0007523085219467702,
+          "precision": 0.20422535211267606,
+          "wrong_per_sighting": 0.41903584672435107
+        },
+        "possible": {
+          "threshold": 0.8194,
+          "recall": 0.27070457354758964,
+          "false_match_rate": 0.008662643998286779,
+          "precision": 0.05312310491206792,
+          "wrong_per_sighting": 4.8250927070457355
+        },
+        "weak": {
+          "threshold": 0.7526,
+          "recall": 0.48825710754017304,
+          "false_match_rate": 0.048552749254903875,
+          "precision": 0.01773407861359912,
+          "wrong_per_sighting": 27.04388133498146
+        }
+      },
+      "unseen_suggested": {
+        "strong": 0.2180365296803653,
+        "possible": 0.7157534246575342,
+        "weak": 0.9680365296803652,
+        "rejected_all": 0.0319634703196347
+      },
+      "live": {
+        "known_top_is_right_possible": 0.2589616810877627,
+        "known_top_is_right_strong": 0.1069221260815822,
+        "known_wrong_on_top_possible": 0.09950556242274412,
+        "unseen_any_possible": 0.1358447488584475,
+        "unseen_any_strong": 0.0136986301369863,
+        "unseen_none_at_all": 0.5091324200913242
+      },
+      "pos_mean": 0.7352819442749023,
+      "neg_mean": 0.5414050817489624,
+      "n_probes": 1618,
+      "n_animals": 558
+    },
+    "B": {
+      "top1": 0.8708281829419036,
+      "top3": 0.9437577255871447,
+      "auc": 0.9957689235267633,
+      "eer": 0.024012833833694458,
+      "tiers": {
+        "strong": {
+          "threshold": 0.4652,
+          "recall": 0.8331273176761433,
+          "false_match_rate": 0.0008333092920088857,
+          "precision": 0.6422105764649834,
+          "wrong_per_sighting": 0.4641532756489493
+        },
+        "possible": {
+          "threshold": 0.3168,
+          "recall": 0.9573547589616811,
+          "false_match_rate": 0.009492624491525988,
+          "precision": 0.15330562153602534,
+          "wrong_per_sighting": 5.287391841779975
+        },
+        "weak": {
+          "threshold": 0.2268,
+          "recall": 0.9814585908529048,
+          "false_match_rate": 0.047250079336370675,
+          "precision": 0.035951189694596,
+          "wrong_per_sighting": 26.31829419035847
+        }
+      },
+      "unseen_suggested": {
+        "strong": 0.228310502283105,
+        "possible": 0.9098173515981736,
+        "weak": 1.0,
+        "rejected_all": 0.0
+      },
+      "live": {
+        "known_top_is_right_possible": 0.9517923362175525,
+        "known_top_is_right_strong": 0.8318912237330037,
+        "known_wrong_on_top_possible": 0.008034610630407911,
+        "unseen_any_possible": 0.18378995433789955,
+        "unseen_any_strong": 0.010273972602739725,
+        "unseen_none_at_all": 0.4292237442922374
+      },
+      "pos_mean": 0.6161612868309021,
+      "neg_mean": 0.08432318270206451,
+      "n_probes": 1618,
+      "n_animals": 558
+    },
+    "C-max": {
+      "top1": 0.9561186650185414,
+      "top3": 0.9851668726823238,
+      "auc": 0.9983547832802573,
+      "eer": 0.012360930442810059,
+      "tiers": {
+        "strong": {
+          "threshold": 0.5034,
+          "recall": 0.9097651421508035,
+          "false_match_rate": 0.00079114450759299,
+          "precision": 0.6736842105263158,
+          "wrong_per_sighting": 0.44066749072929545
+        },
+        "possible": {
+          "threshold": 0.3497,
+          "recall": 0.9826946847960445,
+          "false_match_rate": 0.00922632058995191,
+          "precision": 0.16052498738011106,
+          "wrong_per_sighting": 5.139060568603214
+        },
+        "weak": {
+          "threshold": 0.2563,
+          "recall": 0.9950556242274413,
+          "false_match_rate": 0.04753191763220324,
+          "precision": 0.03622291718226202,
+          "wrong_per_sighting": 26.475278121137208
+        }
+      },
+      "unseen_suggested": {
+        "strong": 0.20319634703196346,
+        "possible": 0.8995433789954338,
+        "weak": 0.9965753424657534,
+        "rejected_all": 0.003424657534246575
+      },
+      "live": {
+        "known_top_is_right_possible": 0.9826946847960445,
+        "known_top_is_right_strong": 0.9097651421508035,
+        "known_wrong_on_top_possible": 0.0,
+        "unseen_any_possible": 0.17922374429223745,
+        "unseen_any_strong": 0.01141552511415525,
+        "unseen_none_at_all": 0.4429223744292237
+      },
+      "pos_mean": 0.7035045027732849,
+      "neg_mean": 0.11686716973781586,
+      "n_probes": 1618,
+      "n_animals": 558
+    },
+    "C-mean": {
+      "top1": 0.9678615574783683,
+      "top3": 0.9888751545117429,
+      "auc": 0.9989369787478126,
+      "eer": 0.011742919683456421,
+      "tiers": {
+        "strong": {
+          "threshold": 0.5029,
+          "recall": 0.9295426452410384,
+          "false_match_rate": 0.0008743644768348894,
+          "precision": 0.6561954624781849,
+          "wrong_per_sighting": 0.48702101359703337
+        },
+        "possible": {
+          "threshold": 0.3441,
+          "recall": 0.9870210135970334,
+          "false_match_rate": 0.009390541329255925,
+          "precision": 0.1587475149105368,
+          "wrong_per_sighting": 5.23053152039555
+        },
+        "weak": {
+          "threshold": 0.2451,
+          "recall": 0.9956736711990112,
+          "false_match_rate": 0.0476905903735578,
+          "precision": 0.03612836671077123,
+          "wrong_per_sighting": 26.563658838071692
+        }
+      },
+      "unseen_suggested": {
+        "strong": 0.21232876712328766,
+        "possible": 0.867579908675799,
+        "weak": 0.9942922374429224,
+        "rejected_all": 0.005707762557077625
+      },
+      "live": {
+        "known_top_is_right_possible": 0.9870210135970334,
+        "known_top_is_right_strong": 0.9295426452410384,
+        "known_wrong_on_top_possible": 0.0,
+        "unseen_any_possible": 0.17579908675799086,
+        "unseen_any_strong": 0.01598173515981735,
+        "unseen_none_at_all": 0.4383561643835616
+      },
+      "pos_mean": 0.7107685208320618,
+      "neg_mean": 0.09710060060024261,
+      "n_probes": 1618,
+      "n_animals": 558
+    },
+    "C-both": {
+      "top1": 0.9660074165636588,
+      "top3": 0.9894932014833128,
+      "auc": 0.9987269043196582,
+      "eer": 0.012218356132507324,
+      "tiers": {
+        "strong": {
+          "threshold": 0.5008,
+          "recall": 0.9264524103831892,
+          "false_match_rate": 0.0008277612940594257,
+          "precision": 0.6677060133630289,
+          "wrong_per_sighting": 0.4610630407911001
+        },
+        "possible": {
+          "threshold": 0.3452,
+          "recall": 0.9864029666254636,
+          "false_match_rate": 0.00929844456329489,
+          "precision": 0.1599839615076183,
+          "wrong_per_sighting": 5.1792336217552535
+        },
+        "weak": {
+          "threshold": 0.2492,
+          "recall": 0.9950556242274413,
+          "false_match_rate": 0.04767505597929931,
+          "precision": 0.0361180904522613,
+          "wrong_per_sighting": 26.555006180469714
+        }
+      },
+      "unseen_suggested": {
+        "strong": 0.20776255707762556,
+        "possible": 0.8778538812785388,
+        "weak": 0.9988584474885844,
+        "rejected_all": 0.001141552511415525
+      },
+      "live": {
+        "known_top_is_right_possible": 0.9864029666254636,
+        "known_top_is_right_strong": 0.9264524103831892,
+        "known_wrong_on_top_possible": 0.0,
+        "unseen_any_possible": 0.17465753424657535,
+        "unseen_any_strong": 0.01141552511415525,
+        "unseen_none_at_all": 0.4406392694063927
+      },
+      "pos_mean": 0.7071363925933838,
+      "neg_mean": 0.10698384791612625,
+      "n_probes": 1618,
+      "n_animals": 558
+    },
+    "F": {
+      "top1": 0.9561186650185414,
+      "top3": 0.9851668726823238,
+      "auc": 0.9983547832802573,
+      "eer": 0.012360930442810059,
+      "tiers": {
+        "strong": {
+          "threshold": 0.5034,
+          "recall": 0.9097651421508035,
+          "false_match_rate": 0.00079114450759299,
+          "precision": 0.6736842105263158,
+          "wrong_per_sighting": 0.44066749072929545
+        },
+        "possible": {
+          "threshold": 0.3497,
+          "recall": 0.9826946847960445,
+          "false_match_rate": 0.00922632058995191,
+          "precision": 0.16052498738011106,
+          "wrong_per_sighting": 5.139060568603214
+        },
+        "weak": {
+          "threshold": 0.2563,
+          "recall": 0.9950556242274413,
+          "false_match_rate": 0.04753191763220324,
+          "precision": 0.03622291718226202,
+          "wrong_per_sighting": 26.475278121137208
+        }
+      },
+      "unseen_suggested": {
+        "strong": 0.20319634703196346,
+        "possible": 0.8995433789954338,
+        "weak": 0.9965753424657534,
+        "rejected_all": 0.003424657534246575
+      },
+      "live": {
+        "known_top_is_right_possible": 0.9826946847960445,
+        "known_top_is_right_strong": 0.9097651421508035,
+        "known_wrong_on_top_possible": 0.0,
+        "unseen_any_possible": 0.17922374429223745,
+        "unseen_any_strong": 0.01141552511415525,
+        "unseen_none_at_all": 0.4429223744292237
+      },
+      "pos_mean": 0.7035045027732849,
+      "neg_mean": 0.11686716973781586,
+      "n_probes": 1618,
+      "n_animals": 558
+    }
+  },
+  "performance": {
+    "provider": "DmlExecutionProvider",
+    "cpu": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "load_embedder_s": 3.4079072999884374,
+    "load_detector_s": 1.200009137392044e-06,
+    "rss_before_mb": 63.61328125,
+    "rss_models_loaded_mb": 231.65625,
+    "rss_peak_mb": 321.5625,
+    "single_photo_ms_median": 194.18130000121891,
+    "fingerprint_ms": 2.708771613382073,
+    "detect_ms": 0.5472409422551133,
+    "embed_ms_batched": 43.97724704050849
+  },
+  "hardest_lookalike_scores": [
+    0.9610927104949951,
+    0.9493429660797119,
+    0.9304901957511902,
+    0.9225447177886963,
+    0.9192171096801758,
+    0.9132230281829834,
+    0.910038948059082,
+    0.8860994577407837
+  ],
+  "lowest_same_animal_scores": [
+    0.1131490170955658,
+    0.11906535178422928,
+    0.1730450540781021,
+    0.1753106415271759,
+    0.18785542249679565,
+    0.20197793841362,
+    0.20664942264556885,
+    0.2224387675523758
+  ],
+  "lookalike_files": [
+    [
+      "eval\\data\\dogfacenet\\dog0531\\03181.jpg",
+      "eval\\data\\dogfacenet\\dog0506\\02887.jpg"
+    ],
+    [
+      "eval\\data\\dogfacenet\\dog0409\\02208.jpg",
+      "eval\\data\\dogfacenet\\dog0703\\04411.jpg"
+    ],
+    [
+      "eval\\data\\dogfacenet\\dog0808\\05373.jpg",
+      "eval\\data\\dogfacenet\\dog1207\\07479.jpg"
+    ],
+    [
+      "eval\\data\\dogfacenet\\dog0703\\04413.jpg",
+      "eval\\data\\dogfacenet\\dog0409\\02210.jpg"
+    ],
+    [
+      "eval\\data\\dogfacenet\\dog0200\\01032.jpg",
+      "eval\\data\\dogfacenet\\dog0464\\02520.jpg"
+    ],
+    [
+      "eval\\data\\dogfacenet\\dog0464\\02518.jpg",
+      "eval\\data\\dogfacenet\\dog0200\\01031.jpg"
+    ],
+    [
+      "eval\\data\\dogfacenet\\dog0703\\04414.jpg",
+      "eval\\data\\dogfacenet\\dog0409\\02211.jpg"
+    ],
+    [
+      "eval\\data\\dogfacenet\\dog0703\\04412.jpg",
+      "eval\\data\\dogfacenet\\dog0409\\02209.jpg"
+    ]
+  ],
+  "seed": 7,
+  "model": "pet-recognition-large+detr-resnet-50/v1+flip"
+}

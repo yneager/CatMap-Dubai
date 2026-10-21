@@ -190,7 +190,17 @@ fun AppNavHost(pendingRoute: MutableState<String?>) {
     LaunchedEffect(user) { if (user != null) container.location.refreshQuietly() }
     LaunchedEffect(user?.uid) {
         user?.takeIf { it.isEmailVerified }?.uid?.let { uid ->
-            runCatching { container.posts.remindStalePosts(uid) }.onFailure { AppErrors.report(it) }
+            // Reminders are about 14 days without activity, so twice a day is plenty (each check reads all own posts).
+            val now = System.currentTimeMillis()
+            if (now - container.settings.lastStaleCheck(uid) >= 12L * 60 * 60 * 1000) {
+                runCatching { container.posts.remindStalePosts(uid); container.settings.setLastStaleCheck(uid, now) }
+                    .onFailure { AppErrors.report(it) }
+            }
+            // Once per account on this phone: a centre saved by 0.0.9 or older leaves the shared document.
+            if (!container.settings.areaFollowPrivate(uid)) {
+                runCatching { container.posts.moveAreaCentreToPrivate(uid); container.settings.setAreaFollowPrivate(uid) }
+                    .onFailure { android.util.Log.w("CatMap", "Alert area not moved yet", it) }
+            }
         }
     }
 

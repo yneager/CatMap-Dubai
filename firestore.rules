@@ -21,6 +21,30 @@ service cloud.firestore {
     // (firebase auth:import). It lets that account give its own profile the admin role.
     function demoAdminClaim() { return signedIn() && request.auth.token.get('catmapAdmin', false) == true; }
 
+    // Reads need a verified email (or the AI worker). Accounts made straight from the public API key without
+    // verifying an address can't download the community's data. Suspended members can still read.
+    function emailVerified() { return signedIn() && request.auth.token.email_verified == true; }
+    function member() { return emailVerified() || aiWorker(); }
+
+    // Client times are milliseconds. A time more than an hour ahead of the server would, for example, keep a post
+    // at the top of everyone's feed, so it's refused.
+    function notFuture(t) { return t is int && t <= request.time.toMillis() + 3600000; }
+    // Optional string / list field `k` of map `d`, at most `max` long.
+    function optStr(d, k, max) { return !(k in d) || (d[k] is string && d[k].size() <= max); }
+    function optList(d, k, max) { return !(k in d) || (d[k] is list && d[k].size() <= max); }
+
+    // Map-area codes (data/Geohash.kt): the position's geohash at precision 4, 5 and 6, or none for a missing position.
+    function geoCellsOk(d) {
+      return !('geoCells' in d) || (d.geoCells is list && (d.geoCells.size() == 0
+        || (d.geoCells.size() == 3 && d.geoCells[0] is string && d.geoCells[1] is string && d.geoCells[2] is string
+            && d.geoCells.join(',').matches('[0-9b-hjkmnp-z]{4},[0-9b-hjkmnp-z]{5},[0-9b-hjkmnp-z]{6}'))));
+    }
+
+    // Search words and their first letters (data/SearchTerms.kt): at most 200, bounded in size.
+    function searchTermsOk(d) {
+      return !('searchTerms' in d) || (d.searchTerms is list && d.searchTerms.size() <= 200 && d.searchTerms.join(' ').size() <= 4000);
+    }
+
     function incoming() { return request.resource.data; }
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
     function onlyChanging(fields) { return changed().hasOnly(fields); }
@@ -36,23 +60,123 @@ service cloud.firestore {
     }
 
     // ---------- users ----------
+    function userFields() {
+      return ['username', 'displayName', 'bio', 'photoId', 'role', 'volunteerStatus', 'stats', 'points', 'neighborhoods',
+              'badges', 'followedCats', 'showStatsPublicly', 'suspended', 'lastPostAt', 'createdAt'];
+    }
+    function statKeys() {
+      return ['sightings', 'catsRegistered', 'approvedSightings', 'photos', 'rescueReports', 'checkins', 'maintenanceReports',
+              'mergeSuggestions', 'tnrReports', 'nightSightings', 'iftarCheckins', 'souqSightings', 'marinaSightings', 'posts',
+              'reunited', 'postUpdates'];
+    }
+    // The app adds at most 6 to a counter in one write (the photos of one sighting). Written out key by key, without
+    // helper calls: the rules may evaluate at most 1,000 expressions per document, and calls are the costly part.
+    function statsDeltaOk(b, a) {
+      let sd = a.diff(b).affectedKeys();
+      return sd.size() <= 8 && sd.hasOnly(statKeys())
+        && (!('sightings' in sd) || a.sightings - b.get('sightings', 0) <= 6)
+        && (!('catsRegistered' in sd) || a.catsRegistered - b.get('catsRegistered', 0) <= 6)
+        && (!('approvedSightings' in sd) || a.approvedSightings - b.get('approvedSightings', 0) <= 6)
+        && (!('photos' in sd) || a.photos - b.get('photos', 0) <= 6)
+        && (!('rescueReports' in sd) || a.rescueReports - b.get('rescueReports', 0) <= 6)
+        && (!('checkins' in sd) || a.checkins - b.get('checkins', 0) <= 6)
+        && (!('maintenanceReports' in sd) || a.maintenanceReports - b.get('maintenanceReports', 0) <= 6)
+        && (!('mergeSuggestions' in sd) || a.mergeSuggestions - b.get('mergeSuggestions', 0) <= 6)
+        && (!('tnrReports' in sd) || a.tnrReports - b.get('tnrReports', 0) <= 6)
+        && (!('nightSightings' in sd) || a.nightSightings - b.get('nightSightings', 0) <= 6)
+        && (!('iftarCheckins' in sd) || a.iftarCheckins - b.get('iftarCheckins', 0) <= 6)
+        && (!('souqSightings' in sd) || a.souqSightings - b.get('souqSightings', 0) <= 6)
+        && (!('marinaSightings' in sd) || a.marinaSightings - b.get('marinaSightings', 0) <= 6)
+        && (!('posts' in sd) || a.posts - b.get('posts', 0) <= 6)
+        && (!('reunited' in sd) || a.reunited - b.get('reunited', 0) <= 6)
+        && (!('postUpdates' in sd) || a.postUpdates - b.get('postUpdates', 0) <= 6);
+    }
+    function statsStepOk(ch) {
+      return !('stats' in ch) || (incoming().stats is map && statsDeltaOk(resource.data.get('stats', {}), incoming().stats));
+    }
+    // Largest single award: a sighting of a new cat with 6 photos (10 + 15 + 12 = 37). Largest loss: a deleted sighting (10).
+    function pointsStepOk(ch) {
+      return !('points' in ch) || (incoming().points is int
+        && incoming().points - resource.data.get('points', 0) >= -25
+        && incoming().points - resource.data.get('points', 0) <= 40);
+    }
+    // Lists the app grows or shrinks by one entry at a time.
+    function listStepOk(ch, k) {
+      return !(k in ch) || (incoming()[k] is list
+        && incoming()[k].size() <= resource.data.get(k, []).size() + 1
+        && incoming()[k].size() >= resource.data.get(k, []).size() - 1
+        && incoming()[k].size() <= 500);
+    }
+    // The badges a profile has earned, by the same thresholds as gamification/Badges.kt ('' where not earned).
+    function earnedBadges(d) {
+      let s = d.get('stats', {});
+      return ['',
+        s.get('sightings', 0) >= 1 ? 'first_whiskers' : '',
+        s.get('souqSightings', 0) >= 5 ? 'souq_resident' : '',
+        d.get('neighborhoods', []).size() >= 3 ? 'abra_rider' : '',
+        s.get('marinaSightings', 0) >= 3 ? 'marina_watcher' : '',
+        s.get('catsRegistered', 0) >= 5 ? 'majlis_host' : '',
+        s.get('checkins', 0) >= 10 ? 'ehsan_hero' : '',
+        s.get('iftarCheckins', 0) >= 1 ? 'iftar_feeder' : '',
+        s.get('nightSightings', 0) >= 5 ? 'night_patrol' : '',
+        s.get('rescueReports', 0) >= 3 ? 'ghaf_guardian' : '',
+        s.get('maintenanceReports', 0) >= 3 ? 'falaj_keeper' : '',
+        s.get('tnrReports', 0) >= 5 ? 'tnr_champion' : '',
+        s.get('approvedSightings', 0) >= 10 ? 'pearl_diver' : '',
+        s.get('photos', 0) >= 20 ? 'palm_photographer' : '',
+        s.get('mergeSuggestions', 0) >= 3 ? 'merge_detective' : '',
+        d.get('followedCats', []).size() >= 5 ? 'heart_of_dubai' : '',
+        s.get('sightings', 0) >= 25 ? 'falcon_eye' : '',
+        d.get('neighborhoods', []).size() >= 10 ? 'burj_explorer' : '',
+        s.get('sightings', 0) >= 100 ? 'caravan_leader' : ''];
+    }
+    // Badges are never taken away, and a new one must be earned by the profile's own counters.
+    function badgesOk(ch) {
+      return !('badges' in ch) || (incoming().badges is list
+        && incoming().badges.toSet().hasAll(resource.data.get('badges', []).toSet())
+        && incoming().badges.toSet().difference(resource.data.get('badges', []).toSet()).hasOnly(earnedBadges(incoming())));
+    }
+    // What a member may change on their own profile. Role, suspension and createdAt are never theirs to change.
+    function selfProfileUpdateOk() {
+      let d = incoming();
+      let ch = changed();
+      return ch.hasOnly(['username', 'displayName', 'bio', 'photoId', 'volunteerStatus', 'stats', 'points', 'neighborhoods',
+                         'badges', 'followedCats', 'showStatsPublicly', 'lastPostAt'])
+        && (!('lastPostAt' in ch) || d.lastPostAt == request.time)
+        && (!('volunteerStatus' in ch) || d.volunteerStatus == 'applied')
+        && (!('username' in ch) || (d.username is string && d.username.size() >= 3 && d.username.size() <= 30))
+        && (!('displayName' in ch) || optStr(d, 'displayName', 60))
+        && (!('bio' in ch) || optStr(d, 'bio', 300))
+        && (!('photoId' in ch) || optStr(d, 'photoId', 128))
+        && (!('showStatsPublicly' in ch) || d.showStatsPublicly is bool)
+        && statsStepOk(ch) && pointsStepOk(ch) && badgesOk(ch) && listStepOk(ch, 'neighborhoods') && listStepOk(ch, 'followedCats');
+    }
+
     match /users/{userId} {
-      allow read: if signedIn();
+      // Verified members see public profiles (names, photos, badges); an unverified account sees only its own.
+      allow get: if signedIn() && (uid() == userId || member());
+      allow list: if member();
       allow create: if signedIn() && uid() == userId
+        && incoming().keys().hasOnly(userFields())
         && (incoming().role == 'user' || (incoming().role == 'admin' && demoAdminClaim()))
         && incoming().volunteerStatus == 'none'
         && incoming().points == 0
-        && incoming().get('suspended', false) == false;
+        && incoming().get('suspended', false) == false
+        && incoming().get('stats', {}).size() == 0
+        && incoming().get('badges', []).size() == 0
+        && incoming().get('neighborhoods', []).size() == 0
+        && incoming().get('followedCats', []).size() == 0
+        && incoming().get('lastPostAt', null) == null
+        && incoming().username is string && incoming().username.size() <= 30
+        && optStr(incoming(), 'displayName', 60) && optStr(incoming(), 'bio', 300) && optStr(incoming(), 'photoId', 128);
       // Only admins can change a role or suspend an account.
       allow update: if
-        (signedIn() && uid() == userId
-          && notChanging(['role', 'suspended'])
-          && (notChanging(['lastPostAt']) || incoming().lastPostAt == request.time)
-          && (notChanging(['volunteerStatus']) || incoming().volunteerStatus == 'applied'))
+        (signedIn() && uid() == userId && selfProfileUpdateOk())
         || (isMod() && notChanging(['role', 'volunteerStatus', 'lastPostAt', 'suspended']))
         || isAdmin()
         || (signedIn() && uid() == userId && demoAdminClaim() && onlyChanging(['role']) && incoming().role == 'admin');
-      allow delete: if (signedIn() && uid() == userId) || isAdmin();
+      // A suspended member can't delete their profile: re-creating it would clear the suspension.
+      allow delete: if (signedIn() && uid() == userId && resource.data.get('suspended', false) != true) || isAdmin();
 
       // Email address and other account data only the owner may see.
       match /private/{doc} {
@@ -62,8 +186,12 @@ service cloud.firestore {
       match /notifications/{notificationId} {
         allow read, delete: if signedIn() && uid() == userId;
         allow update: if signedIn() && uid() == userId && onlyChanging(['read']);
-        allow create: if (signedIn() && uid() == userId)
-          || (verified() && !aiWorker() && incoming().fromUid == uid())
+        allow create: if (signedIn() && uid() == userId && validNotification(incoming()))
+          // Into someone else's inbox: only the kinds of alert the sender's role sends, in the app's own shape.
+          || (verified() && !aiWorker() && incoming().fromUid == uid() && validNotification(incoming())
+              && incoming().read == false && senderMaySend(incoming().type)
+              // Someone you blocked can't reach your inbox either (their messages are already refused).
+              && !exists(/databases/$(database)/documents/users/$(userId)/blocked/$(uid())))
           // The AI worker may only announce a match it found, once per match (fixed ids pm_/pr_ + match id).
           || (aiWorker() && incoming().fromUid == uid()
               && incoming().type in ['match_found', 'match_reporter']
@@ -79,12 +207,44 @@ service cloud.firestore {
       }
     }
 
+    // ---------- notification shape ----------
+    // Alerts are formatted on the receiving phone from `type` and `params`, so these checks decide what a sender can
+    // make someone else's phone say.
+    function paramOk(m, k) { return !(k in m) || (m[k] is string && m[k].size() <= 300); }
+    function validParams(m) {
+      return m is map && m.size() <= 8
+        && m.keys().hasOnly(['user', 'name', 'text', 'area', 'lostArea', 'matchId', 'type', 'category', 'kind', 'status', 'cat',
+                             'station', 'decision', 'target', 'label', 'rating', 'badge'])
+        && paramOk(m, 'user') && paramOk(m, 'name') && paramOk(m, 'text') && paramOk(m, 'area') && paramOk(m, 'lostArea')
+        && paramOk(m, 'matchId') && paramOk(m, 'type') && paramOk(m, 'category') && paramOk(m, 'kind') && paramOk(m, 'status')
+        && paramOk(m, 'cat') && paramOk(m, 'station') && paramOk(m, 'decision') && paramOk(m, 'target') && paramOk(m, 'label')
+        && paramOk(m, 'rating') && paramOk(m, 'badge');
+    }
+    function validNotification(n) {
+      return n.keys().hasOnly(['type', 'params', 'route', 'fromUid', 'read', 'createdAt'])
+        && n.type is string && n.type.size() <= 40
+        && validParams(n.get('params', {}))
+        && n.get('route', '') is string
+        && n.get('route', '').matches('(|(post|cat|sighting|rescue|station|sitter|user|match|chat)/[A-Za-z0-9][A-Za-z0-9_.-]{0,299}|adoption-requests|achievements|profile|bookings|bookings[?]tab=(sitter|owner))')
+        && notFuture(n.createdAt);
+    }
+    // Alerts any member sends to another person (messages, matches, bookings, lost-pet alerts...). Moderation and
+    // staff alerts need the role; welcome, achievement and stale-post reminders only ever go to your own inbox.
+    function senderMaySend(t) {
+      return t in ['message', 'adoption_request', 'adoption_decision', 'booking_request', 'booking_update', 'review',
+                   'post_update', 'lost_nearby', 'followed_cat', 'match_found', 'match_reporter', 'match_info',
+                   'match_reunited', 'rescue_moderation']
+        || (t == 'rescue_update' && isVolunteer())
+        || (t in ['moderation', 'rescue_volunteer', 'volunteer_decision', 'maintenance_update'] && isMod());
+    }
+
     // Username -> uid, so names stay unique. Readable before sign-in for the registration check.
     // The app may only write `uid`; `loginEmail` (username sign-in for demo accounts) is set by admin tooling.
     match /usernames/{name} {
       allow get: if true;
       allow list: if false;
-      allow create: if signedIn() && incoming().uid == uid() && incoming().keys().hasOnly(['uid']);
+      allow create: if signedIn() && incoming().uid == uid() && incoming().keys().hasOnly(['uid'])
+        && name.matches('[a-z0-9_.]{3,20}');
       allow delete: if signedIn() && (resource.data.uid == uid() || isAdmin());
       allow update: if false;
     }
@@ -93,7 +253,7 @@ service cloud.firestore {
     function communityCatFields() {
       return ['sightingCount', 'lastSeen', 'lat', 'lng', 'neighborhood', 'neighborhoods', 'photoIds',
               'coverPhotoId', 'contributors', 'followers', 'aliases', 'tnrStatus', 'healthStatus',
-              'features', 'updatedAt'];
+              'features', 'geoCells', 'searchTerms', 'updatedAt'];
     }
     // Only volunteers may mark a cat as verified neutered.
     function tnrAllowed() {
@@ -103,61 +263,152 @@ service cloud.firestore {
             : incoming().tnrStatus != 'neutered_verified');
     }
 
+    function catTextOk(d) {
+      return optStr(d, 'name', 60) && optStr(d, 'description', 2000) && optStr(d, 'distinctiveMarks', 1000)
+        && optStr(d, 'createdByName', 40) && optStr(d, 'coverPhotoId', 128) && optStr(d, 'neighborhood', 80)
+        // features: CatAnalyzer.FEATURE_SIZE is 117.
+        && optList(d, 'photoIds', 1000) && optList(d, 'aliases', 50) && optList(d, 'breedHints', 20) && optList(d, 'features', 200)
+        && optList(d, 'neighborhoods', 200) && geoCellsOk(d) && searchTermsOk(d);
+    }
+    // Someone else's cat: followers and contributors change only by the writer themself, photos and aliases are only
+    // added, and the cat's place, photos and health change only together with a new sighting (which counts one more
+    // sighting and stamps the writer's rate limit in the same batch, see CatRepository.addSighting).
+    function addedOnly(ch, k, maxNew) {
+      return !(k in ch) || (incoming()[k] is list
+        && incoming()[k].toSet().hasAll(resource.data.get(k, []).toSet())
+        && incoming()[k].size() <= resource.data.get(k, []).size() + maxNew);
+    }
+    function onlySelfAddedOrRemoved(ch, k) {
+      return !(k in ch) || (incoming()[k] is list
+        && incoming()[k].toSet().difference(resource.data.get(k, []).toSet()).hasOnly([uid()])
+        && resource.data.get(k, []).toSet().difference(incoming()[k].toSet()).hasOnly([uid()]));
+    }
+    function newSightingOfCatOk(ch, before, d) {
+      return d.sightingCount == before.get('sightingCount', 0) + 1 && rateLimited()
+        && addedOnly(ch, 'photoIds', 6) && addedOnly(ch, 'neighborhoods', 1)
+        && (!('contributors' in ch) || (addedOnly(ch, 'contributors', 1)
+            && d.contributors.toSet().difference(before.get('contributors', []).toSet()).hasOnly([uid()])))
+        && (!('coverPhotoId' in ch) || (before.get('coverPhotoId', '') == '' && d.coverPhotoId in d.photoIds))
+        && (!ch.hasAny(['lat', 'lng', 'neighborhood', 'lastSeen'])
+            || (notFuture(d.lastSeen) && d.lastSeen >= before.get('lastSeen', 0)));
+    }
+    function communityCatUpdateOk() {
+      let before = resource.data;
+      let d = incoming();
+      let ch = changed();
+      return ch.hasOnly(communityCatFields()) && tnrAllowed() && catTextOk(d)
+        && onlySelfAddedOrRemoved(ch, 'followers')
+        && addedOnly(ch, 'aliases', 1)
+        && (
+          // Following / unfollowing, or adding a name the cat is also known by.
+          !ch.hasAny(['sightingCount', 'lastSeen', 'lat', 'lng', 'neighborhood', 'neighborhoods', 'photoIds', 'coverPhotoId',
+                      'contributors', 'tnrStatus', 'healthStatus', 'features', 'geoCells'])
+          // A new sighting of this cat.
+          || newSightingOfCatOk(ch, before, d)
+          // A sighting of this cat was deleted.
+          || (ch.hasOnly(['sightingCount', 'updatedAt']) && before.get('sightingCount', 0) > 0
+              && d.sightingCount == before.get('sightingCount', 0) - 1));
+    }
+
     match /cats/{catId} {
-      allow read: if signedIn();
+      allow read: if member();
       allow create: if verified()
         && incoming().createdBy == uid()
         && incoming().hidden == false
         && incoming().mergedInto == ''
         && incoming().tnrVerified == false
-        && incoming().tnrStatus != 'neutered_verified';
+        && incoming().tnrStatus != 'neutered_verified'
+        && incoming().get('followers', []) == [uid()]
+        && incoming().get('contributors', []) == [uid()]
+        && incoming().get('sightingCount', 1) == 1
+        && notFuture(incoming().get('createdAt', 0))
+        && catTextOk(incoming());
       allow update: if isMod()
         || (verified() && resource.data.createdBy == uid()
             && notChanging(['createdBy', 'createdByName', 'createdAt', 'hidden', 'mergedInto', 'tnrVerified'])
-            && tnrAllowed())
-        || (isVolunteer() && onlyChanging(communityCatFields().concat(['tnrVerified'])))
-        || (verified() && onlyChanging(communityCatFields()) && tnrAllowed());
+            && tnrAllowed() && catTextOk(incoming()))
+        // Volunteers confirm neutering (TNR) on top of what any member may do.
+        || (isVolunteer() && onlyChanging(['tnrStatus', 'tnrVerified', 'updatedAt']))
+        || (verified() && communityCatUpdateOk())
+        // The PC worker fills in the map-area codes and search words of profiles written by older app versions
+        // (cat-server backfill).
+        || (aiWorker() && onlyChanging(['geoCells', 'searchTerms']) && geoCellsOk(incoming()) && searchTermsOk(incoming()));
       allow delete: if isMod();
     }
 
     // ---------- sightings ----------
+    function sightingTextOk(d) {
+      return optStr(d, 'catName', 80) && optStr(d, 'username', 40) && optStr(d, 'notes', 2000) && optStr(d, 'aiSummary', 2000)
+        && optStr(d, 'neighborhood', 80) && optList(d, 'photoIds', 6) && optList(d, 'healthTags', 20) && optList(d, 'behaviorTags', 20);
+    }
+
     match /sightings/{sightingId} {
-      allow read: if signedIn();
+      allow read: if member();
       allow create: if verified()
+        && incoming().keys().hasOnly(['catId', 'catName', 'userId', 'username', 'photoIds', 'seenAt', 'lat', 'lng', 'neighborhood',
+             'locationSource', 'coatColor', 'pattern', 'size', 'healthTags', 'behaviorTags', 'earTipped', 'possiblyNotNeutered',
+             'needsMedical', 'notes', 'newCat', 'matchScore', 'aiSummary', 'suggestedCatIds', 'rejectedCatIds', 'status',
+             'createdAt', 'updatedAt'])
+        && sightingTextOk(incoming())
+        && notFuture(incoming().get('createdAt', 0)) && notFuture(incoming().get('seenAt', 0))
         && incoming().userId == uid()
         && incoming().status == 'pending'
         && incoming().get('suggestedCatIds', []).size() <= 6
         && incoming().get('rejectedCatIds', []).size() <= 6
         && rateLimited();
       allow update: if isMod()
-        || (verified() && resource.data.userId == uid()
+        || (verified() && resource.data.userId == uid() && sightingTextOk(incoming())
             && onlyChanging(['notes', 'healthTags', 'behaviorTags', 'earTipped', 'possiblyNotNeutered',
                              'needsMedical', 'lat', 'lng', 'neighborhood', 'locationSource', 'updatedAt']));
       allow delete: if signedIn() && (resource.data.userId == uid() || isMod());
     }
 
     // Exact coordinates of a sighting: author and volunteers only.
+    // Phase 9 size caps (here and below): only the app's fields, and the free text joined with `+`, which bounds its
+    // total size in one step and fails for anything that isn't text. The limits are well above what the apps allow.
+    function exactLocationOk(d) {
+      return d.keys().hasOnly(['ownerId', 'lat', 'lng', 'accuracy']) && (d.lat + d.lng + d.get('accuracy', 0)) is number;
+    }
     match /privateLocations/{sightingId} {
       allow read: if signedIn() && (resource.data.ownerId == uid() || isVolunteer());
       // A location belongs to its sighting, and ownership cannot be reassigned.
       allow create: if verified() && incoming().ownerId == uid()
-        && getAfter(/databases/$(database)/documents/sightings/$(sightingId)).data.userId == uid();
+        && getAfter(/databases/$(database)/documents/sightings/$(sightingId)).data.userId == uid()
+        && exactLocationOk(incoming());
       allow update: if verified() && resource.data.ownerId == uid()
-        && incoming().ownerId == resource.data.ownerId;
+        && incoming().ownerId == resource.data.ownerId && exactLocationOk(incoming());
       allow delete: if signedIn() && (resource == null || resource.data.ownerId == uid() || isMod());
     }
 
     // Verified medical information, written by volunteers and staff.
     match /medicalRecords/{recordId} {
-      allow read: if signedIn();
-      allow create: if isVolunteer() && incoming().byUid == uid();
+      allow read: if member();
+      allow create: if isVolunteer() && incoming().byUid == uid()
+        && incoming().keys().hasOnly(['catId', 'type', 'note', 'byUid', 'byName', 'at'])
+        && ('' + incoming().get('catId', '') + incoming().get('type', '') + incoming().get('note', '') + incoming().get('byName', '')).size() <= 2500;
       allow update: if isMod();
       allow delete: if isAdmin();
     }
 
     // ---------- rescue reports ----------
     function volunteerVisible() { return ['approved', 'in_progress', 'resolved']; }
+    // The history only grows: everything already there stays as it was, and the one new entry is the writer's own.
+    function appendedOwnRescueNote() {
+      let before = resource.data.get('updates', []);
+      let after = incoming().get('updates', []);
+      return after is list && after.size() == before.size() + 1
+        && after[0:before.size()] == before
+        && after[before.size()].byUid == uid()
+        && after[before.size()].get('note', '') is string && after[before.size()].get('note', '').size() <= 1000;
+    }
 
+    function rescueFieldsOk(d) {
+      return d.keys().hasOnly(['type', 'urgency', 'description', 'landmark', 'photoIds', 'lat', 'lng', 'neighborhood', 'catId',
+                               'catName', 'reporterId', 'reporterName', 'status', 'assignedTo', 'assignedName', 'updates',
+                               'createdAt', 'updatedAt'])
+        && ('' + d.get('type', '') + d.get('urgency', '') + d.get('description', '') + d.get('landmark', '') + d.get('neighborhood', '') + d.get('catId', '') + d.get('catName', '') + d.get('reporterName', '') + d.get('assignedTo', '') + d.get('assignedName', '')).size() <= 4000
+        && optList(d, 'photoIds', 12) && optList(d, 'updates', 3) && notFuture(d.get('createdAt', 0));
+    }
     match /rescues/{reportId} {
       allow read: if signedIn() && (
         isMod()
@@ -166,35 +417,52 @@ service cloud.firestore {
       allow create: if verified()
         && incoming().reporterId == uid()
         && incoming().status == 'submitted'
+        && rescueFieldsOk(incoming())
         && rateLimited();
       allow update: if isMod()
         || (isVolunteer()
             && resource.data.status in volunteerVisible()
             && incoming().status in volunteerVisible()
-            && onlyChanging(['status', 'updates', 'assignedTo', 'assignedName', 'updatedAt']))
-        || (verified() && resource.data.reporterId == uid() && onlyChanging(['updates', 'updatedAt']));
+            && onlyChanging(['status', 'updates', 'assignedTo', 'assignedName', 'updatedAt'])
+            && (notChanging(['updates']) || appendedOwnRescueNote())
+            // A volunteer takes a report on themself; they can't hand it to someone else.
+            && (notChanging(['assignedTo']) || incoming().assignedTo == uid())
+            && optStr(incoming(), 'assignedName', 40))
+        || (verified() && resource.data.reporterId == uid() && onlyChanging(['updates', 'updatedAt']) && appendedOwnRescueNote());
       allow delete: if isAdmin() || (signedIn() && resource.data.reporterId == uid());
     }
 
     // ---------- Ehsan feeding stations ----------
     match /stations/{stationId} {
-      allow read: if signedIn();
+      allow read: if member();
       allow create, delete: if isAdmin();
+      // A check-in counts exactly one more visit; deleting one (yours, or during account deletion) one fewer.
       allow update: if isAdmin()
-        || (verified() && onlyChanging(['checkinCount', 'lastCheckinAt', 'lastCheckinBy']));
+        || (verified() && onlyChanging(['checkinCount', 'lastCheckinAt', 'lastCheckinBy'])
+            && (incoming().checkinCount == resource.data.get('checkinCount', 0) + 1
+                || incoming().checkinCount == resource.data.get('checkinCount', 0) - 1
+                || (incoming().checkinCount == 0 && resource.data.get('checkinCount', 0) == 0))
+            && incoming().checkinCount >= 0
+            && notFuture(incoming().get('lastCheckinAt', 0)) && optStr(incoming(), 'lastCheckinBy', 40));
     }
 
     match /checkins/{checkinId} {
-      allow read: if signedIn();
-      allow create: if verified() && incoming().userId == uid();
+      allow read: if member();
+      allow create: if verified() && incoming().userId == uid()
+        && incoming().keys().hasOnly(['stationId', 'stationName', 'userId', 'username', 'catsSeen', 'catIds', 'foodLevel', 'waterLevel', 'note', 'at'])
+        && optStr(incoming(), 'note', 1000) && optStr(incoming(), 'stationName', 120) && optStr(incoming(), 'username', 40)
+        && optList(incoming(), 'catIds', 30) && notFuture(incoming().get('at', 0));
       allow delete: if signedIn() && (resource.data.userId == uid() || isAdmin());
     }
 
     match /maintenance/{reportId} {
-      allow read: if signedIn();
+      allow read: if member();
       allow create: if verified()
         && incoming().userId == uid()
         && incoming().status == 'open'
+        && incoming().keys().hasOnly(['stationId', 'stationName', 'userId', 'username', 'issue', 'description', 'status',
+                                      'resolutionNote', 'resolvedBy', 'createdAt', 'updatedAt'])
+        && ('' + incoming().get('stationId', '') + incoming().get('stationName', '') + incoming().get('username', '') + incoming().get('issue', '') + incoming().get('description', '') + incoming().get('resolutionNote', '') + incoming().get('resolvedBy', '')).size() <= 3000
         && rateLimited();
       allow update: if isAdmin();
       allow delete: if isAdmin() || (signedIn() && resource.data.userId == uid());
@@ -202,8 +470,12 @@ service cloud.firestore {
 
     // ---------- moderation ----------
     match /mergeRequests/{requestId} {
-      allow read: if signedIn();
-      allow create: if verified() && incoming().requestedBy == uid() && incoming().status == 'pending';
+      allow read: if member();
+      allow create: if verified() && incoming().requestedBy == uid() && incoming().status == 'pending'
+        && incoming().keys().hasOnly(['primaryCatId', 'primaryName', 'duplicateCatId', 'duplicateName', 'requestedBy',
+                                      'requestedByName', 'reason', 'similarity', 'status', 'reviewedBy', 'reviewedByName',
+                                      'reviewNote', 'createdAt', 'reviewedAt'])
+        && ('' + incoming().get('primaryCatId', '') + incoming().get('primaryName', '') + incoming().get('duplicateCatId', '') + incoming().get('duplicateName', '') + incoming().get('requestedByName', '') + incoming().get('reason', '') + incoming().get('reviewNote', '')).size() <= 3000;
       allow update: if isMod();
       allow delete: if signedIn() && resource.data.requestedBy == uid();
     }
@@ -213,6 +485,9 @@ service cloud.firestore {
       allow create: if verified()
         && incoming().reporterId == uid()
         && incoming().status == 'open'
+        && incoming().keys().hasOnly(['targetType', 'targetId', 'targetLabel', 'reason', 'details', 'reporterId',
+                                      'reporterName', 'status', 'resolution', 'resolvedBy', 'createdAt'])
+        && ('' + incoming().get('targetType', '') + incoming().get('targetId', '') + incoming().get('targetLabel', '') + incoming().get('reason', '') + incoming().get('details', '') + incoming().get('reporterName', '') + incoming().get('resolution', '')).size() <= 3000
         && rateLimited();
       allow update: if isMod();
       allow delete: if signedIn() && resource.data.reporterId == uid();
@@ -227,22 +502,50 @@ service cloud.firestore {
       allow read: if signedIn() && (uid() == applicantId || isAdmin());
       allow create, update: if (signedIn() && uid() == applicantId
                                 && incoming().userId == uid()
-                                && incoming().status == 'pending')
+                                && incoming().status == 'pending'
+                                && incoming().keys().hasOnly(['userId', 'username', 'motivation', 'experience', 'area',
+                                                              'status', 'reviewedBy', 'createdAt'])
+                                && ('' + incoming().get('username', '') + incoming().get('motivation', '') + incoming().get('experience', '') + incoming().get('area', '') + incoming().get('reviewedBy', '')).size() <= 4000)
                             || isAdmin();
       allow delete: if signedIn() && (uid() == applicantId || isAdmin());
     }
 
     // ---------- animal posts: lost, found, spotted, needs help, street, adoption, other ----------
-    function fingerprintPart0(f) { return (f[0] >= 0 && f[0] <= 1) && (f[1] >= 0 && f[1] <= 1) && (f[2] >= 0 && f[2] <= 1) && (f[3] >= 0 && f[3] <= 1) && (f[4] >= 0 && f[4] <= 1) && (f[5] >= 0 && f[5] <= 1) && (f[6] >= 0 && f[6] <= 1) && (f[7] >= 0 && f[7] <= 1); }
-    function fingerprintPart1(f) { return (f[8] >= 0 && f[8] <= 1) && (f[9] >= 0 && f[9] <= 1) && (f[10] >= 0 && f[10] <= 1) && (f[11] >= 0 && f[11] <= 1) && (f[12] >= 0 && f[12] <= 1) && (f[13] >= 0 && f[13] <= 1) && (f[14] >= 0 && f[14] <= 1) && (f[15] >= 0 && f[15] <= 1); }
-    function fingerprintPart2(f) { return (f[16] >= 0 && f[16] <= 1) && (f[17] >= 0 && f[17] <= 1) && (f[18] >= 0 && f[18] <= 1) && (f[19] >= 0 && f[19] <= 1) && (f[20] >= 0 && f[20] <= 1) && (f[21] >= 0 && f[21] <= 1) && (f[22] >= 0 && f[22] <= 1) && (f[23] >= 0 && f[23] <= 1); }
-    function fingerprintPart3(f) { return (f[24] >= 0 && f[24] <= 1) && (f[25] >= 0 && f[25] <= 1) && (f[26] >= 0 && f[26] <= 1); }
+    // Each of the 27 numbers is in [0, 1]: |x - 0.5| <= 0.5 is one comparison instead of two (the rules budget), and it
+    // still fails for anything that isn't a number.
+    function fingerprintPart0(f) { return math.abs(f[0] - 0.5) <= 0.5 && math.abs(f[1] - 0.5) <= 0.5 && math.abs(f[2] - 0.5) <= 0.5 && math.abs(f[3] - 0.5) <= 0.5 && math.abs(f[4] - 0.5) <= 0.5 && math.abs(f[5] - 0.5) <= 0.5 && math.abs(f[6] - 0.5) <= 0.5 && math.abs(f[7] - 0.5) <= 0.5; }
+    function fingerprintPart1(f) { return math.abs(f[8] - 0.5) <= 0.5 && math.abs(f[9] - 0.5) <= 0.5 && math.abs(f[10] - 0.5) <= 0.5 && math.abs(f[11] - 0.5) <= 0.5 && math.abs(f[12] - 0.5) <= 0.5 && math.abs(f[13] - 0.5) <= 0.5 && math.abs(f[14] - 0.5) <= 0.5 && math.abs(f[15] - 0.5) <= 0.5; }
+    function fingerprintPart2(f) { return math.abs(f[16] - 0.5) <= 0.5 && math.abs(f[17] - 0.5) <= 0.5 && math.abs(f[18] - 0.5) <= 0.5 && math.abs(f[19] - 0.5) <= 0.5 && math.abs(f[20] - 0.5) <= 0.5 && math.abs(f[21] - 0.5) <= 0.5 && math.abs(f[22] - 0.5) <= 0.5 && math.abs(f[23] - 0.5) <= 0.5; }
+    function fingerprintPart3(f) { return math.abs(f[24] - 0.5) <= 0.5 && math.abs(f[25] - 0.5) <= 0.5 && math.abs(f[26] - 0.5) <= 0.5; }
     function validFingerprint(f) {
       return f is list && (f.size() == 0 || (f.size() == 27 && fingerprintPart0(f) && fingerprintPart1(f) && fingerprintPart2(f) && fingerprintPart3(f)));
     }
 
-    function validPost() {
+    // Types and size limits. Types matter: the app converts a whole feed at once, so one post with, say, a number
+    // where text belongs would break every phone's map. To stay inside the rules' budget of 1,000 expressions per
+    // document (a 27-number fingerprint already uses much of it), the text fields are joined with `+`, which fails
+    // unless every one of them is a string and bounds their total size in one step (the app's own limits add up to
+    // about 3,300 characters, PostRepository.toPost). Lists are bounded through join().
+    function postFieldsOk(d) {
+      return ('' + d.ownerName + d.ownerPhotoId + d.name + d.description + d.color + d.breed + d.features + d.sex + d.ageGroup
+              + d.videoPath + d.neighborhood + d.contactMethod + d.contactPhone + d.contactEmail + d.health).size() <= 4500
+        && d.ownerName.size() <= 40 && d.features.size() <= 600 && d.health.size() <= 600
+        && d.photoIds is list && d.photoIds.join(',').size() <= 800
+        && d.keywords is list && d.keywords.size() <= 100 && d.keywords.join(' ').size() <= 4000
+        && (d.lat + d.lng) is number && d.lastSeenAt is int && d.updatesCount is int
+        && [d.approximate, d.vaccinated, d.neutered, d.hidden].hasOnly([true, false]);
+    }
+    // On an update only what changed is checked again: a full check with a 27-number fingerprint uses most of the
+    // rules' budget of 1,000 expressions per document.
+    // BUDGET: a post edit with a new fingerprint has only about 100 expressions to spare (measured 20 Oct 2026). Any
+    // check added here must keep "largest possible real post fits the rules budget" and "owner edits the fingerprint
+    // of the largest post" passing in tools/rulestest/test.mjs; a request over 1,000 expressions is simply refused.
+    function validPost() { return validPostWith(resource == null ? [] : changed()); }
+    // `ch` is what an update changes, worked out once by the caller (each diff of a 40-field post is costly).
+    function validPostWith(ch) {
       let d = incoming();
+      let creating = resource == null;
+      let latest = request.time.toMillis() + 3600000;
       return d.category in ['lost', 'found', 'spotted', 'needs_help', 'street', 'adoption', 'other']
         && d.animalType in ['cat', 'dog', 'bird', 'rabbit', 'other']
         && d.status in ['open', 'reunited', 'resolved']
@@ -253,36 +556,54 @@ service cloud.firestore {
         && d.areaRadiusM is int && d.areaRadiusM >= 0 && d.areaRadiusM <= 5000
         && d.get('lastActivityAt', 0) is int && d.get('lastActivityAt', 0) >= 0
         && d.get('microchip', 'unknown') in ['yes','no','unknown']
-        && validFingerprint(d.get('fingerprint', []))
+        && ((!creating && !('fingerprint' in ch)) || validFingerprint(d.get('fingerprint', [])))
         // How a lost/found report was closed: through a CatMap match, the animal came home by itself, or other.
         && d.get('resolution', '') in ['', 'catmap', 'home', 'other']
         && d.get('resolvedMatchId', '') is string && d.get('resolvedMatchId', '').size() <= 300
-        && d.keys().hasOnly(['ownerId', 'ownerName', 'ownerPhotoId', 'animalType', 'category', 'status', 'name', 'description', 'color', 'breed', 'features', 'sex', 'ageGroup', 'photoIds', 'videoPath', 'lat', 'lng', 'approximate', 'areaRadiusM', 'neighborhood', 'lastSeenAt', 'reward', 'contactMethod', 'contactPhone', 'contactEmail', 'adoptionStatus', 'health', 'vaccinated', 'neutered', 'updatesCount', 'hidden', 'keywords', 'createdAt', 'updatedAt', 'resolvedAt', 'lastActivityAt', 'fingerprint', 'microchip', 'resolution', 'resolvedMatchId']);
+        && ((!creating && !('geoCells' in ch)) || geoCellsOk(d))
+        && ((!creating && !('searchTerms' in ch)) || searchTermsOk(d))
+        && ((!creating && !ch.hasAny(['ownerId', 'ownerName', 'ownerPhotoId', 'name', 'description', 'color', 'breed', 'features', 'sex', 'ageGroup',
+                        'videoPath', 'neighborhood', 'contactMethod', 'contactPhone', 'contactEmail', 'health', 'photoIds', 'keywords',
+                        'lat', 'lng', 'approximate', 'lastSeenAt', 'vaccinated', 'neutered', 'hidden', 'updatesCount']))
+            || postFieldsOk(d))
+        // No post can claim to be newer than now (that would pin it to the top of every feed).
+        && ((!creating && !ch.hasAny(['createdAt', 'lastActivityAt', 'updatedAt']))
+            || (d.createdAt is int && d.createdAt <= latest && d.get('lastActivityAt', 0) <= latest
+                && d.updatedAt is int && d.updatedAt <= latest))
+        && d.keys().hasOnly(['ownerId', 'ownerName', 'ownerPhotoId', 'animalType', 'category', 'status', 'name', 'description', 'color', 'breed', 'features', 'sex', 'ageGroup', 'photoIds', 'videoPath', 'lat', 'lng', 'approximate', 'areaRadiusM', 'neighborhood', 'lastSeenAt', 'reward', 'contactMethod', 'contactPhone', 'contactEmail', 'adoptionStatus', 'health', 'vaccinated', 'neutered', 'updatesCount', 'hidden', 'keywords', 'createdAt', 'updatedAt', 'resolvedAt', 'lastActivityAt', 'fingerprint', 'microchip', 'resolution', 'resolvedMatchId', 'geoCells', 'searchTerms']);
+    }
+
+    function ownerPostUpdateOk(ch) {
+      return !ch.hasAny(['ownerId', 'ownerName', 'hidden', 'createdAt', 'updatesCount']) && validPostWith(ch);
     }
 
     match /posts/{postId} {
       // Hidden posts stay visible to their author and to moderators only.
-      allow get: if signedIn() && (resource == null || resource.data.hidden == false || resource.data.ownerId == uid() || isMod());
-      allow list: if signedIn() && (resource.data.hidden == false || resource.data.ownerId == uid() || isMod());
+      allow get: if member() && (resource == null || resource.data.hidden == false || resource.data.ownerId == uid() || isMod());
+      allow list: if member() && (resource.data.hidden == false || resource.data.ownerId == uid() || isMod());
       allow create: if verified()
         && incoming().ownerId == uid()
+        // Posts show the author's real username, never a made-up name.
+        && incoming().ownerName == get(userPath()).data.username
         && incoming().hidden == false
         && incoming().updatesCount == 0
         && validPost()
         && rateLimited();
       allow update: if (isMod() && validPost())
-        || (verified() && resource.data.ownerId == uid()
-            && notChanging(['ownerId', 'hidden', 'createdAt', 'updatesCount'])
-            && validPost())
-        // Anyone adding a sighting moves the counter by exactly one, in the same batch as the update.
+        || (verified() && resource.data.ownerId == uid() && ownerPostUpdateOk(changed()))
+        // Anyone adding a sighting moves the counter by exactly one, in the same batch as the update (which also
+        // stamps the writer's rate limit, so the counter can't be pumped on its own).
         || (verified() && onlyChanging(['updatesCount', 'updatedAt'])
-            && (incoming().updatesCount == resource.data.updatesCount + 1
+            && ((incoming().updatesCount == resource.data.updatesCount + 1 && rateLimited())
                 // Removing an update (by its author or the post owner) moves it back down, never below zero.
-                || (incoming().updatesCount == resource.data.updatesCount - 1 && resource.data.updatesCount > 0)));
+                || (incoming().updatesCount == resource.data.updatesCount - 1 && resource.data.updatesCount > 0)))
+        // The PC worker fills in the map-area codes and search words of posts written by older app versions
+        // (recovery.py, backfill).
+        || (aiWorker() && onlyChanging(['geoCells', 'searchTerms']) && geoCellsOk(incoming()) && searchTermsOk(incoming()));
       allow delete: if signedIn() && (resource.data.ownerId == uid() || isMod());
 
       match /updates/{updateId} {
-        allow read: if signedIn();
+        allow read: if member();
         allow create: if verified() && incoming().byUid == uid() && incoming().postId == postId
           && incoming().text.size() <= 1000 && rateLimited();
         allow delete: if signedIn() && (resource.data.byUid == uid() || isMod()
@@ -291,9 +612,18 @@ service cloud.firestore {
     }
 
     // Followed areas for lost-pet alerts. Readable by members so a poster can find who to alert.
+    // The app now keeps the alert area's centre in users/{uid}/private/areaFollow and writes only the neighbourhood
+    // list here. lat/lng/radiusKm are still accepted for v0.0.9 phones; docs/security/LATER_RULES.md removes them once
+    // old versions are gone and tools/migrate/area-follow-privacy.mjs has moved the existing ones.
     match /areaFollows/{followerId} {
       allow read: if verified();
-      allow write: if signedIn() && uid() == followerId;
+      allow create, update: if signedIn() && uid() == followerId
+        && incoming().keys().hasOnly(['neighborhoods', 'lat', 'lng', 'radiusKm', 'updatedAt'])
+        && incoming().neighborhoods is list && incoming().neighborhoods.size() <= 200;
+      // An admin can strip a centre an old app version left behind (the neighbourhoods, and so the alerts, stay).
+      allow update: if isAdmin() && changed().hasOnly(['lat', 'lng', 'radiusKm'])
+        && !incoming().keys().hasAny(['lat', 'lng', 'radiusKm']);
+      allow delete: if signedIn() && uid() == followerId;
     }
 
     // Ownership-filtered collection-group query used by export and account cleanup.
@@ -311,10 +641,13 @@ service cloud.firestore {
         && incoming().ownerId != uid()
         && incoming().status == 'pending'
         && requestId == incoming().postId + '_' + uid()
+        && incoming().keys().hasOnly(['postId', 'postName', 'postPhotoId', 'ownerId', 'requesterId', 'requesterName',
+                                      'message', 'home', 'status', 'ownerNote', 'createdAt', 'decidedAt'])
+        && ('' + incoming().get('postName', '') + incoming().get('postPhotoId', '') + incoming().get('requesterName', '') + incoming().get('message', '') + incoming().get('home', '') + incoming().get('ownerNote', '')).size() <= 3000
         && get(/databases/$(database)/documents/posts/$(incoming().postId)).data.ownerId == incoming().ownerId;
       allow update: if
         (signedIn() && resource.data.ownerId == uid()
-          && onlyChanging(['status', 'ownerNote', 'decidedAt'])
+          && onlyChanging(['status', 'ownerNote', 'decidedAt']) && optStr(incoming(), 'ownerNote', 1000)
           && resource.data.status == 'pending' && incoming().status in ['approved', 'declined'])
         || (signedIn() && resource.data.requesterId == uid()
           && onlyChanging(['status']) && resource.data.status == 'pending' && incoming().status == 'withdrawn')
@@ -325,13 +658,21 @@ service cloud.firestore {
     // ---------- pet sitting ----------
     function reviewAfter(id) { return getAfter(/databases/$(database)/documents/reviews/$(id)).data; }
 
+    function sitterFieldsOk(d) {
+      return d.keys().hasOnly(['uid', 'name', 'photoId', 'headline', 'description', 'experience', 'petTypes', 'services',
+                               'availability', 'rate', 'rateUnit', 'lat', 'lng', 'neighborhood', 'active', 'ratingSum',
+                               'verified', 'ratingCount', 'lastReviewId', 'createdAt', 'updatedAt'])
+        && ('' + d.get('name', '') + d.get('photoId', '') + d.get('headline', '') + d.get('description', '') + d.get('experience', '') + d.get('availability', '') + d.get('rateUnit', '') + d.get('neighborhood', '')).size() <= 5000
+        && optList(d, 'petTypes', 12) && optList(d, 'services', 12);
+    }
     match /sitters/{sitterId} {
-      allow read: if signedIn();
+      allow read: if member();
       allow create: if verified() && sitterId == uid()
         && incoming().ratingSum == 0 && incoming().ratingCount == 0
-        && incoming().get('verified', false) == false;
+        && incoming().get('verified', false) == false
+        && sitterFieldsOk(incoming());
       allow update: if incoming().get('verified', false) is bool && (notChanging(['verified']) || isAdmin()) && (
-        (verified() && sitterId == uid() && notChanging(['ratingSum', 'ratingCount', 'lastReviewId']))
+        (verified() && sitterId == uid() && notChanging(['ratingSum', 'ratingCount', 'lastReviewId']) && sitterFieldsOk(incoming()))
         // A reviewer adds exactly their new review's rating, in the same transaction that creates the review.
         || (verified() && onlyChanging(['ratingSum', 'ratingCount', 'lastReviewId', 'updatedAt'])
             && !exists(/databases/$(database)/documents/reviews/$(incoming().lastReviewId))
@@ -350,6 +691,10 @@ service cloud.firestore {
         && incoming().sitterId != uid()
         && incoming().status == 'requested'
         && incoming().reviewed == false
+        && incoming().keys().hasOnly(['ownerId', 'ownerName', 'sitterId', 'sitterName', 'petTypes', 'petCount', 'startAt',
+                                      'endAt', 'notes', 'sitterNote', 'status', 'reviewed', 'createdAt', 'updatedAt'])
+        && ('' + incoming().get('ownerName', '') + incoming().get('sitterName', '') + incoming().get('notes', '') + incoming().get('sitterNote', '')).size() <= 3000
+        && optList(incoming(), 'petTypes', 12)
         && exists(/databases/$(database)/documents/sitters/$(incoming().sitterId))
         && rateLimited();
       allow update: if
@@ -357,7 +702,7 @@ service cloud.firestore {
         || (signedIn() && resource.data.sitterId == uid() && onlyChanging(['sitterName','sitterNote']) && incoming().sitterName == '' && incoming().sitterNote == '')
         ||
         (signedIn() && resource.data.sitterId == uid()
-          && onlyChanging(['status', 'sitterNote', 'updatedAt'])
+          && onlyChanging(['status', 'sitterNote', 'updatedAt']) && optStr(incoming(), 'sitterNote', 1000)
           && ((resource.data.status == 'requested' && incoming().status in ['accepted', 'declined'])
               || (resource.data.status == 'accepted' && incoming().status in ['completed', 'cancelled'])))
         || (signedIn() && resource.data.ownerId == uid()
@@ -375,7 +720,7 @@ service cloud.firestore {
     // One review per completed booking (the id is the booking id), written by the pet owner.
     match /reviews/{bookingId} {
       function booking() { return get(/databases/$(database)/documents/bookings/$(bookingId)).data; }
-      allow read: if signedIn();
+      allow read: if member();
       allow update: if signedIn() && resource.data.authorId == uid() && onlyChanging(['authorName','text']) && incoming().authorName == '' && incoming().text == '';
       allow create: if verified()
         && incoming().authorId == uid()
@@ -396,10 +741,31 @@ service cloud.firestore {
         && incoming().members.size() == 2
         && uid() in incoming().members
         && incoming().members[0] < incoming().members[1]
-        && chatId == incoming().members[0] + '_' + incoming().members[1];
+        && chatId == incoming().members[0] + '_' + incoming().members[1]
+        // Phase 9 size caps: only the app's fields, previews and names of chat size.
+        && incoming().keys().hasOnly(['members', 'names', 'photos', 'lastText', 'lastSender', 'lastAt', 'unread'])
+        && incoming().get('names', {}).keys().hasOnly(incoming().members)
+        && incoming().get('photos', {}).keys().hasOnly(incoming().members)
+        && incoming().get('unread', {}).keys().hasOnly(incoming().members)
+        && optStr(incoming(), 'lastText', 300);
       allow update: if signedIn() && uid() in resource.data.members
-        && onlyChanging(['lastText', 'lastSender', 'lastAt', 'unread', 'names', 'photos']);
+        && onlyChanging(['lastText', 'lastSender', 'lastAt', 'unread', 'names', 'photos'])
+        && chatUpdateOk(changed(), incoming(), resource.data);
       allow delete: if isAdmin();
+
+      // Phase 9: a member changes only their own name and photo, and previews stay short. Account deletion blanks the
+      // name, photo and preview. (No time gap between messages: messages written offline are sent back to back when
+      // the phone reconnects, and a gap would silently drop them; see docs/security/ABUSE_LIMITS.md.)
+      function chatUpdateOk(ch, d, before) {
+        return (!('lastText' in ch) || (d.lastText is string && d.lastText.size() <= 300))
+          && (!('lastSender' in ch) || d.lastSender in [uid(), ''])
+          && (!('lastAt' in ch) || notFuture(d.lastAt))
+          && (!('names' in ch) || (d.names.diff(before.get('names', {})).affectedKeys().hasOnly([uid()])
+              && d.names.get(uid(), '') is string && d.names.get(uid(), '').size() <= 40))
+          && (!('photos' in ch) || (d.photos.diff(before.get('photos', {})).affectedKeys().hasOnly([uid()])
+              && d.photos.get(uid(), '') is string && d.photos.get(uid(), '').size() <= 128))
+          && (!('unread' in ch) || d.unread.keys().hasOnly(before.members));
+      }
 
       match /messages/{messageId} {
         function chat() { return get(/databases/$(database)/documents/chats/$(chatId)).data; }
@@ -409,7 +775,11 @@ service cloud.firestore {
         allow create: if verified()
           && incoming().senderId == uid()
           && uid() in chat().members
+          && incoming().keys().hasOnly(['senderId', 'text', 'imageId', 'postId', 'postTitle', 'postPhotoId', 'matchId', 'matchPhotoId', 'createdAt'])
           && incoming().text.size() <= 2000
+          && optStr(incoming(), 'imageId', 128) && optStr(incoming(), 'postId', 128) && optStr(incoming(), 'postTitle', 80)
+          && optStr(incoming(), 'postPhotoId', 128) && optStr(incoming(), 'matchId', 300) && optStr(incoming(), 'matchPhotoId', 128)
+          && notFuture(incoming().get('createdAt', 0))
           && !exists(/databases/$(database)/documents/users/$(otherMember())/blocked/$(uid()));
         allow delete: if signedIn() && (resource.data.senderId == uid() || isAdmin());
       }
@@ -421,7 +791,7 @@ service cloud.firestore {
 
     // Heartbeat: the worker says it's online, so phones skip the check at once when the PC is off.
     match /config/aiWorker {
-      allow read: if signedIn();
+      allow read: if member();
       allow write: if aiWorker()
         && request.resource.data.keys().hasOnly(['online', 'lastSeen', 'model', 'provider', 'same', 'maybe'])
         && request.resource.data.online is bool && request.resource.data.lastSeen is timestamp;
@@ -448,7 +818,10 @@ service cloud.firestore {
       allow update: if aiWorker()
         && changed().hasOnly(['status', 'results', 'embeddings', 'classification', 'model', 'provider', 'ms', 'error', 'doneAt', 'answeredRequestId'])
         && incoming().status in ['done', 'error'];
-      allow delete: if signedIn() && (uid() == ownerId || aiWorker());
+      // Phase 9: the phone removes its job once answered, or after its 15 s wait. Deleting a pending job sooner would
+      // let a script skip the one-second gap above by deleting and re-creating (v0.0.9 never deletes).
+      allow delete: if aiWorker() || (signedIn() && uid() == ownerId
+        && (resource.data.status != 'pending' || request.time > resource.data.createdAt + duration.value(10, 's')));
     }
 
     // ---------- lost report <-> sighting matches (see docs/MATCHING.md) ----------
@@ -543,10 +916,19 @@ service cloud.firestore {
 
     // ---------- photos (JPEG blobs, EXIF already stripped on the phone) ----------
     match /images/{imageId} {
-      allow read: if signedIn();
+      // Photos are fetched one by one by id. Listing them is only for your own (account deletion and export) or for
+      // moderators, so nobody can page through every photo in the app.
+      allow get: if member();
+      allow list: if (signedIn() && resource.data.ownerId == uid()) || isMod();
+      // JPEG only (both apps re-encode every photo, which also drops its location data), a thumbnail (`{id}_t`, 360
+      // px) at most 200 KB and a full photo under 1 MB.
       allow create: if verified()
+        && incoming().keys().hasOnly(['data', 'ownerId', 'createdAt'])
         && incoming().ownerId == uid()
-        && incoming().data.size() < 1000000;
+        && incoming().data is bytes
+        && incoming().data.size() < (imageId.matches('.+_t') ? 200000 : 1000000)
+        && incoming().data.toHexString().matches('(FFD8FF|ffd8ff).*')
+        && notFuture(incoming().get('createdAt', 0));
       allow delete: if signedIn() && (resource == null || resource.data.ownerId == uid() || isMod());
     }
   }

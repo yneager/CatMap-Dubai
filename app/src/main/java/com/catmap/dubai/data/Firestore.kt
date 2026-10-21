@@ -15,6 +15,7 @@ import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import kotlinx.coroutines.channels.awaitClose
@@ -139,8 +140,10 @@ fun Throwable.userMessage(context: Context): String {
     return if (res != null) context.getString(res) else (localizedMessage ?: context.getString(R.string.err_generic))
 }
 
-fun Query.snapshotFlow(): Flow<QuerySnapshot> = callbackFlow {
-    val registration = addSnapshotListener { snapshot, error ->
+/** With [metadata], a snapshot also arrives when only "from the phone's cache / confirmed by the server" changes. */
+fun Query.snapshotFlow(metadata: Boolean = false): Flow<QuerySnapshot> = callbackFlow {
+    val changes = if (metadata) MetadataChanges.INCLUDE else MetadataChanges.EXCLUDE
+    val registration = addSnapshotListener(changes) { snapshot, error ->
         if (error != null) {
             close(error)
             return@addSnapshotListener
@@ -161,14 +164,29 @@ fun DocumentReference.snapshotFlow(): Flow<DocumentSnapshot> = callbackFlow {
     awaitClose { registration.remove() }
 }
 
+/**
+ * Converts each document on its own. A document with a field of the wrong type (written by a modified app; the rules
+ * can't check every list entry) is skipped, instead of making the whole list, and every phone's map with it, fail.
+ */
+inline fun <reified T : Any> QuerySnapshot.safeObjects(): List<T> = documents.mapNotNull { document ->
+    runCatching { document.toObject(T::class.java) }
+        .onFailure { android.util.Log.w("CatMap", "Skipped malformed ${document.reference.path}", it) }
+        .getOrNull()
+}
+
+inline fun <reified T : Any> DocumentSnapshot.safeObject(): T? =
+    runCatching { toObject(T::class.java) }
+        .onFailure { android.util.Log.w("CatMap", "Skipped malformed ${reference.path}", it) }
+        .getOrNull()
+
 inline fun <reified T : Any> Query.listFlow(): Flow<List<T>> =
     snapshotFlow()
-        .map { it.toObjects(T::class.java) }
+        .map { it.safeObjects<T>() }
         .retryWhen { error, _ -> AppErrors.awaitListenerRetry(error) }
 
 inline fun <reified T : Any> DocumentReference.objectFlow(): Flow<T?> =
     snapshotFlow()
-        .map { it.toObject(T::class.java) }
+        .map { it.safeObject<T>() }
         .retryWhen { error, _ -> AppErrors.awaitListenerRetry(error) }
 
 /** One finished document load; [value] is null when the document doesn't exist or can't be read. */

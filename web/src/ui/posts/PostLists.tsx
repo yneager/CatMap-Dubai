@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAsyncList } from '../../data/useAsyncList';
 import { useLocation } from 'react-router-dom';
 import { useApp, useList, useDoc, useAction } from '../../state';
 import { PostFromDoc, AreaFollowFromDoc } from '../../data/model';
@@ -8,22 +9,36 @@ import { AppTopBar, PostCard, Loading, EmptyState, Switch } from '../components/
 import { LocationField } from '../components/LocationField';
 export default function PostLists() {
   const path = useLocation().pathname,
-    { profile, posts, favoriteIds } = useApp(),
+    { profile, favoriteIds } = useApp(),
     uid = profile?.uid ?? '',
     action = useAction(),
     [closed, setClosed] = useState(false),
     [position, setPosition] = useState({ lat: 0, lng: 0 }),
-    [radius, setRadius] = useState(3);
+    [pickedRadius, setRadius] = useState<number | null>(null);
   const own = useList(
     () => (uid && path === '/my-posts' ? PostRepository.postsBy(uid) : null),
     PostFromDoc,
     'my-posts-' + uid + '-' + path,
   );
-  const area = useDoc(
+  const saved = useAsyncList(
+    () => (path === '/favorites' ? PostRepository.byIds(favoriteIds) : Promise.resolve([])),
+    'favorites-' + uid + '-' + path + '-' + favoriteIds.join(','),
+  );
+  const centre = useDoc(
+    () => (uid && path === '/area-alerts' ? PostRepository.areaCentre(uid) : null),
+    AreaFollowFromDoc,
+    'area-centre-' + uid + path,
+  );
+  const sharedArea = useDoc(
     () => (uid && path === '/area-alerts' ? PostRepository.areaFollow(uid) : null),
     AreaFollowFromDoc,
     'area-follow-' + uid + '-' + path,
   );
+  const area =
+    sharedArea && centre
+      ? { ...sharedArea, lat: centre.lat, lng: centre.lng, radiusKm: centre.radiusKm }
+      : sharedArea;
+  const radius = pickedRadius ?? area?.radiusKm ?? 3;
   if (path === '/area-alerts')
     return (
       <>
@@ -77,7 +92,7 @@ export default function PostLists() {
     );
   const shown =
     path === '/favorites'
-      ? posts?.filter((p) => favoriteIds.includes(p.id))
+      ? saved
       : own
           ?.filter((p) => (p.status !== 'open') === closed)
           .sort((a, b) => b.createdAt - a.createdAt);

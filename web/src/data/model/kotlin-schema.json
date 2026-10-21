@@ -163,6 +163,14 @@
     "resolvedMatchId": {
       "type": "String",
       "documentId": false
+    },
+    "geoCells": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "searchTerms": {
+      "type": "List<String>",
+      "documentId": false
     }
   },
   "PostMatch": {
@@ -850,6 +858,14 @@
     },
     "updatedAt": {
       "type": "Long",
+      "documentId": false
+    },
+    "geoCells": {
+      "type": "List<String>",
+      "documentId": false
+    },
+    "searchTerms": {
+      "type": "List<String>",
       "documentId": false
     }
   },

@@ -48,6 +48,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -207,10 +208,12 @@ fun FavoritesScreen(nav: NavHostController) {
     val runner = rememberRunner()
     val uid = container.session.uid ?: return
     val saved by remember(uid) { container.favorites.favorites(uid) }.collectAsStateWithLifecycle(null)
-    val posts by remember { container.communityFeed }.collectAsStateWithLifecycle(null)
     val ids = saved?.map { it.postId }.orEmpty()
-    // Saved posts are matched against the live feed; ones that were removed simply drop out.
-    val shown = if (saved == null || posts == null) null else ids.mapNotNull { id -> posts!!.firstOrNull { it.id == id } }
+    // Saved posts are read by id; ones that were deleted or hidden simply drop out.
+    val posts by produceState<List<com.catmap.dubai.data.model.Post>?>(null, ids) {
+        if (saved != null) value = runCatching { container.posts.byIds(ids) }.getOrDefault(emptyList())
+    }
+    val shown = if (saved == null) null else posts?.let { list -> ids.mapNotNull { id -> list.firstOrNull { it.id == id } } }
 
     Scaffold(topBar = { AppTopBar(stringResource(R.string.favorites), onBack = { nav.popBackStack() }) }) { padding ->
         when {

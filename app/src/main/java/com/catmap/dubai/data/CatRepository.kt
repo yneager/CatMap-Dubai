@@ -14,9 +14,13 @@ import com.catmap.dubai.data.model.TnrStatus
 import com.catmap.dubai.data.model.UserProfile
 import com.catmap.dubai.data.model.labeledFrom
 import com.catmap.dubai.gamification.Points
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
@@ -63,21 +67,41 @@ class CatRepository(
 
     fun catRef(id: String) = cats.document(id)
 
-    /** Cats shown on the map and in the directory: most recently seen first. */
-    fun allCats(): Flow<List<Cat>> =
-        cats.orderBy("lastSeen", Query.Direction.DESCENDING).limit(800).listFlow<Cat>()
-            .map { list -> list.filter { !it.hidden && it.mergedInto.isEmpty() } }
-
-    suspend fun allCatsOnce(): List<Cat> =
-        cats.orderBy("lastSeen", Query.Direction.DESCENDING).limit(800).get().await()
-            .toObjects(Cat::class.java).filter { !it.hidden && it.mergedInto.isEmpty() }
-
     fun catFlow(id: String): Flow<Cat?> = catRef(id).objectFlow()
 
     suspend fun cat(id: String): Cat? = catRef(id).get().await().toObject(Cat::class.java)
 
-    fun catsByIds(ids: List<String>): Flow<List<Cat>> =
-        allCats().map { list -> list.filter { it.id in ids } }
+    /** Cats by id (followed cats, the merge queue), read once; merged and hidden ones are left out. */
+    fun catsByIds(ids: List<String>): Flow<List<Cat>> = kotlinx.coroutines.flow.flow { emit(byIds(ids)) }
+
+    suspend fun byIds(ids: List<String>): List<Cat> = coroutineScope {
+        ids.distinct().chunked(30).map { chunk ->
+            async { cats.whereIn(FieldPath.documentId(), chunk).get().await().safeObjects<Cat>() }
+        }.awaitAll().flatten().filter { !it.hidden && it.mergedInto.isEmpty() }.sortedBy { ids.indexOf(it.id) }
+    }
+
+    /** Cats last seen within [radiusKm], through the map-area cells (Phase 4) instead of every profile. */
+    suspend fun near(lat: Double, lng: Double, radiusKm: Double, perCell: Long = 150): List<Cat> = coroutineScope {
+        Geohash.around(lat, lng, radiusKm).map { cell ->
+            async {
+                cats.whereArrayContains("geoCells", cell).orderBy("updatedAt", Query.Direction.DESCENDING).limit(perCell)
+                    .get().await().safeObjects<Cat>()
+            }
+        }.awaitAll().flatten().distinctBy { it.id }
+            .filter { !it.hidden && it.mergedInto.isEmpty() && distanceKm(lat, lng, it.lat, it.lng) <= radiusKm }
+    }
+
+    /** The cats directory, most recently seen first (or by [field]); Cats pages through this. */
+    fun directoryQuery(field: String = "lastSeen", descending: Boolean = true): Query =
+        cats.orderBy(field, if (descending) Query.Direction.DESCENDING else Query.Direction.ASCENDING)
+
+    /** Cats ever seen in one neighbourhood, most recently seen first. */
+    fun neighborhoodQuery(key: String): Query =
+        cats.whereArrayContains("neighborhoods", key).orderBy("lastSeen", Query.Direction.DESCENDING)
+
+    /** Cats whose name or aliases include [word] (or its first letters), most recently seen first. */
+    fun searchQuery(word: String): Query =
+        cats.whereArrayContainsAny("searchTerms", SearchTerms.query(word)).orderBy("lastSeen", Query.Direction.DESCENDING)
 
     fun catsCreatedBy(uid: String): Flow<List<Cat>> =
         cats.whereEqualTo("createdBy", uid).listFlow<Cat>().map { l -> l.sortedByDescending { it.lastSeen } }
@@ -153,6 +177,8 @@ class CatRepository(
                     features = draft.features,
                     createdAt = created,
                     updatedAt = created,
+                    geoCells = Geohash.cells(publicLat, publicLng),
+                    searchTerms = searchTerms(catName, emptyList()),
                 ),
             )
         } else {
@@ -174,6 +200,7 @@ class CatRepository(
                 updates["lat"] = publicLat
                 updates["lng"] = publicLng
                 updates["neighborhood"] = hood
+                updates["geoCells"] = Geohash.cells(publicLat, publicLng)
             }
             if (draft.features.isNotEmpty()) updates["features"] = blendFeatures(existing, draft.features)
             batch.update(catRef, updates)
@@ -300,9 +327,15 @@ class CatRepository(
         catRef(catId).update(changes + ("updatedAt" to now())).await()
     }
 
-    suspend fun addAlias(catId: String, alias: String) {
-        catRef(catId).update(mapOf("aliases" to FieldValue.arrayUnion(alias.trim()), "updatedAt" to now())).await()
+    suspend fun addAlias(cat: Cat, alias: String) {
+        val name = alias.trim()
+        catRef(cat.id).update(
+            mapOf("aliases" to FieldValue.arrayUnion(name), "searchTerms" to searchTerms(cat.name, (cat.aliases + name).distinct()), "updatedAt" to now()),
+        ).await()
     }
+
+    /** A cat's `searchTerms`: its name and the other names it is known by. */
+    fun searchTerms(name: String, aliases: List<String>): List<String> = SearchTerms.of(SearchTerms.words(name, *aliases.toTypedArray()))
 
     suspend fun setCoverPhoto(catId: String, photoId: String) = updateCat(catId, mapOf("coverPhotoId" to photoId))
 
@@ -345,7 +378,7 @@ class CatRepository(
                     reason = reason.trim(), similarity = similarity, createdAt = now(),
                 ),
             )
-            users.addStats(b, me.uid, mapOf(Stats.MERGE_SUGGESTIONS to 1L), Points.MERGE)
+            users.addStats(b, me.uid, mapOf(Stats.MERGE_SUGGESTIONS to 1L), Points.MERGE, rateLimited = true)
         }.await()
     }
 
@@ -372,7 +405,10 @@ class CatRepository(
             "updatedAt" to now(),
         )
         val aliases = (listOf(duplicate.name) + duplicate.aliases).filter { it.isNotBlank() && it != primary.name }
-        if (aliases.isNotEmpty()) primaryUpdates["aliases"] = FieldValue.arrayUnion(*aliases.toTypedArray())
+        if (aliases.isNotEmpty()) {
+            primaryUpdates["aliases"] = FieldValue.arrayUnion(*aliases.toTypedArray())
+            primaryUpdates["searchTerms"] = searchTerms(primary.name, (primary.aliases + aliases).distinct())
+        }
         if (duplicate.photoIds.isNotEmpty()) primaryUpdates["photoIds"] = FieldValue.arrayUnion(*duplicate.photoIds.toTypedArray())
         if (duplicate.contributors.isNotEmpty()) primaryUpdates["contributors"] = FieldValue.arrayUnion(*duplicate.contributors.toTypedArray())
         if (duplicate.followers.isNotEmpty()) primaryUpdates["followers"] = FieldValue.arrayUnion(*duplicate.followers.toTypedArray())
@@ -381,6 +417,7 @@ class CatRepository(
             primaryUpdates["lastSeen"] = duplicate.lastSeen
             primaryUpdates["lat"] = duplicate.lat
             primaryUpdates["lng"] = duplicate.lng
+            primaryUpdates["geoCells"] = Geohash.cells(duplicate.lat, duplicate.lng)
             primaryUpdates["neighborhood"] = duplicate.neighborhood
         }
         // The duplicate's followers now follow the kept profile; their own "following" lists must say so too,

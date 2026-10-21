@@ -1,3 +1,10 @@
+import { usePager, PagingFooter, useDebounced } from '../../data/usePager';
+import { useAsyncList } from '../../data/useAsyncList';
+import { SearchTerms } from '../../data/SearchTerms';
+import { list } from '../../data/Firestore';
+import { query, limit } from 'firebase/firestore';
+import { BreedTraits } from '../components/BreedTraits';
+import { shareCat } from '../../util/share';
 import PhotoViewer from './PhotoViewer';
 import { ReportButton } from '../components/ReportButton';
 import { useEffect, useState } from 'react';
@@ -39,8 +46,7 @@ export default function CatScreens() {
   );
 }
 function CatList() {
-  const cats = useList(CatRepository.allCats, CatFromDoc, 'cats'),
-    { profile } = useApp(),
+  const { profile } = useApp(),
     [search, setSearch] = useState(''),
     [following, setFollowing] = useState(false),
     [sort, setSort] = useState('recent'),
@@ -50,6 +56,30 @@ function CatList() {
     [neighborhood, setNeighborhood] = useState(''),
     [period, setPeriod] = useState(0),
     [filters, setFilters] = useState(false);
+  const settled = useDebounced(search),
+    word = SearchTerms.words(settled).sort((a, b) => b.length - a.length)[0] ?? '';
+  const page = usePager(
+    () =>
+      following
+        ? null
+        : word
+          ? CatRepository.searchQuery(word)
+          : neighborhood
+            ? CatRepository.neighborhoodQuery(neighborhood)
+            : CatRepository.directoryQuery(
+                sort === 'name' ? 'name' : sort === 'sightings' ? 'sightingCount' : 'lastSeen',
+                sort !== 'name',
+              ),
+    CatFromDoc,
+    'cats-' + settled + '-' + following + '-' + neighborhood + '-' + sort,
+    25,
+    () => (word ? null : CatRepository.directoryQuery()),
+  );
+  const followed = useAsyncList(
+    () => (following ? CatRepository.byIds(profile?.followedCats ?? []) : Promise.resolve([])),
+    'followed-' + profile?.uid + '-' + following + '-' + profile?.followedCats.join(','),
+  );
+  const cats = following ? followed : page.items;
   const shown = cats
     ?.filter(
       (c) =>
@@ -59,12 +89,11 @@ function CatList() {
         (!coat || c.coatColor === coat) &&
         (!health || c.healthStatus === health) &&
         (!tnr || c.tnrStatus === tnr) &&
-        (!neighborhood || c.neighborhood === neighborhood) &&
+        (!neighborhood || c.neighborhoods.includes(neighborhood)) &&
         (period === 0 || Date.now() - c.lastSeen <= period * 86400000) &&
-        [c.name, ...c.aliases, Dubai.nameOf(c.neighborhood)]
-          .join(' ')
-          .toLowerCase()
-          .includes(search.toLowerCase()),
+        SearchTerms.words(settled).every((w) =>
+          SearchTerms.matches(w, SearchTerms.words(c.name, ...c.aliases)),
+        ),
     )
     .sort((a, b) =>
       sort === 'name'
@@ -130,6 +159,7 @@ function CatList() {
         ) : (
           <EmptyState text={t('no_cats_found')} />
         )}
+        {!following && <PagingFooter page={page} visibleCount={shown?.length} />}
       </div>
       {filters && (
         <Dialog title={t('filters')} onClose={() => setFilters(false)}>
@@ -186,7 +216,7 @@ function CatList() {
 }
 function CatDetail() {
   const { id = '' } = useParams(),
-    { profile } = useApp(),
+    { profile, toast } = useApp(),
     action = useAction();
   const cat = useDoc(() => CatRepository.catFlow(id), CatFromDoc, 'cat-' + id),
     sightings = useList(
@@ -212,12 +242,16 @@ function CatDetail() {
   return (
     <>
       <AppTopBar title={cat.name}>
+        <button className="text-button" onClick={() => void action.run(async () => { const message = await shareCat(cat); if (message) toast(message); })}>
+          {t('share_cat')}
+        </button>
         {(own || mod) && (
           <Link className="text-button" to={'/cat-edit/' + id}>
             {t('edit')}
           </Link>
         )}
       </AppTopBar>
+      {cat.hidden && <p className="banner">{t('hidden_by_moderators')}</p>}
       {cat.mergedInto && (
         <Link className="banner" to={'/cat/' + cat.mergedInto}>
           {t('merged_banner')}
@@ -284,6 +318,7 @@ function CatDetail() {
             <p>
               {t('first_seen')} {dateTime(cat.firstSeen)}
             </p>
+            <BreedTraits hints={cat.breedHints} />
             <SectionHeader>{t('also_known_as')}</SectionHeader>
             <p dir="auto">{cat.aliases.join(' · ')}</p>
             <button
@@ -352,6 +387,40 @@ function CatDetail() {
               </button>
             )}
             <SectionHeader>{t('community_observations')}</SectionHeader>
+            {(sightings ?? [])
+              .filter(
+                (s) =>
+                  s.healthTags.length ||
+                  s.needsMedical ||
+                  s.possiblyNotNeutered ||
+                  s.earTipped === 'yes',
+              )
+              .map((s) => (
+                <article className="card" key={s.id}>
+                  <Link to={'/sighting/' + s.id}>
+                    {dateTime(s.seenAt)} · @{s.username}
+                  </Link>
+                  <p>
+                    {[
+                      s.earTipped === 'yes' ? t('obs_ear_tipped') : '',
+                      s.possiblyNotNeutered ? t('obs_not_neutered') : '',
+                      s.needsMedical ? t('needs_medical') : '',
+                      ...s.healthTags.map((v) => enumLabel('HealthTag', v)),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                  <small>{t('community_observation_label')}</small>
+                </article>
+              ))}
+            {sightings &&
+              !sightings.some(
+                (s) =>
+                  s.healthTags.length ||
+                  s.needsMedical ||
+                  s.possiblyNotNeutered ||
+                  s.earTipped === 'yes',
+              ) && <p>{t('no_observations')}</p>}
             <p>{t('tnr_community_note')}</p>
             <Link className="text-button" to={'/sighting-new?catId=' + id}>
               {t('add_observation')}
@@ -489,13 +558,25 @@ function CatMerge() {
     { profile } = useApp(),
     action = useAction(),
     navigate = useNavigate(),
-    cats = useList(CatRepository.allCats, CatFromDoc, 'merge-cats'),
     [duplicate, setDuplicate] = useState(''),
     [search, setSearch] = useState(''),
     [keepThis, setKeepThis] = useState(true),
     [reason, setReason] = useState('');
-  const primary = cats?.find((c) => c.id === id),
-    other = cats?.find((c) => c.id === duplicate);
+  const primary = useDoc(() => CatRepository.catFlow(id), CatFromDoc, 'merge-primary-' + id);
+  const settled = useDebounced(search);
+  const cats = useAsyncList(
+    () =>
+      settled.trim()
+        ? list(
+            query(CatRepository.searchQuery(SearchTerms.words(settled)[0] ?? settled), limit(40)),
+            CatFromDoc,
+          )
+        : primary
+          ? CatRepository.near(primary.lat, primary.lng, 5)
+          : Promise.resolve([]),
+    'merge-candidates-' + id + '-' + primary?.lat + '-' + primary?.lng + '-' + settled,
+  );
+  const other = cats?.find((c) => c.id === duplicate);
   const score = (other: NonNullable<typeof primary>) =>
     primary
       ? Similarity.score(

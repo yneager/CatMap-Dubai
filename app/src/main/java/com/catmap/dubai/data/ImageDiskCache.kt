@@ -2,11 +2,15 @@ package com.catmap.dubai.data
 
 import java.io.File
 
-/** Best-effort, bounded cache for immutable image document IDs. Call from an IO dispatcher. */
+/**
+ * Best-effort, bounded cache for immutable image document IDs. Call from an IO dispatcher.
+ * A photo's bytes never change once uploaded, so entries live long (each download is a billed Firestore read plus up to
+ * 650 KB); reading an entry marks it recently used, so the size limit drops the photos nobody has looked at lately.
+ */
 internal class ImageDiskCache(
     private val directory: File,
-    private val maxBytes: Long = 40L * 1024 * 1024,
-    private val maxAgeMillis: Long = 24L * 60 * 60 * 1000,
+    private val maxBytes: Long = 80L * 1024 * 1024,
+    private val maxAgeMillis: Long = 30L * 24 * 60 * 60 * 1000,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private fun file(key: String): File? =
@@ -19,7 +23,9 @@ internal class ImageDiskCache(
             target.delete()
             return null
         }
-        return runCatching { target.readBytes().takeIf { it.isNotEmpty() } }.getOrElse {
+        return runCatching {
+            target.readBytes().takeIf { it.isNotEmpty() }?.also { target.setLastModified(clock()) }
+        }.getOrElse {
             target.delete()
             null
         }

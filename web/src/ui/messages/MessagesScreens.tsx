@@ -6,6 +6,9 @@ import { ChatRepository } from '../../data/ChatRepository';
 import { UserRepository } from '../../data/UserRepository';
 import { ImageRepository } from '../../data/ImageRepository';
 import { PostRepository } from '../../data/PostRepository';
+import { useOlder } from '../../data/useOlder';
+import { listQuery } from '../../data/Firestore';
+import { orderBy } from 'firebase/firestore';
 import { ChatFromDoc, MessageFromDoc } from '../../data/model';
 import { processPhoto } from '../../util/images';
 import { t, dateTime } from '../../i18n';
@@ -38,7 +41,7 @@ export default function MessagesScreens() {
       ChatFromDoc,
       'chat-' + id + '-' + isChat,
     ),
-    messages = useList(
+    liveMessages = useList(
       () => (isChat ? ChatRepository.messages(id) : null),
       MessageFromDoc,
       'messages-' + id + '-' + isChat,
@@ -48,6 +51,17 @@ export default function MessagesScreens() {
       (id, data) => ({ id, ...data }),
       'blocked-' + uid,
     );
+  const history = useOlder(
+    () => listQuery(`chats/${id}/messages`, orderBy('createdAt', 'desc')),
+    MessageFromDoc,
+    'chat-' + id,
+    50,
+  );
+  const messages = liveMessages
+    ? [...new Map([...history.items, ...liveMessages].map((m) => [m.id, m])).values()].sort(
+        (a, b) => a.createdAt - b.createdAt,
+      )
+    : undefined;
   const postId = new URLSearchParams(location.search).get('postId');
   useEffect(() => {
     if (!otherUid || !profile) return;
@@ -153,12 +167,26 @@ export default function MessagesScreens() {
         >
           {t(isBlocked ? 'unblock_user' : 'block_user')}
         </button>
+        <Link className="text-button" to={'/user/' + other}>
+          {t('view_profile')}
+        </Link>
       </AppTopBar>
       <div className="chat-messages">
+        {!history.done && (liveMessages?.length ?? 0) >= 50 && (
+          <button
+            className="text-button"
+            disabled={history.busy}
+            onClick={() => void history.load(`chats/${id}/messages/${liveMessages![0].id}`)}
+          >
+            {t('older_messages')}
+          </button>
+        )}
         {messages?.map((m) => (
           <div className={'message-bubble ' + (m.senderId === uid ? 'mine' : '')} key={m.id}>
             {m.text && <p dir="auto">{m.text}</p>}
-            {m.imageId && <Photo id={m.imageId} thumb={false} />}{' '}
+            {m.imageId && (
+              <Photo id={m.imageId} onClick={() => navigate('/photo/' + m.imageId)} />
+            )}{' '}
             {m.matchId ? (
               <Link className="shared-post match-message" to={'/match/' + m.matchId}>
                 <span className="match-pair">

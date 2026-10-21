@@ -6,9 +6,9 @@ Reference: Android Kotlin screens and the checked-in `app/src/test/screenshots` 
 
 Android is on the left, WebKit on the right. Device references include Android status/navigation bars; browser captures show the app viewport.
 
-<div><img src="../../../docs/verification/bottom-plus-after.png" width="260" alt="Android map"><img src="screens/light/map.png" width="260" alt="Web map"></div>
+<div><img src="../../../docs/done/verification/bottom-plus-after.png" width="260" alt="Android map"><img src="screens/light/map.png" width="260" alt="Web map"></div>
 
-<div><img src="../../../docs/verification/explore-final.png" width="260" alt="Android Explore"><img src="screens/light/explore.png" width="260" alt="Web Explore"></div>
+<div><img src="../../../docs/done/verification/explore-final.png" width="260" alt="Android Explore"><img src="screens/light/explore.png" width="260" alt="Web Explore"></div>
 
 <div><img src="../../../app/src/test/screenshots/light-post-card.png" width="320" alt="Android post card"><img src="screens/light/fixture-post-card.png" width="320" alt="Web post card"></div>
 
@@ -49,3 +49,11 @@ The light/dark launch-image set includes the 402×874 / 440×956 families and 42
 - Actual pinch, camera capture, share-sheet, install and geolocation presentation remain unverified on a real iPhone. Browser alert toasts replace Android system notifications; no background poll or push is implemented as specified.
 
 The renderer set is review evidence. Visual parity remains subject to the owner's/Claude's comparison and real-device approval, and should not be described as exact 1:1.
+
+## Round 3 major-update parity (21 October 2026)
+
+The major-update data and query contracts are ported from Kotlin. New `geoCells`/`searchTerms`, private alert centres, safe document readers, cursor pages and viewport caching require the current rules/indexes and the owner's worker backfill. Account cleanup removes drafts as well as cached account data on web (a stronger wipe than Android's retained per-account drafts). The browser still needs a network connection to authenticate a different account; offline checks cover signing out and the next account's isolated data after authentication.
+
+Post/cat sharing includes a cover JPEG where file sharing is supported, with text/link fallback. Directions use saved public coordinates. Breed traits, source-of-location text, community health observations, coat-based name suggestions, station nearby cats and missing navigation entries are now present. The 264-key checklist review and intentional native/browser wording differences are in `round3-string-audit.txt`.
+
+The local hardening suite checks JPEG/EXIF removal, plain React text and recovery from an interrupted device wipe in Chromium and WebKit. Full authenticated emulator checks, map read measurements, real iPhone sharing/location, App Check with a registered site key and deployed hosting-header behavior remain unverified. No new round-3 screenshot set is claimed.

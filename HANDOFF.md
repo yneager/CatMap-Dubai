@@ -1,7 +1,353 @@
 # CatMap Dubai – handoff
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 17 Oct 2026 (v0.0.9 released at `c83dae4`: the lost-to-reunited workflow. The owner says the rules are deployed. Next release is v0.0.10).**
+and what's left. **Last updated: 21 Oct 2026 (major update done; v0.1.0 committed and pushed, tag waiting for the rules deploy; see the top section).**
+
+## 21 October 2026 - Tidy-up and v0.1.0 (Claude)
+
+* **Folder tidy-up (owner's request):** finished notes moved to `docs/done/` (the Phase 1–10 plan, the web round 3
+  brief `CLAUDE_TO_CODEX.txt`, the 13 Oct implementation notes, runtime screens and `docs/verification/` images, the
+  old AI review, the emoji inventory, the web-parity string list). `PRESENTATION_NOTES.md` moved to `docs/`. Links
+  updated everywhere. The next Codex brief still goes in the root as `CLAUDE_TO_CODEX.txt`.
+* **Kept off the public repo (`.gitignore`), still on this PC:** `docs/audit-2026-10-21/` (today's release audit,
+  with probes), `docs/security/THREAT_MODEL.md`, `LATER_RULES.md`, `ABUSE_LIMITS.md`, `docs/MAJOR_UPDATE_REPORT.md`
+  and `tools/rulestest/phase1-findings.mjs` (security notes and test probes; the owner decides when to publish
+  them).
+* **README** rewritten for everyday readers; developer details are in SETUP.md and this file.
+* **v0.1.0:** committed and `main` pushed with the owner's OK. **The tag waits for the owner to deploy the rules and
+  indexes**: the live rules only allow the old post fields, so v0.1.0 couldn't create or edit posts (and search
+  wouldn't work) before that.
+* **Still open:** review of Codex's web round 3 (`work done.txt`; its own browser e2e run is incomplete, see
+  `WEB_TODO.txt`) before `web\publish.cmd`; the follow-up work in the local audit report.
+
+## 21 October 2026 - Major update Phase 10: web brief, full check, review, report (Claude)
+
+* **Final report:** `docs/MAJOR_UPDATE_REPORT.md` (findings S1–S20 with status, before/after reads, check results,
+  remaining risks, every owner step in order). **Read it first.**
+* **Web:** `CLAUDE_TO_CODEX.txt` is the round-3 brief (round 2 is `git show e779edd:CLAUDE_TO_CODEX.txt`): every
+  `WEB_TODO.txt` item from the earlier misses and Phases 2–9, hosting headers and service worker, App Check
+  (reCAPTCHA, monitoring). Codex reports in `work done.txt`; review it with the `review-codex-work` skill.
+* **Self-review (`/code-review`, high):** 8 findings. Fixed: an alert route like `post/..` crashed the app when tapped
+  (rules + `AppRoutes` now need ids starting with a letter or digit; rules test added), the route key is no longer
+  written with `commit()` on the main thread, the updater checks the download's HTTP status, two clean-ups. Accepted
+  and documented: logout drops writes still queued offline; App Check may add start-up time on GitHub installs; the
+  "account deleted" toast is lost on Android 8–10.
+* **Final run, all green:** strings; unit tests 116/116; `verifyRoborazziDebug`; lint debug/release 0 errors;
+  `assembleDebug`; **signed `assembleRelease`** (test version 0.1.0) passes the release workflow's certificate check;
+  it installed over a release-signed 0.0.3 on the emulator as an update; rules suite 486/486; probes only F4/F13 open;
+  worker e2e 27/27; backfill e2e 12/12; cat-server unit tests; secret scan (history and the new `--worktree` mode)
+  clean. Web e2e of the current web app against the new rules: 34 passed, 8 skipped, 2 failed = the shape-parity test
+  in both browsers, only because web posts lack `geoCells`/`searchTerms` (Codex round 3).
+* **v0.0.9 compatibility:** its updater accepts the new release layout (one `CatMap-<v>.apk` + `.sha256`; the new
+  dependency list and SBOM are ignored); its writes still pass every original rules check.
+* **New/changed here:** `tools/security/secretscan.py --worktree`, `docs/security/THREAT_MODEL.md` 3f, the catmap
+  skill's Pending list.
+* **Emulator state:** the Android emulator's `com.catmap.dubai` is now the local **0.1.0 test build** (it replaced
+  0.0.3); `com.catmap.dubai.staging` is a debuggable staging build. Uninstall them before testing the real release
+  there.
+* **Waiting for the owner:** the version number; "push and release vX"; when to switch on the later rules and whether
+  to show "please update" to old versions. **Not committed. Nothing pushed, tagged or deployed.**
+
+## 21 October 2026 - Major update Phase 9: abuse limits, App Check, cost model (Claude)
+
+* **Rules (`firestore.rules`):** size caps on chats (field allowlist on create; preview ≤ 300; a member changes only
+  their own name/photo; lastSender is yourself or ""), and field allowlists + total-text caps on rescues,
+  maintenance, content reports, merge suggestions, volunteer applications, adoption requests, sitters, bookings,
+  medical notes and exact locations. AI jobs: a waiting job can be deleted by its owner only once answered or after
+  10 s (closes the delete-and-recreate way around the 1 s gap). Rules suite **485/485** (48 new, incl. "two messages
+  back to back (offline queue) both go through" and real-sized rescue/report text still accepted).
+* **Deliberately not done:** time gaps for messages and a daily photo cap; both would drop real offline writes
+  (explained in `docs/security/ABUSE_LIMITS.md`). New finding **S20** (storage filling by a scripted account) is the
+  biggest open risk, with recovery steps.
+* **Account deletion** now also removes `aiJobs/{uid}` (it can hold the last photos sent to the PC).
+* **App Check (monitoring only):** `firebase-appcheck-playintegrity`; `AppCheckSetup` per build type
+  (`src/release/java` Play Integrity, `src/debug/java` + `src/staging/java` debug provider), installed first in
+  `CatMapApp.onCreate`, skipped with the local emulators. Not enforced (GitHub installs may fail Play Integrity).
+  Owner console steps: `docs/security/APP_CHECK.md`.
+* **Cost:** `docs/cost/COST_MODEL.md` + `tools/cost/cost_model.py`: about 424 reads, 8 writes, 59 KB stored and
+  1.4 MB downloaded per daily user. **First daily Spark limit: reads at about 110 daily users** (a third of it is the
+  background inbox check on signed-in phones); first permanent wall: 1 GiB stored (photos), about 5 months at 100
+  daily users; downloads at about 250. Blaze (us-central1 prices checked on Google's page): $0 / $3 / $8 / $49 /
+  $100 a month at 100 / 500 / 1,000 / 5,000 / 10,000 daily users. `docs/cost/BILLING_SAFETY.md`: Spark can't bill;
+  Blaze checklist (budget alerts don't stop spending, optional hard stop, key restrictions, emergency steps).
+* **Checks:** compile debug/release/staging, unit tests pass, rules suite 485/485. Full Phase 10 run follows.
+* **Web:** 3 Phase 9 items in `WEB_TODO.txt`.
+* **Not committed. Nothing deployed.**
+
+## 21 October 2026 - Major update Phase 8: GitHub and release pipeline (Claude)
+
+* **All workflows:** every action pinned to a commit SHA (tag in a comment; looked up on GitHub's API),
+  `persist-credentials: false`, read-only tokens by default, `firebase-tools@15.34.0` pinned in CI, no secrets in
+  pull-request runs. `android-actions/setup-android` replaced by the runner's own `sdkmanager` (CI uses the same
+  step, so a push to main tests it before a tag ever does).
+* **`release.yml`, three jobs:** `check` (tag is `vX.Y.Z` on `main`, no release yet, unit tests + lintRelease; no
+  secrets) → `build` (environment `release`, read-only token: restores the key and `google-services.json`, fails if
+  either is missing, builds, deletes them, checks package `com.catmap.dubai`, versionName/versionCode, exactly one
+  signer and the certificate SHA-256 `256df905…cdf42887` (taken from the release-signed 0.0.3 APK on the emulator;
+  override with variable `CATMAP_RELEASE_CERT_SHA256`), adds a dependency list) → `publish` (write token, no signing
+  secrets: SBOM via anchore/sbom-action, build attestation, `gh release create --verify-tag`; refuses if the release
+  exists, never `--clobber`).
+* **New files:** `.github/workflows/codeql.yml` (Kotlin/Java with a compile, JS/TS, Python, Actions; weekly + push +
+  PR), `.github/workflows/dependency-review.yml` (PRs, fails on high), `.github/dependabot.yml` (actions, gradle,
+  web, rulestest, functions; grouped), `docs/security/GITHUB_SETTINGS.md` (owner click-steps: 2FA, `release`
+  environment with you as reviewer and environment secrets, tag ruleset, immutable releases, main ruleset, secret
+  scanning + push protection + Dependabot, Actions permissions), `SECURITY.md`.
+* **S16:** `tools/rulestest/package.json` overrides `@grpc/grpc-js` to ^1.13.6 → `npm audit` 0; rules suite 437/437.
+* **Checked:** all YAML parses; the certificate/version check script run locally against the release-signed APK
+  (pass) and with a wrong version, wrong certificate, and the staging APK (each fails with the right message).
+  **Not run on GitHub** (nothing is pushed). Risks: CodeQL's Kotlin extractor might not support Kotlin 2.4.21 yet
+  (that job would fail, nothing else); the first release after the owner adds a reviewer waits for approval.
+* **SETUP.md** release section updated (GOOGLE_SERVICES_JSON required, what the workflow checks).
+* **Not committed. Nothing pushed.**
+
+## 21 October 2026 - Major update Phase 7: Android app hardening (Claude)
+
+* **Other apps can't open CatMap screens (S10):** a notification tap carries a random key only this install knows;
+  without it the `route` extra is ignored, and even with it only alert screens open (`util/AppRoutes.kt`, the rules'
+  list plus the inbox). `catmap://post/<id>` links still work. The inbox tap uses the same list (an unknown route
+  used to be able to crash it).
+* **Logout leaves nothing behind (S12):** logout and account deletion restart the app; the new process signs out
+  again if needed, clears Firestore's offline cache before any query, the photo cache, shared exports and camera
+  files, and clears CatMap's notifications from the tray (`data/LocalWipe.kt`, `util/AppRestart.kt`,
+  `AppContainer.finishPendingWipe`, called first in `CatMapApp`). Drafts stay (per account).
+* **Lock screen:** notifications are private; locked phones show only "CatMap Dubai · Messages" (etc.).
+* **Updater (S14, `update/UpdateChecks.kt`, `Updater.kt`):** only `CatMap-<v>.apk` from this repo's `v<v>` release;
+  ≤ 150 MB and exactly the announced size; every request and redirect HTTPS to GitHub hosts only; text responses
+  ≤ 1 MB; plain-text release notes; the `.sha256` is only a corruption check, the install still needs the same
+  package + release version + higher version code + same signing certificate; failed and old downloads deleted.
+* **Release build:** explicit network config in `src/main/res/xml/network_security_config.xml` (HTTPS only, system
+  CAs only; debug/staging override it for the emulators); release `EMULATOR_HOST` pinned to empty. Merged manifest
+  checked: exported = MainActivity, Firebase Auth helper activities, and permission-guarded library components.
+* **Tests:** new `UpdateChecksTest`, `ReleaseParsingTest` (incl. a v0.0.9-style release), `AppRoutesTest`,
+  `NotificationRouteTest` (route key, foreign intents, logout flags), more `PostLinksTest` cases. Unit tests
+  116/116, `lintDebug` clean of new issues.
+* **Emulator run (staging build on local emulators):** logout restarted the app to the login screen; the 930 KB
+  Firestore cache file and 13 cached photos were gone; signing in again worked (the map then showed only stations,
+  because the imported `.emulator-data` posts have no `geoCells`; the 16 pins before logout came from the old cache,
+  which confirms it was cleared). `am start --es route settings` was ignored; `catmap://post/demo_adopt_luna` opened
+  the post; a message alert showed `vis=PRIVATE` with public text "CatMap Dubai / Messages", and tapping it opened its
+  screen. (For this run staging was built debuggable once to inspect the files; `build.gradle.kts` was restored.)
+* **Web:** 3 Phase 7 items in `WEB_TODO.txt`.
+* **Not committed. Nothing deployed.**
+
+## 20 October 2026 - Major update Phase 6: photos, privacy and AI cost (Claude)
+
+* **Photo location data, verified:** a GPS-tagged photo chosen as a profile photo on the emulator was stored (full
+  182 KB, thumbnail 13 KB) with **no EXIF at all**; both apps re-encode every photo. Details:
+  `docs/security/PRIVACY_AUDIT.md`.
+* **Rules:** photos must be JPEG (header `FF D8 FF`), thumbnails under 200 KB, full photos under 1 MB, `createdAt`
+  not in the future. Someone you blocked can't write alerts into your inbox.
+* **Alerts are written one per person** (`NotificationRepository.send`), so one blocker never stops a group alert
+  (a lost-pet alert to followers used to be one batch).
+* **Thumbnails first:** chat photo bubbles and the rescue and sighting photo strips show thumbnails; tapping opens
+  the full photo (chat photos are now tappable).
+* **AI cost:** "same animal" crops sent to the PC are at most 320 px (`AiServer.COMPARE_PX`).
+* **PC worker (cat-server, threat model S5):** Pillow 11.2.1 → **12.3.0** (38 advisories → 0) and requests
+  2.32.3 → **2.34.1** (4 → 0), checked on OSV. Photos from Firestore are opened with the JPEG decoder only
+  (`recognition.APP_FORMATS`); the evaluation scripts still read PNG/WEBP datasets. `start.cmd` installs the new
+  versions by itself (requirements.txt changed).
+* **Documents:** `docs/security/PRIVACY_AUDIT.md` (EXIF, locations, messaging, account lifecycle, AI);
+  `docs/cost/PHOTO_STORAGE.md` (the first Spark limit photos reach is the **1 GiB of stored data, about 3,800
+  photos**; watch "Stored data" in the console and plan a move to Cloud Storage at about 700 MB);
+  `docs/cost/AI_HOSTING.md` (Cloud Run on CPU: free at 100 posts a day, about $5 a month at 1,000; CPU timings
+  measured: 1.35 s per photo to find and describe the animal, 0.19 s for the photo check). Threat model "Status after
+  Phase 6".
+* **Checks:** rules suite 437/437 (11 new); probes only F4 and F13 open; worker e2e 27/27 on the new Pillow; JPEG-only
+  decoding refuses a PNG; full `:app:testDebugUnitTest :app:verifyRoborazziDebug :app:lintDebug :app:lintRelease
+  :app:assembleDebug` passed.
+* **Left for Phase 7:** logout still leaves Firestore's offline cache and the photo cache (S12); message text on
+  the lock screen.
+* **Not committed. Nothing deployed.**
+
+## 20 October 2026 - Major update Phase 5: search, paging and nearby queries (Claude)
+
+* **Owner's decision:** search uses keyword fields (option a).
+* **Search:** posts and cats get `searchTerms` (each word plus its first 3–7 letters; posts from `keywords`, cats
+  from name and aliases). The search box asks Firestore across all posts (`array-contains-any`), so it no longer
+  depends on the newest 400. Animal and category words ("dog", "lost") act as filters. `keywords` is no longer
+  indexed.
+* **Paging:** Explore, Search, Adoption, Cats, and the admin posts, users, sitters and moderation log read 25–40 at a
+  time with a cursor, loading the next page near the end of the list (`data/Pager.kt`, `ui/components/Paging.kt`).
+  Explore's "Nearest" uses the map's area data. If a new index isn't built yet, the category, adoption and
+  neighbourhood lists fall back to the plain newest-first list (search itself needs its index).
+* **Nearby / by id instead of "the newest 400":** the post form's duplicate and same-animal checks, the new-sighting
+  cat matcher, cats at a feeding station and merge suggestions use the Phase 4 `geoCells`. Favourites are read one
+  post at a time (the rules refuse an `id in [...]` query once one post is deleted: found by the cost tool).
+  Followed cats and the merge queue are read by id. The phone's backup matching asks only for the newest 200 posts of
+  the other side.
+* **Live only where it matters:** inbox newest 30 (was 100), chat newest 50 (was 300), post updates newest 30
+  (was 200), each with "load older". The old `communityFeed`, `feed()`, `allCats()` and `allPosts()` are gone.
+* **Also fixed:** a cat merge now updates the kept cat's `geoCells`, and a stray control character in three docs
+  (Phase 4).
+* **Measured** (`docs/cost/BASELINE.md` "After Phase 5"): Explore 400 → 25, search 1,200 → 26, Cats 800 → 25,
+  favourites 400 → 10, post-form checks 700 → 240 (dense test data), inbox 100 → 30, chat 300 → 50; grown cold app
+  open 1,351 → 649.
+* **Checks:** unit tests 99/99 (new `SearchTermsTest`); rules suite 426/426; probes only F4 and F13 open; worker
+  e2e 27/27; backfill e2e 12/12; `test_searchterms.py`, `test_geocells.py`; full
+  `:app:testDebugUnitTest :app:verifyRoborazziDebug :app:lintDebug :app:lintRelease :app:assembleDebug` passed (before
+  the last small fallback fix, which then passed compile, unit tests and lintDebug). Android emulator: Explore pages,
+  the Lost chip, search ("sal" → Rex, "zaf" → the cat Zafran, "dog" as a filter) and Adoption work; no app errors.
+* **PC (cat-server):** `searchterms.py`; the worker and `backfill.cmd` now fill `searchTerms` too.
+* **Owner, when releasing:** deploy rules + indexes (4 new in Phase 5), then `cat-server\backfill.cmd`.
+* **Not committed. Nothing deployed.**
+
+## 20 October 2026 - Major update Phase 4: the map loads only the area on screen (Claude)
+
+* **What changed:** posts and cats get `geoCells` (geohash at precision 4/5/6 of the stored, already blurred
+  position). The map asks only for the cells on screen, newest first, about 300 posts + 300 cats per screen. It
+  keeps a saved copy (`files/map/<uid>.json`, deleted on logout and account deletion), and on later opens asks only
+  for what changed since the last sync. Design: `docs/done/MAJOR_UPDATE_PLAN.md` "Phase 4 design, as built".
+* **Files:** new `data/Geohash.kt`, `data/MapArea.kt`, `data/MapRepository.kt`; `MapScreen.kt`, `CommunityMap.kt`
+  (`onViewport`), `PostRepository`, `CatRepository`, models, `AppContainer`, `AuthRepository`, `Firestore.kt`;
+  `firestore.rules` (`geoCellsOk`, AI-worker branch that may change only `geoCells`), `firestore.indexes.json`
+  (2 new indexes); cat-server `geocells.py`, `recovery.py` (fills `geoCells` on older posts), `backfill.py` +
+  `backfill.cmd`, tests.
+* **Measured** (`docs/cost/BASELINE.md` "After Phase 4"): grown cold app open 1,351 → 719 reads; map reopened with
+  no changes 1,200 → 2.
+* **Checks:** new unit tests 13/13 (`GeohashTest`, `MapAreaTest`); rules suite 397/397 (with heavier budget guards);
+  probes only F4 and F13 open; worker e2e 27/27; backfill e2e 9/9; geocells 10/10;
+  `:app:testDebugUnitTest :app:verifyRoborazziDebug :app:lintDebug :app:lintRelease :app:assembleDebug` passed.
+* **Android emulator run (staging build on local Firebase emulators):** the demo data had 9 posts + 1 cat without
+  `geoCells`; `backfill.py --emulator` filled them, then the map showed them (15 pins). A new post written with the
+  current time appeared live within seconds (16 pins); after force-stopping the app the map came back with all 16;
+  the preview card works from the saved copy; no app errors in logcat. Expected by design: a post written with an
+  old `updatedAt` into an area already loaded shows only after that area's 24 h refresh.
+* **Not done:** real phone; web app (`WEB_TODO.txt` Phase 4 items).
+* **Owner, when releasing:** deploy rules + indexes first, then run `cat-server\backfill.cmd` once (try
+  `--dry-run` first). Removed at the owner's request: the `handoff-to-codex` skill and its hooks.
+* **Not committed. Nothing deployed.**
+
+## 20 October 2026 - Major update Phase 3: quick cost wins (Claude)
+
+* **Background notification check** (`NotificationWorker`): reads only alerts newer than its previous run, minus one
+  hour of overlap (`NotificationRepository.since`, `SettingsRepository.lastInboxCheck`). The first run per account
+  still reads the full window to set the delivery baseline.
+  * *Measured:* 9,600 → 288 reads per phone per day on a busy inbox, and 96 with no new alerts.
+* **Stale-post reminder check:** at most every 12 h instead of every launch (`AppNavHost`, `lastStaleCheck`).
+* **Photo disk cache:** 30 days instead of 24 h, 80 MB, and reading refreshes an entry's time, so eviction is
+  least-recently-viewed (`ImageDiskCache` + 2 new tests).
+* **Admin analytics:** count queries instead of downloading up to 5,000 matches.
+  * Needs a new `(ownerState, verifiedBy)` index.
+* **AI jobs:**
+  * The phone deletes `aiJobs/{uid}` once answered (`AiServer.run`).
+  * The PC sweeps answered jobs older than 10 minutes, hourly (`server.py sweep_jobs`, downloads `doneAt` only).
+* **PC worker** (`cat-server/recovery.py`, not in git):
+  * A 50-minute token refresh now re-reads only what changed since the newest snapshot, with an hour of overlap.
+  * A full window read happens at start and every 12 h, and prunes posts that left the window.
+  * Matches are limited to the 60-day window (`createdAt`).
+  * A quick refresh needs the new `(hidden, updatedAt)` posts index. Without it the worker logs the problem and
+    falls back to a full read.
+* **Checks:**
+  * rules suite 372/372 (9 new Phase 3 checks);
+  * worker e2e 25/25 (3 new: quick refresh, a later sighting still matched, listeners healthy);
+  * `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug` passed;
+  * baseline re-run (`docs/cost/BASELINE.md`, "After Phase 3").
+* **Owner, when releasing:** `firebase deploy --only firestore` also deploys the two new indexes. The cat-server
+  changes work with today's production rules, so the server can be restarted any time (`start.cmd`).
+* **Also new:** `docs/PRESENTATION_NOTES.md` (slides key points; keep it free of passwords, the repo is
+  public).
+* **Not committed. Nothing deployed.**
+
+## 20 October 2026 - Major update Phase 2: rules and sign-in hardening (Claude)
+
+* **`firestore.rules`.** The rules stay compatible with v0.0.9: every original check in the suite still passes, and
+  each one replays what the apps really write.
+  * Reads need a verified email (or the AI worker); unverified accounts can only read their own profile.
+  * Photos are opened by id only. Listing them is limited to your own or moderators.
+  * A suspended member can't delete their profile (that was the way to clear a suspension).
+  * Points, counters and badges move in small steps, and a new badge must be earned by the counters (thresholds
+    copied from `Badges.kt`).
+  * Alerts to others must have the app's shape and a type the sender's role may send.
+  * Someone else's cat: only follow/unfollow yourself, add aliases, or a real sighting (+1 count and the rate-limit
+    stamp in the same batch).
+  * Posts: the author's real username (also locked on edit), nothing dated in the future, and type and size checks
+    (text fields joined with `+`).
+  * Rescue history is append-only, and volunteers assign cases only to themselves.
+  * Field allowlists on sightings, check-ins, messages, users and images; username format on `usernames`.
+* **Budget lesson:** Firestore rules may evaluate at most **1,000 expressions per document**, and helper-function
+  calls are the costly part. Checks are written inline and only run for changed fields on updates.
+  * `test.mjs` has the heaviest real writes as guards: the largest post with a 27-number fingerprint, and a 6-photo
+    sighting on someone else's cat with a 117-number feature vector.
+  * The largest post still had room for about 150 more checks when measured.
+* **Android:**
+  * `safeObjects` / `safeObject` (`data/Firestore.kt`): one malformed document is skipped instead of breaking a
+    whole list (new finding S18).
+  * The alert-area centre moved to `users/{uid}/private/areaFollow`, with a once-per-account move of old centres
+    (`PostRepository`, `AppNavHost`, `SettingsRepository`, `UserDataExport`).
+  * Sign-in and password reset no longer reveal whether an email has an account.
+  * Every points-giving action stamps `lastPostAt`.
+* **New files:**
+  * `docs/security/LATER_RULES.md`: 5 rules to switch on once old versions are gone.
+  * Threat model "Status after Phase 2", plus S18 (malformed-document DoS) and S19 (the demo admin is a real
+    production admin; owner decision).
+* **Checks:**
+  * rules suite 363/363 on the final rules;
+  * `:app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug` passed;
+  * web e2e (isolated suite) against the new rules: 35 passed, 8 skipped (by design), 1 failed. The failure was
+    WebKit's shape-parity test stuck at sign-in; re-run, it passed in both browsers;
+  * probes: 11 of 13 closed, F4 and F13 expected (the script fails on any other).
+* **Rules budget:** a post edit with a new fingerprint has only about 100 expressions to spare. Keep the two
+  heavy-write tests in `test.mjs` passing whenever post rules change (a comment in `validPost` says so).
+* **Web (Codex):** four Phase 2 items in `WEB_TODO.txt`.
+* **Not committed. Nothing deployed.**
+
+## 20 October 2026 - Major update Phase 1: audit and measured baseline (Claude)
+
+* **No app code changed.** New files:
+  * `docs/security/THREAT_MODEL.md`: the threat model and 17 ranked findings S1–S17, each mapped to a phase.
+  * `docs/cost/BASELINE.md`, with raw numbers in `docs/cost/baseline-results.json`.
+  * `tools/cost/baseline.mjs`: an emulator replay of the Android queries, at "today" and "grown" data sizes.
+  * `tools/rulestest/phase1-findings.mjs`: 13 attack probes plus 2 controls. **All 13 are OPEN** under today's
+    rules; the controls are closed.
+  * `tools/security/secretscan.py`: a redacted git-history secret scan.
+* **Top security findings:**
+  * a suspended user can delete and recreate their profile to unsuspend;
+  * any verified user can list everyone's alert-area home coordinates (`areaFollows` lat/lng);
+  * unverified bot accounts can read everything, so the daily quota can be used up deliberately;
+  * any user can write fake notifications into anyone's inbox;
+  * the PC worker's Pillow 11.2.1 has many advisories and decodes strangers' photos;
+  * cat-profile vandalism, self-awarded points and badges, and feed pinning with a future `createdAt`.
+* **Measured reads:** a cold app open costs 133 reads (today) and 1,351 (grown). The background check costs up to
+  2,400–9,600 reads per phone per day. The PC worker re-reads all posts from the last 60 days plus all matches every
+  50 minutes (estimated, not measured).
+* **Clean:** no secrets in git history (27 commits, all tags), and no known vulnerabilities in the Android, web or
+  `functions/` dependencies.
+* **How to re-run** (PowerShell, Java on PATH): use
+  `npx.cmd -y firebase-tools@latest emulators:exec --config firebase.rules-test.json --only firestore --project demo-catmap-cost "node tools/cost/baseline.mjs"`.
+  Use project `demo-catmap-probe` with `"node tools/rulestest/phase1-findings.mjs firestore.rules"` for the probes.
+* **Not committed** (the owner hasn't asked). Next: Phase 2 (rules and sign-in hardening).
+
+## 20 October 2026 - Major update planned: security + cost, 10 phases (Claude)
+
+* The owner merged two briefs (`Desktop\security.txt`, `Desktop\updates.txt`) into one project:
+  **`docs/done/MAJOR_UPDATE_PLAN.md`**.
+* **Owner's rule:** no push, tag or deploy until all 10 phases are done. The next release is a major one.
+* **Checked in the code:**
+  * The map reads up to 1,200 documents per opening: `feed(400)` plus `allCats()` (800).
+  * `NotificationWorker` re-reads up to 100 notifications every 15 min.
+  * Old v0.0.9 installs limit how strict the rules can be at release time (Phase 10 "later rules").
+* **Web parity audit:** 8 confirmed features the web app missed (share post/cat, directions, AI breed traits, admin
+  match/reunion analytics, chat "view profile", "add my location" on updates, the adoption-requests entry, small
+  hints). They're now in `WEB_TODO.txt`, which also gained a "coming with the major update" section. The full
+  checklist of Android strings the web never uses is `docs/done/web-parity-unused-strings.txt` (264 keys, many fine).
+* **No code changes yet.** Next: Phase 1 (audit and measured baseline).
+
+## 17 October 2026 - PC matcher fix: lost report found nothing (Claude)
+
+* **Symptom (production, v0.0.9):** a lost report whose exact photo was already on the map as a street cat showed
+  "Looking for matching sightings…", then "No matching sightings yet".
+* **Likely cause:** the worker's live query (`hidden == false`, `createdAt >= …`, no order) needs an ascending
+  `(hidden, createdAt)` index that production doesn't have (only the feed's descending one). A failed Firestore
+  listener stops silently, and phones see the PC as online, so they don't fall back to colour matching. The
+  emulator doesn't enforce indexes, which is why the tests missed it. Not confirmed in production yet.
+* **Fix (cat-server only, no app release or deploy):** `recovery.py` orders the query newest-first (served by the
+  existing index), probes it once at start and writes any Firestore error to the activity log, and re-opens dead
+  listeners every minute (`check()`). `server.py`: Google client warnings go to the activity log, the photo-check
+  listener is also revived, the status line shows "watching N posts", and only one server can run at a time
+  (two were running).
+* `tests/test_recovery_e2e.py` gained the owner's case: 22/22. The identical photo gets "possible", not "strong",
+  because the street post is 2.5 days before the report's default "last seen = now" (the before-lost rule).
+* **Owner:** close every CatMap AI Server window, start `start.cmd` once, and check the activity log.
 
 ## 17 October 2026 - v0.0.9 released (Claude)
 
@@ -422,7 +768,7 @@ of floating orange text.
 
 The Roborazzi baselines were re-recorded and checked by eye.
 
-**AI recognition review** (`prompt.txt` → [docs/AI_RECOGNITION_REVIEW.md](docs/AI_RECOGNITION_REVIEW.md)). Implemented:
+**AI recognition review** (`prompt.txt` → [docs/done/AI_RECOGNITION_REVIEW.md](docs/done/AI_RECOGNITION_REVIEW.md)). Implemented:
 * Only the largest subject is described when a photo has several.
 * Proximity allows for GPS error and the privacy blur, and widens with time since last seen.
 * Matches are worded Strong / Possible / Weak; "strong" needs ≥ 0.80 and a 0.05 lead over the runner-up.
@@ -500,7 +846,7 @@ reduced the circle from 58dp to 52dp and the shadow from 10dp to 2dp. It is cent
 the accessible Post action and 52dp touch target remain intact. No strings, dependencies or rules changed.
 
 Installed on the local staging emulator. The before/after images are
-[before](docs/verification/bottom-plus-before.png) and [after](docs/verification/bottom-plus-after.png).
+[before](docs/done/verification/bottom-plus-before.png) and [after](docs/done/verification/bottom-plus-after.png).
 Visually confirmed the whole circle sits within the bar; tapped Post and confirmed the chooser opens.
 Install log: `build/bottom-plus-install.log` (BUILD SUCCESSFUL in 2m 8s).
 Final test/screenshot/lint/debug/release checks: `build/bottom-plus-verification.log`
@@ -611,9 +957,9 @@ rendering tests and both lint variants, but **not** the pixel comparison (see th
 * Map list had an overlapping distance note -> outer header measured including insets, separate constrained list viewport; large text/dark confirmed.
 * Poster contact line clipped beside QR -> two-line reserved contact footer; QR test decodes actual bitmap.
 
-Core images retained under `docs/verification/`: Explore before/final, dark larger-text map list, poster,
+Core images retained under `docs/done/verification/`: Explore before/final, dark larger-text map list, poster,
 photo matching, export chooser, upgrade notes, stale inbox, demo directory, verified sitter, older/microchip filter and time picker.
-[49 route/screen captures](docs/runtime-screens.md) and XML/label evidence remain locally under git-ignored `build/prompt-shots/` (including
+[49 route/screen captures](docs/done/runtime-screens.md) and XML/label evidence remain locally under git-ignored `build/prompt-shots/` (including
 map/Explore/profile/editor/detail/badges/poster; adoption/sitting/messages/chat/search/settings; community
 cats/stations/rescue/sighting; dashboard and all admin queues). Individual captures are smoke/visual evidence,
 not proof of every state or workflow. Synthetic posts and the empty local QA chat remain for owner review;
@@ -665,8 +1011,8 @@ Schema/rules (all changes in `firestore.rules`, with positive/negative coverage 
 ### Complete emoji inventory
 
 The **100 original source-line occurrences across 22 files**, including both generated string languages,
-are listed here with replacements. Exact original lines are in [docs/emoji-inventory.json](docs/emoji-inventory.json);
-the compact copy is [docs/emoji-replacements.md](docs/emoji-replacements.md). No original wording was rewritten
+are listed here with replacements. Exact original lines are in [docs/done/emoji-inventory.json](docs/done/emoji-inventory.json);
+the compact copy is [docs/done/emoji-replacements.md](docs/done/emoji-replacements.md). No original wording was rewritten
 for icon migration. The review sheet is [docs/icons-preview.png](docs/icons-preview.png).
 
 Search used, with the explicitly forbidden credential file excluded:

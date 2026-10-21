@@ -1,6 +1,17 @@
 import { where } from 'firebase/firestore';
 import { count } from './AdminRepository';
 export interface AdminAnalytics {
+  matches: {
+    total: number;
+    strong: number;
+    possible: number;
+    weak: number;
+    maybe: number;
+    notMine: number;
+    viaCatmap: number;
+    confirmed: number;
+    verified: number;
+  } | null;
   weeks: { start: number; posts: number; members: number }[];
   searchPosts: number;
   reunited: number;
@@ -8,6 +19,9 @@ export interface AdminAnalytics {
 }
 let cached: { at: number; value: AdminAnalytics } | undefined;
 export const AdminAnalyticsRepository = {
+  clear: () => {
+    cached = undefined;
+  },
   load: async (): Promise<AdminAnalytics> => {
     if (cached && Date.now() - cached.at < 300000) return cached.value;
     const now = new Date(Date.now() + 4 * 3600000);
@@ -41,7 +55,36 @@ export const AdminAnalyticsRepository = {
       where('createdAt', '>=', starts[0]),
       where('status', '==', 'reunited'),
     );
+    const matches = await (async () => {
+      const [strong, possible, weak, maybe, notMine, viaCatmap, confirmed, verified] =
+        await Promise.all([
+          count('matches', where('tier', '==', 'strong')),
+          count('matches', where('tier', '==', 'possible')),
+          count('matches', where('tier', '==', 'weak')),
+          count('matches', where('ownerState', '==', 'maybe')),
+          count('matches', where('ownerState', '==', 'not_mine')),
+          count('matches', where('ownerState', '==', 'reunited')),
+          count(
+            'matches',
+            where('ownerState', '==', 'reunited'),
+            where('reporterState', '==', 'confirmed'),
+          ),
+          count('matches', where('ownerState', '==', 'reunited'), where('verifiedBy', '>', '')),
+        ]);
+      return {
+        total: strong + possible + weak,
+        strong,
+        possible,
+        weak,
+        maybe,
+        notMine,
+        viaCatmap,
+        confirmed,
+        verified,
+      };
+    })().catch(() => null);
     const value = {
+      matches,
       weeks,
       searchPosts,
       reunited,

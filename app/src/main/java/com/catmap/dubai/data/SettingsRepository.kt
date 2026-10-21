@@ -75,6 +75,9 @@ class SettingsRepository(private val context: Context) {
         val PRIVACY_LEVEL = stringPreferencesKey("privacy_level")
         val SHARE_EXACT = booleanPreferencesKey("share_exact")
         fun delivered(uid: String) = stringSetPreferencesKey("delivered_notifications_" + uid)
+        fun areaFollowPrivate(uid: String) = booleanPreferencesKey("area_follow_private_" + uid)
+        fun lastInboxCheck(uid: String) = longPreferencesKey("last_inbox_check_" + uid)
+        fun lastStaleCheck(uid: String) = longPreferencesKey("last_stale_check_" + uid)
         fun category(c: NotifCategory) = booleanPreferencesKey("notif_" + c.name.lowercase())
         val MAP_MODE = stringPreferencesKey("map_mode")
         val SATELLITE = booleanPreferencesKey("map_satellite")
@@ -163,6 +166,18 @@ class SettingsRepository(private val context: Context) {
     suspend fun deliveredNotifications(uid: String): Set<String>? = context.dataStore.data.first()[Keys.delivered(uid)]
     suspend fun setDeliveredNotifications(uid: String, ids: Set<String>) = context.dataStore.edit { it[Keys.delivered(uid)] = ids }
     suspend fun clearDeliveredNotifications(uid: String) = context.dataStore.edit { it.remove(Keys.delivered(uid)) }
+
+    /** When the background check last read this account's inbox (device time), or null if it never has. */
+    suspend fun lastInboxCheck(uid: String): Long? = context.dataStore.data.first()[Keys.lastInboxCheck(uid)]
+    suspend fun setLastInboxCheck(uid: String, at: Long) = context.dataStore.edit { it[Keys.lastInboxCheck(uid)] = at }
+
+    /** When this account's posts were last checked for 14-day reminders (device time), 0 if never. */
+    suspend fun lastStaleCheck(uid: String): Long = context.dataStore.data.first()[Keys.lastStaleCheck(uid)] ?: 0L
+    suspend fun setLastStaleCheck(uid: String, at: Long) = context.dataStore.edit { it[Keys.lastStaleCheck(uid)] = at }
+
+    /** True once this account's alert-area centre has been moved out of the shared areaFollows document. */
+    suspend fun areaFollowPrivate(uid: String): Boolean = context.dataStore.data.first()[Keys.areaFollowPrivate(uid)] == true
+    suspend fun setAreaFollowPrivate(uid: String) = context.dataStore.edit { it[Keys.areaFollowPrivate(uid)] = true }
 
     /** "" follows the system language; otherwise "en" or "ar". */
     fun language(): String = AppCompatDelegate.getApplicationLocales().toLanguageTags().substringBefore('-')

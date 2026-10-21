@@ -54,6 +54,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.catmap.dubai.ui.components.PagingEffects
+import com.catmap.dubai.ui.components.PagingFooter
+import com.catmap.dubai.ui.components.rememberPager
 import com.catmap.dubai.R
 import com.catmap.dubai.data.AppStats
 import com.catmap.dubai.data.Dubai
@@ -144,19 +148,22 @@ fun AdminPostsScreen(nav: NavHostController) {
     val container = LocalContainer.current
     val runner = rememberRunner()
     val me by container.session.profile.collectAsStateWithLifecycle()
-    val posts by remember { container.posts.allPosts() }.collectAsStateWithLifecycle(null)
     var category by rememberSaveable { mutableStateOf<String?>(null) }
     var hiddenOnly by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var acting by remember { mutableStateOf<Pair<Post, String>?>(null) }
     val q = query.trim().lowercase()
+    val listState = rememberLazyListState()
+    val pager = rememberPager<Post>(hiddenOnly, category, key = { it.id }) { container.posts.moderationQuery(hiddenOnly, category) }
+    val page by pager.state.collectAsStateWithLifecycle()
+    val posts = page.items.takeIf { page.loaded }
     val shown = posts?.filter {
         (category == null || it.category == category) && (!hiddenOnly || it.hidden) &&
             (q.isEmpty() || it.name.lowercase().contains(q) || it.ownerName.lowercase().contains(q) || it.keywords.any { k -> k.startsWith(q) })
     }
 
     Scaffold(topBar = { AppTopBar(stringResource(R.string.manage_posts), onBack = { nav.popBackStack() }) }) { padding ->
-        LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.padding(padding).fillMaxSize(), state = listState, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 OutlinedTextField(query, { query = it }, label = { Text(stringResource(R.string.search)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
             }
@@ -169,13 +176,15 @@ fun AdminPostsScreen(nav: NavHostController) {
             }
             when {
                 shown == null -> items(4, contentType = { "loading" }) { SkeletonRow() }
-                shown.isEmpty() -> item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.queue_empty)) }
+                shown.isEmpty() && page.end -> item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.queue_empty)) }
                 else -> items(shown, key = { it.id }, contentType = { "AdminCommunityScreens" }) { p ->
                     AdminPostRow(p, Modifier.animateItem(), onOpen = { nav.navigate(Routes.post(p.id)) }, onEdit = { nav.navigate(Routes.editPost(p.id)) }) { action -> acting = p to action }
                 }
             }
+            item(contentType = "footer") { PagingFooter(page, pager::loadMore) }
         }
     }
+    PagingEffects(pager, page, shown?.size ?: 0, list = listState)
     acting?.let { (post, action) ->
         TextInputDialog(
             stringResource(
@@ -235,24 +244,26 @@ fun AdminUsersScreen(nav: NavHostController) {
     val container = LocalContainer.current
     val runner = rememberRunner()
     val me by container.session.profile.collectAsStateWithLifecycle()
-    val users by remember { container.admin.users() }.collectAsStateWithLifecycle(null)
     var query by rememberSaveable { mutableStateOf("") }
     var suspendedOnly by rememberSaveable { mutableStateOf(false) }
     var suspending by remember { mutableStateOf<UserProfile?>(null) }
     val q = query.trim().lowercase().removePrefix("@")
-    val shown = users?.filter {
-        (!suspendedOnly || it.suspended) && (q.isEmpty() || it.username.lowercase().contains(q) || it.displayName.lowercase().contains(q))
-    }?.sortedByDescending { it.createdAt }
+    // Usernames are lower case, so a typed name is a prefix query; the rest is checked here.
+    val listState = rememberLazyListState()
+    val pager = rememberPager<UserProfile>(q, suspendedOnly, key = { it.uid }) { container.admin.usersQuery(q, suspendedOnly) }
+    val page by pager.state.collectAsStateWithLifecycle()
+    val users = page.items.takeIf { page.loaded }
+    val shown = users?.filter { (!suspendedOnly || it.suspended) }
     val isAdmin = isAdminRole(me?.role)
 
     Scaffold(topBar = { AppTopBar(stringResource(R.string.manage_users), onBack = { nav.popBackStack() }) }) { padding ->
-        LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.padding(padding).fillMaxSize(), state = listState, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { OutlinedTextField(query, { query = it }, label = { Text(stringResource(R.string.username)) }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
             item { FilterChip(suspendedOnly, { suspendedOnly = !suspendedOnly }, label = { Text(stringResource(R.string.suspended_only)) }) }
             item { Text(stringResource(R.string.members_n, shown?.size ?: 0), style = MaterialTheme.typography.labelLarge) }
             when {
                 shown == null -> items(5, contentType = { "loading" }) { SkeletonRow() }
-                shown.isEmpty() -> item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.user_not_found)) }
+                shown.isEmpty() && page.end -> item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.user_not_found)) }
                 else -> items(shown, key = { it.uid }, contentType = { "AdminCommunityScreens" }) { u ->
                     var menu by remember { mutableStateOf(false) }
                     ClickableCard(onClick = { nav.navigate(Routes.user(u.uid)) }, modifier = Modifier.animateItem()) {
@@ -288,8 +299,10 @@ fun AdminUsersScreen(nav: NavHostController) {
                     }
                 }
             }
+            item(contentType = "footer") { PagingFooter(page, pager::loadMore) }
         }
     }
+    PagingEffects(pager, page, shown?.size ?: 0, list = listState)
     suspending?.let { u ->
         TextInputDialog(
             stringResource(R.string.suspend_account), stringResource(R.string.reason), stringResource(R.string.suspend_account),
@@ -306,14 +319,17 @@ fun AdminSittersScreen(nav: NavHostController) {
     val container = LocalContainer.current
     val runner = rememberRunner()
     val me by container.session.profile.collectAsStateWithLifecycle()
-    val sitters by remember { container.sitting.allSitters() }.collectAsStateWithLifecycle(null)
     var removing by remember { mutableStateOf<SitterProfile?>(null) }
+    val listState = rememberLazyListState()
+    val pager = rememberPager<SitterProfile>(key = { it.uid }) { container.sitting.allSittersQuery() }
+    val page by pager.state.collectAsStateWithLifecycle()
+    val sitters = page.items.takeIf { page.loaded }
     Scaffold(topBar = { AppTopBar(stringResource(R.string.manage_sitters), onBack = { nav.popBackStack() }) }) { padding ->
-        LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.padding(padding).fillMaxSize(), state = listState, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             when {
                 sitters == null -> items(4, contentType = { "loading" }) { SkeletonRow() }
-                sitters!!.isEmpty() -> item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.no_sitters)) }
-                else -> items(sitters!!, key = { it.uid }, contentType = { "AdminCommunityScreens" }) { s ->
+                sitters.isEmpty() -> item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.no_sitters)) }
+                else -> items(sitters, key = { it.uid }, contentType = { "AdminCommunityScreens" }) { s ->
                     ClickableCard(onClick = { nav.navigate(Routes.sitter(s.uid)) }, modifier = Modifier.animateItem()) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Avatar(s.photoId, s.name)

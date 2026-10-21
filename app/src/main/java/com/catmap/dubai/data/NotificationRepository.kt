@@ -44,12 +44,25 @@ object NotifType {
 class NotificationRepository(private val db: FirebaseFirestore, private val auth: FirebaseAuth) {
     private fun col(uid: String) = db.collection(Col.USERS).document(uid).collection(Col.NOTIFICATIONS)
 
+    /** The newest [WINDOW] alerts, live (the bell, the inbox, alerts shown while the app is open). */
     fun notifications(uid: String): Flow<List<AppNotification>> =
-        col(uid).orderBy("createdAt", Query.Direction.DESCENDING).limit(100).listFlow()
+        col(uid).orderBy("createdAt", Query.Direction.DESCENDING).limit(WINDOW).listFlow()
 
     // Same ordered window as the live listener; an unordered unread limit can hide new alerts.
     suspend fun latest(uid: String): List<AppNotification> =
-        col(uid).orderBy("createdAt", Query.Direction.DESCENDING).limit(100).get().await().toObjects(AppNotification::class.java)
+        col(uid).orderBy("createdAt", Query.Direction.DESCENDING).limit(WINDOW).get().await().safeObjects<AppNotification>()
+
+    /** Older alerts, read a page at a time below the live window (the inbox's "Load more"). */
+    fun olderQuery(uid: String, before: Long): Query =
+        col(uid).orderBy("createdAt", Query.Direction.DESCENDING).startAfter(before)
+
+    /**
+     * Only the alerts created after [sinceMillis]: what the background check needs. When nothing is new this costs one
+     * Firestore read, where [latest] costs up to 100 every 15 minutes.
+     */
+    suspend fun since(uid: String, sinceMillis: Long): List<AppNotification> =
+        col(uid).whereGreaterThan("createdAt", sinceMillis).orderBy("createdAt", Query.Direction.DESCENDING).limit(50)
+            .get().await().safeObjects<AppNotification>()
 
     suspend fun markRead(uid: String, id: String) {
         col(uid).document(id).update("read", true).await()
@@ -84,33 +97,24 @@ class NotificationRepository(private val db: FirebaseFirestore, private val auth
         val me = auth.currentUser?.uid ?: return
         val targets = recipients.filter { it.isNotBlank() }.toSet()
         if (targets.isEmpty()) return
-        if (dedupeKey != null) {
-            // A fixed document id makes repeats harmless: writing over an existing alert is an update, which the
-            // rules refuse, so each person gets one alert per key until they read and remove it.
-            coroutineScope {
-                targets.map { uid ->
-                    async {
-                        runCatching {
-                            col(uid).document(dedupeKey).set(
-                                AppNotification(type = type, params = params, route = route, fromUid = me, createdAt = now()),
-                            ).await()
-                        }
-                    }
-                }.awaitAll()
-            }
-            return
+        // One write per person, never one batch: the rules refuse an alert to someone who blocked the sender, and in a
+        // batch that one refusal would stop everyone else's alert too. A fixed id ([dedupeKey]) makes repeats
+        // harmless: writing over an existing alert is an update, which the rules refuse, so each person gets one
+        // alert per key until they read and remove it.
+        coroutineScope {
+            targets.map { uid ->
+                async {
+                    runCatching {
+                        val ref = if (dedupeKey != null) col(uid).document(dedupeKey) else col(uid).document()
+                        ref.set(AppNotification(type = type, params = params, route = route, fromUid = me, createdAt = now())).await()
+                    }.onFailure { android.util.Log.w("CatMap", "Notification to one person not delivered", it) }
+                }
+            }.awaitAll()
         }
-        runCatching {
-            targets.chunked(400).forEach { chunk ->
-                db.runBatch { b ->
-                    chunk.forEach { uid ->
-                        b.set(
-                            col(uid).document(),
-                            AppNotification(type = type, params = params, route = route, fromUid = me, createdAt = now()),
-                        )
-                    }
-                }.await()
-            }
-        }.onFailure { android.util.Log.w("CatMap", "Notification delivery failed", it) }
+    }
+
+    companion object {
+        /** How many of the newest alerts stay live; the inbox loads older ones on demand. */
+        const val WINDOW = 30L
     }
 }

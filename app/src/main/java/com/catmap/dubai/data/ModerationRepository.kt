@@ -60,8 +60,8 @@ class ModerationRepository(private val db: FirebaseFirestore, private val notifi
         }
     }
 
-    fun actions(): Flow<List<ModAction>> =
-        actions.orderBy("at", Query.Direction.DESCENDING).limit(300).listFlow()
+    /** The moderation log, newest first, read a page at a time. */
+    fun actionsQuery(): Query = actions.orderBy("at", Query.Direction.DESCENDING)
 
     // ---- Volunteers ----
 

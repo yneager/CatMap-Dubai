@@ -1,7 +1,8 @@
 import AdminVolunteers from './AdminVolunteers';
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { where } from 'firebase/firestore';
+import { usePager, PagingFooter, useDebounced } from '../../data/usePager';
+import { where, orderBy, documentId } from 'firebase/firestore';
 import { useApp, useList, useAction } from '../../state';
 import { AdminRepository } from '../../data/AdminRepository';
 import { AdminAnalyticsRepository, type AdminAnalytics } from '../../data/AdminAnalytics';
@@ -175,7 +176,11 @@ function Dashboard() {
                 <p>{t('reunion_rate_basis', analytics.reunited, analytics.searchPosts)}</p>
                 <svg
                   role="img"
-                  aria-label={t('analytics_accessibility')}
+                  aria-label={t(
+                    'analytics_accessibility',
+                    analytics.weeks.map((w) => w.posts).join(', '),
+                    analytics.weeks.map((w) => w.members).join(', '),
+                  )}
                   className="analytics-chart"
                   viewBox="0 0 360 160"
                 >
@@ -211,8 +216,33 @@ function Dashboard() {
                     );
                   })}
                 </svg>
+                {analytics.matches && (
+                  <section>
+                    <SectionHeader>{t('analytics_matches')}</SectionHeader>
+                    <p>
+                      {t(
+                        'analytics_matches_body',
+                        analytics.matches.total,
+                        analytics.matches.strong,
+                        analytics.matches.possible,
+                        analytics.matches.weak,
+                        analytics.matches.maybe,
+                        analytics.matches.notMine,
+                      )}
+                    </p>
+                    <p>
+                      {t(
+                        'analytics_reunions_body',
+                        analytics.reunited,
+                        analytics.matches.viaCatmap,
+                        analytics.matches.confirmed,
+                        analytics.matches.verified,
+                      )}
+                    </p>
+                  </section>
+                )}
                 <p className="small">
-                  {t('weekly_posts')} · {t('weekly_members')}
+                  {t('weekly_posts')} · {t('weekly_members')} · {t('analytics_axis')}
                 </p>
               </>
             ) : (
@@ -252,14 +282,26 @@ function Dashboard() {
   );
 }
 function AdminPosts() {
-  const posts = useList(PostRepository.allPosts, PostFromDoc, 'admin-posts'),
-    { profile } = useApp(),
+  const { profile } = useApp(),
     action = useAction(),
     [search, setSearch] = useState(''),
     [hidden, setHidden] = useState(false),
     [category, setCategory] = useState(''),
     [manage, setManage] = useState(''),
     [note, setNote] = useState('');
+  const page = usePager(
+    () =>
+      listQuery(
+        'posts',
+        ...(hidden ? [where('hidden', '==', true)] : []),
+        ...(category ? [where('category', '==', category)] : []),
+        orderBy('createdAt', 'desc'),
+      ),
+    PostFromDoc,
+    'admin-posts-' + hidden + category,
+    30,
+  );
+  const posts = page.items;
   const shown = posts?.filter(
       (p) =>
         (!hidden || p.hidden) &&
@@ -306,6 +348,7 @@ function AdminPosts() {
         ) : (
           <EmptyState text={t('queue_empty')} />
         )}
+        <PagingFooter page={page} visibleCount={shown?.length} />
       </div>
       {selected && (
         <Dialog title={t('manage_post')} onClose={() => setManage('')}>
@@ -343,13 +386,20 @@ function AdminPosts() {
   );
 }
 function AdminUsers() {
-  const users = useList(AdminRepository.users, UserProfileFromDoc, 'admin-users'),
-    { profile } = useApp(),
+  const { profile } = useApp(),
     action = useAction(),
     [search, setSearch] = useState(''),
     [suspended, setSuspended] = useState(false),
     [manage, setManage] = useState<UserProfile | null>(null),
     [note, setNote] = useState('');
+  const settled = useDebounced(search.trim().replace(/^@/, '').toLowerCase());
+  const page = usePager(
+    () => AdminRepository.users(settled, suspended),
+    UserProfileFromDoc,
+    'admin-users-' + settled + suspended,
+    40,
+  );
+  const users = page.items;
   const shown = users
     ?.filter(
       (u) =>
@@ -394,6 +444,7 @@ function AdminUsers() {
         ) : (
           <EmptyState text={t('user_not_found')} />
         )}
+        <PagingFooter page={page} visibleCount={shown?.length} />
       </div>
       {manage && (
         <Dialog title={'@' + manage.username} onClose={() => setManage(null)}>
@@ -434,7 +485,13 @@ function AdminUsers() {
   );
 }
 function AdminSitters() {
-  const sitters = useList(SittingRepository.allSitters, SitterProfileFromDoc, 'admin-sitters'),
+  const page = usePager(
+      () => listQuery('sitters', orderBy(documentId())),
+      SitterProfileFromDoc,
+      'admin-sitters',
+      30,
+    ),
+    sitters = page.items,
     { profile } = useApp(),
     action = useAction();
   return (
@@ -484,6 +541,7 @@ function AdminSitters() {
         ) : (
           <EmptyState text={t('no_sitters')} />
         )}
+        <PagingFooter page={page} />
       </div>
     </>
   );
@@ -492,16 +550,17 @@ function AdminQueue() {
   const path = useLocation().pathname,
     { profile } = useApp(),
     action = useAction(),
-    [note, setNote] = useState('');
+    [note, setNote] = useState(''),
+    [rescueStatus, setRescueStatus] = useState('');
   const reports = useList(
       () => (path === '/admin-reports' ? ModerationRepository.openReports() : null),
       ContentReportFromDoc,
       'admin-reports-' + path,
     ),
     rescues = useList(
-      () => (path === '/admin-rescues' ? RescueRepository.allReports() : null),
+      () => (path === '/admin-rescues' ? RescueRepository.allReports(rescueStatus) : null),
       RescueReportFromDoc,
-      'admin-rescues-' + path,
+      'admin-rescues-' + path + rescueStatus,
     ),
     merges = useList(
       () => (path === '/admin-merges' ? CatRepository.mergeRequests() : null),
@@ -531,11 +590,13 @@ function AdminQueue() {
       CatFromDoc,
       'admin-new-cats-' + path,
     ),
-    log = useList(
-      () => (path === '/admin-log' ? ModerationRepository.actions() : null),
+    logPage = usePager(
+      () => (path === '/admin-log' ? listQuery('modActions', orderBy('at', 'desc')) : null),
       ModActionFromDoc,
       'admin-log-' + path,
-    );
+      40,
+    ),
+    log = path === '/admin-log' ? logPage.items : undefined;
   const title = routes.find(([route]) => '/' + route === path)?.[1] ?? 'admin_dashboard';
   const actOnReport = async (r: ContentReport) => {
     if (r.targetType === 'post') {
@@ -561,6 +622,14 @@ function AdminQueue() {
     <>
       <AppTopBar title={t(title)} />
       <div className="screen">
+        {path === '/admin-rescues' && (
+          <Chips
+            options={[{ key: '', label: 'all' }, ...enums.RescueStatus]}
+            value={rescueStatus}
+            onChange={setRescueStatus}
+          />
+        )}
+        {path === '/admin-log' && <PagingFooter page={logPage} />}
         {path !== '/admin-log' && (
           <Field label={t('resolution_note')} value={note} onChange={setNote} multiline />
         )}

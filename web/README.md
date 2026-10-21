@@ -4,6 +4,22 @@ The iPhone/browser version of CatMap Dubai is a React/TypeScript PWA using Andro
 
 Round 2 brings Android 0.0.8's photo check and location-first posting to the web, and makes CatMap an install-only app. These changes are local and uncommitted; this run did not deploy them. Review [the work report](../work%20done.txt) and [visual parity](docs/parity.md) before publishing. WebKit substitutes for an iPhone; a real iPhone and Android reading web records have not been tested.
 
+## Round 3: major update (21 October 2026)
+
+The web now writes Android's `geoCells` and `searchTerms`, loads the map by viewport with an account-scoped IndexedDB copy, and uses cursor pages for Explore, Search, Adoption, Cats and the requested admin lists. Inbox/chat/post-update live windows are 30/50/30. Alert centres are private and older centres migrate once per account. Logout/account deletion clear Firestore persistence and account caches, keeping language, theme and installation preferences.
+
+Optional `VITE_RECAPTCHA_SITE_KEY` enables reCAPTCHA Enterprise App Check monitoring before Firestore starts. An empty key leaves it off; emulator builds always skip it. Keep console enforcement off. Hosting headers include explicit App Check origins, HSTS and COOP; the service worker precaches app files only.
+
+Verification is **incomplete**: emulator startup and npm audit were denied access to the npm registry in this session. The emulator-dependent full Chromium/WebKit suite, current rules suite and map/Explore read measurements must run before publishing. See `../work done.txt`, `e2e/major-update.spec.ts` and `docs/round3-string-audit.txt` (264 reviewed keys). The tests use only disposable accounts and `demo-*` projects.
+
+The emulator-independent hardening checks run with:
+
+```powershell
+npm.cmd run test:e2e -- e2e/local-hardening.spec.ts --project=chromium --project=webkit
+```
+
+After starting the isolated emulators below, run the full `npm.cmd run test:e2e` suite. The new major-update spec prints map query/document-read counters and Explore page query/read counters. Counters include the one-read minimum for empty server queries; they are not a billing/index-entry audit. The warm-map assertion requires no repeated cell query. Normal lists offer Refresh and restart their cursor on a downward pull at the top.
+
 ## Local run
 
 Use two PowerShell windows from `C:\Users\mohammad\Desktop\cat`. Reuse the emulators if they are already running. Do not export over the saved demo data.
@@ -30,6 +46,7 @@ Copy `.env.example` to `.env.local` yourself; keep actual values out of Git.
 - `VITE_USE_EMULATORS`: keep `false` in `.env.local`. The dev commands and `--mode emulators` switch to the emulators on their own, and a normal production build refuses to run with it set to `true`. Local ports are Auth 9099, Firestore 8080 and optional Storage 9199, at `127.0.0.1`.
 - `VITE_INSTALL_GATE`: omit for normal use. Production always requires standalone/fullscreen mode or iOS `navigator.standalone`; a production build with `off` fails. Emulator mode skips the gate by default. Set `on` only to test the installation screen locally. There is no URL or storage bypass.
 - `VITE_FIRESTORE_EMULATOR_PORT`: optional local test override; default 8080. The final isolated suite uses Firestore 8180, Auth 9098, Storage 9198 and project `demo-catmap-web-test`, with disposable accounts. These overrides have no effect outside emulator mode; see the full isolated-suite commands below.
+- `VITE_RECAPTCHA_SITE_KEY`: optional reCAPTCHA Enterprise site key for App Check monitoring. Empty = off; never initialized in emulator mode. Register the web app in App Check and keep enforcement off.
 - `VITE_MAPTILER_KEY`: optional satellite tiles; hides the control when blank.
 - `VITE_BLAZE`: defaults to `false`. Enables Android-compatible Storage video, requiring the paid plan in production. Photos use Firestore blobs.
 - `VITE_PUBLIC_URL`: optional public HTTPS origin for share links and poster QR codes. Without it the poster uses `catmap://post/<id>`.

@@ -32,3 +32,14 @@ __pycache__/
 
 # Firebase CLI deploy cache
 /.firebase/
+
+# Security notes that describe issues not yet fixed in production, and probes that exercise them. Kept on this PC only
+# (the repository is public); publish them once the fixes they describe are deployed.
+docs/audit-2026-10-21/
+docs/security/THREAT_MODEL.md
+docs/security/LATER_RULES.md
+docs/security/ABUSE_LIMITS.md
+docs/MAJOR_UPDATE_REPORT.md
+tools/rulestest/phase1-findings.mjs
+# Local test and audit output.
+test-results/

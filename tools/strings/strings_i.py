@@ -96,4 +96,7 @@ S = [
 ('photo_not_animal','This looks like %1$s, not an animal.','This looks like %1$s, not an animal.'), # TODO-AR
 ('photo_not_animal_unnamed',"This photo doesn't look like an animal.","This photo doesn't look like an animal."), # TODO-AR
 ('photo_not_animal_action','Remove it and add a photo of the animal to continue.','Remove it and add a photo of the animal to continue.'), # TODO-AR
+('load_more','Load more','Load more'), # TODO-AR
+('older_messages','Show older messages','Show older messages'), # TODO-AR
+('search_more_letters','Type at least 2 letters to search','Type at least 2 letters to search'), # TODO-AR
 ]

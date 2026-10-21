@@ -98,7 +98,7 @@ fun UpdateSheet(release: Release, onDismiss: () -> Unit) {
             }
             Text(stringResource(R.string.whats_new), style = MaterialTheme.typography.titleSmall)
             Column(Modifier.fillMaxWidth().heightIn(max = 260.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh).verticalScroll(rememberScrollState()).padding(14.dp)) {
-                Text(release.notes.ifBlank { release.title.ifBlank { stringResource(R.string.no_release_notes) } }.replace("**", "").replace("## ", ""), style = MaterialTheme.typography.bodyMedium)
+                Text(release.notes.ifBlank { release.title.ifBlank { stringResource(R.string.no_release_notes) } }, style = MaterialTheme.typography.bodyMedium)
             }
             AnimatedContent(state, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "update") { s ->
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

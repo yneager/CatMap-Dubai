@@ -48,6 +48,7 @@ function RescueList() {
     <>
       <AppTopBar title={t('rescue_reports')} />
       <div className="screen">
+        <p>{t('rescue_visibility_note')}</p>
         <Link className="primary" to="/rescue-new">
           {t('report_emergency')}
         </Link>
@@ -171,6 +172,7 @@ function RescueEditor() {
   );
 }
 function RescueDetail() {
+  const navigate = useNavigate();
   const { id = '' } = useParams(),
     { profile } = useApp(),
     action = useAction(),
@@ -194,9 +196,21 @@ function RescueDetail() {
         <p>{Dubai.nameOf(report.neighborhood)}</p>
         <div className="photo-grid">
           {report.photoIds.map((p) => (
-            <Photo id={p} key={p} />
+            <Photo id={p} key={p} onClick={() => navigate('/photo/' + p)} />
           ))}
         </div>
+        {(report.lat || report.lng) !== 0 && (
+          <a
+            className="outlined"
+            href={
+              'https://www.google.com/maps/dir/?api=1&destination=' + report.lat + ',' + report.lng
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t('directions')}
+          </a>
+        )}
         {report.catId && <Link to={'/cat/' + report.catId}>{report.catName}</Link>}
         <ReportButton type="rescue" id={id} label={report.catName || report.type} />
         <SectionHeader>{t('progress_updates')}</SectionHeader>

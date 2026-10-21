@@ -55,6 +55,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import com.catmap.dubai.ui.components.PagingEffects
+import com.catmap.dubai.ui.components.PagingFooter
+import com.catmap.dubai.ui.components.rememberPager
 import com.catmap.dubai.R
 import com.catmap.dubai.data.model.AdoptionRequest
 import com.catmap.dubai.data.model.AdoptionStatus
@@ -82,7 +86,13 @@ fun AdoptionScreen(nav: NavHostController) {
     val container = LocalContainer.current
     val runner = rememberRunner()
     val uid = container.session.uid
-    val posts by remember { container.communityFeed }.collectAsStateWithLifecycle(null)
+    // Adoption listings only, a page at a time (index: hidden, category, createdAt).
+    val pager = rememberPager<com.catmap.dubai.data.model.Post>(key = { it.id }, fallback = { container.posts.feedQuery() }) {
+        container.posts.feedQuery(listOf(PostCategory.ADOPTION.key))
+    }
+    val page by pager.state.collectAsStateWithLifecycle()
+    val gridState = rememberLazyGridState()
+    val posts = page.items.takeIf { page.loaded }
     val favorites by remember(uid) { if (uid == null) flowOf(emptySet()) else container.favorites.ids(uid) }.collectAsStateWithLifecycle(emptySet())
     var type by rememberSaveable { mutableStateOf<String?>(null) }
     var showAdopted by rememberSaveable { mutableStateOf(false) }
@@ -107,6 +117,7 @@ fun AdoptionScreen(nav: NavHostController) {
     ) { padding ->
         LazyVerticalGrid(
             GridCells.Adaptive(160.dp), Modifier.padding(padding).fillMaxSize(),
+            state = gridState,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -128,7 +139,7 @@ fun AdoptionScreen(nav: NavHostController) {
             }
             when {
                 listings == null -> items(4, contentType = { "loading" }) { SkeletonCard() }
-                listings.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
+                listings.isEmpty() && page.end -> item(span = { GridItemSpan(maxLineSpan) }) {
                     EmptyState(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.PAW), stringResource(R.string.no_adoption_listings))
                 }
                 else -> items(listings, key = { it.id }, contentType = { "AdoptionScreens" }) { p ->
@@ -140,8 +151,10 @@ fun AdoptionScreen(nav: NavHostController) {
                     )
                 }
             }
+            item(span = { GridItemSpan(maxLineSpan) }, contentType = "footer") { PagingFooter(page, pager::loadMore) }
         }
     }
+    PagingEffects(pager, page, listings?.size ?: 0, grid = gridState)
 }
 
 private enum class RequestTab(val label: Int) { RECEIVED(R.string.received), SENT(R.string.sent) }

@@ -4,9 +4,11 @@ import {
   onSnapshot,
   serverTimestamp,
   Bytes,
+  deleteDoc,
+  runTransaction,
   type DocumentData,
 } from 'firebase/firestore';
-import { auth } from '../firebase';
+import { auth, database } from '../firebase';
 import { ref } from './Firestore';
 import { compress, centreCrop, scaleToMax } from '../util/images';
 import { parseClassification } from '../ai/PhotoCheck';
@@ -16,6 +18,8 @@ export interface AiTransport {
   set: (path: string, fields: DocumentData) => Promise<void>;
   listen: (path: string, next: (fields: DocumentData) => void, error: () => void) => () => void;
   timestamp: () => unknown;
+  delete?: (path: string) => Promise<void>;
+  deleteRequest?: (path: string, requestId: string) => Promise<void>;
 }
 const transport: AiTransport = {
   uid: () => auth?.currentUser?.uid ?? null,
@@ -23,6 +27,13 @@ const transport: AiTransport = {
   set: (path, fields) => setDoc(ref(path), fields),
   listen: (path, next, error) => onSnapshot(ref(path), (s) => next(s.data() ?? {}), error),
   timestamp: serverTimestamp,
+  delete: (path) => deleteDoc(ref(path)),
+  deleteRequest: (path, requestId) =>
+    runTransaction(database(), async (tx) => {
+      const target = ref(path),
+        current = await tx.get(target);
+      if (current.data()?.requestId === requestId) tx.delete(target);
+    }),
 };
 export interface AiMatch {
   id: string;
@@ -79,30 +90,46 @@ export class AiServerClient {
         requestId,
         createdAt: this.io.timestamp(),
       });
+      const started = Date.now();
+      const cleanup = async () => {
+        if (this.io.deleteRequest) {
+          await this.io.deleteRequest(path, requestId).catch(() => {});
+          return;
+        }
+        if (!this.io.delete) return;
+        // An aborted photo check may have been replaced by a newer request.
+        const current = await this.io.get(path).catch(() => null);
+        if (current?.requestId === requestId) await this.io.delete(path).catch(() => {});
+      };
       return await new Promise((resolve) => {
         let unsubscribe: () => void = () => {};
         let finished = false;
-        const done = (value: DocumentData | null) => {
+        const done = (value: DocumentData | null, cleanup = false) => {
           if (finished) return;
           finished = true;
           clearTimeout(timer);
           signal?.removeEventListener('abort', aborted);
           unsubscribe();
+          if (cleanup) void removeJob();
           resolve(value);
         };
-        const timer = setTimeout(() => done(null), this.timeout);
-        const aborted = () => done(null);
+        const removeJob = cleanup;
+        const timer = setTimeout(() => done(null, true), this.timeout);
+        const aborted = () => {
+          done(null);
+          setTimeout(() => void removeJob(), Math.max(0, this.timeout - (Date.now() - started)));
+        };
         signal?.addEventListener('abort', aborted, { once: true });
         unsubscribe = this.io.listen(
           path,
           (data) => {
             if (data.answeredRequestId === requestId && ['done', 'error'].includes(data.status))
-              done(data.status === 'done' ? data : null);
+              done(data.status === 'done' ? data : null, true);
           },
-          () => done(null),
+          aborted,
         );
         if (finished) unsubscribe();
-        if (signal?.aborted) done(null);
+        if (signal?.aborted) aborted();
       });
     } catch {
       return null;

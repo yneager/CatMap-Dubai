@@ -16,6 +16,7 @@ import { UserRepository as users } from './UserRepository';
 import { UserProfileDefaults, UserProfileToDoc } from './model';
 import { NotificationRepository } from './NotificationRepository';
 import { DemoAccounts, DemoVault } from './DemoAccounts';
+import { wipeAndReload } from './LocalWipe';
 async function createProfile(user: User, username: string, displayName: string, role = 'user') {
   const b = writeBatch(database());
   b.set(ref(`usernames/${username.toLowerCase()}`), { uid: user.uid });
@@ -103,10 +104,15 @@ export const AuthRepository = {
     const user = authentication().currentUser;
     return user ? sendEmailVerification(user) : Promise.resolve();
   },
-  sendPasswordReset: (email: string) => sendPasswordResetEmail(authentication(), email.trim()),
+  sendPasswordReset: async (email: string) => {
+    try { await sendPasswordResetEmail(authentication(), email.trim()); }
+    catch (error) { if ((error as { code?: string }).code !== 'auth/user-not-found') throw error; }
+  },
   logout: async () => {
+    localStorage.setItem('catmap_pending_wipe', '1');
     await DemoVault.clear();
     await signOut(authentication());
+    await wipeAndReload();
   },
   switchDemoAccount: async (account: (typeof DemoAccounts.ALL)[number]) => {
     const password = await DemoVault.password();

@@ -1,4 +1,4 @@
-import { doc, where, writeBatch, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, where, writeBatch, updateDoc, arrayUnion, orderBy, limit } from 'firebase/firestore';
 import { database } from '../firebase';
 import { col, ref, listQuery } from './Firestore';
 import { RescueReportToDoc, type RescueReport, type UserProfile } from './model';
@@ -11,7 +11,13 @@ export const RescueRepository = {
   myReports: (uid: string) => listQuery('rescues', where('reporterId', '==', uid)),
   volunteerBoard: () =>
     listQuery('rescues', where('status', 'in', ['approved', 'in_progress', 'resolved'])),
-  allReports: () => listQuery('rescues'),
+  allReports: (status = '') =>
+    listQuery(
+      'rescues',
+      ...(status ? [where('status', '==', status)] : []),
+      orderBy('createdAt', 'desc'),
+      limit(150),
+    ),
   pending: () => listQuery('rescues', where('status', '==', 'submitted')),
   report: (id: string) => ref(`rescues/${id}`),
   submit: async (report: RescueReport, me: UserProfile) => {

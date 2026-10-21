@@ -1,0 +1,16 @@
+{
+ "model": "pet-recognition-large+detr-resnet-50/v1",
+ "provider": "DmlExecutionProvider",
+ "onnx_mb": 1163.4697742462158,
+ "load_embedder_s": 1.9882325999788009,
+ "load_detector_s": 1.3774519999860786,
+ "rss_start_mb": 1894.0,
+ "rss_detector_mb": 2060.3046875,
+ "rss_both_mb": 2321.58984375,
+ "rss_peak_mb": 2335.15625,
+ "gpu_dedicated_start_mb": null,
+ "gpu_dedicated_loaded_mb": 2261.0703125,
+ "one_photo_ms_median": 295.26549999718554,
+ "embed_one_ms_median": 241.26325000543147,
+ "embed_batched_ms_per_photo": 24.36425703126588
+}

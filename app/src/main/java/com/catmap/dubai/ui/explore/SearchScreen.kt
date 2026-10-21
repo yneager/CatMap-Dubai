@@ -54,6 +54,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.produceState
+import com.catmap.dubai.data.SearchTerms
+import com.catmap.dubai.data.safeObjects
+import com.catmap.dubai.data.model.Cat
+import com.catmap.dubai.data.model.Post
+import com.catmap.dubai.ui.components.PagingEffects
+import com.catmap.dubai.ui.components.PagingFooter
+import com.catmap.dubai.ui.components.rememberPager
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.tasks.await
 import com.catmap.dubai.R
 import com.catmap.dubai.data.Dubai
 import com.catmap.dubai.data.model.AnimalType
@@ -78,8 +89,6 @@ fun SearchScreen(nav: NavHostController) {
     val container = LocalContainer.current
     val resources = LocalResources.current
     val locale = currentLocale()
-    val posts by remember { container.communityFeed }.collectAsStateWithLifecycle(emptyList())
-    val cats by remember { container.cats.allCats() }.collectAsStateWithLifecycle(emptyList())
     var query by rememberSaveable { mutableStateOf("") }
     var type by rememberSaveable { mutableStateOf<String?>(null) }
     var category by rememberSaveable { mutableStateOf<String?>(null) }
@@ -88,25 +97,50 @@ fun SearchScreen(nav: NavHostController) {
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
     val q = query.trim().lowercase(locale)
-    // Words for animal kinds and categories match in either language, e.g. "dog" or "كلب".
-    val matchedTypes = remember(q, resources) {
-        if (q.isEmpty()) emptySet() else AnimalType.entries.filter { resources.getString(it.label).lowercase(locale).contains(q) || it.key.contains(q) }.map { it.key }.toSet()
+    // Firestore is asked only once typing pauses.
+    var settled by remember { mutableStateOf(q) }
+    LaunchedEffect(q) { delay(350); settled = q }
+    // Words for animal kinds and categories ("dog", "كلب", "lost") become filters; the other words are searched.
+    val parsed = remember(settled, resources) {
+        val types = mutableSetOf<String>()
+        val categories = mutableSetOf<String>()
+        val words = SearchTerms.words(settled).filter { w ->
+            val t = AnimalType.entries.filter { resources.getString(it.label).lowercase(locale).startsWith(w) || it.key.startsWith(w) }.map { it.key }
+            val c = PostCategory.entries.filter { resources.getString(it.label).lowercase(locale).startsWith(w) || it.key.startsWith(w) }.map { it.key }
+            types += t
+            categories += c
+            t.isEmpty() && c.isEmpty()
+        }
+        Triple(words, types.toSet(), categories.toSet())
     }
-    val matchedCategories = remember(q, resources) {
-        if (q.isEmpty()) emptySet() else PostCategory.entries.filter { resources.getString(it.label).lowercase(locale).contains(q) || it.key.contains(q) }.map { it.key }.toSet()
+    val (words, matchedTypes, matchedCategories) = parsed
+    // The longest word is asked of Firestore (all posts, newest first); the others are checked on the phone.
+    val word = words.maxByOrNull { it.length }.orEmpty()
+    val chipCategories = listOfNotNull(category).ifEmpty { matchedCategories.toList() }.sorted()
+    val browsing = word.isEmpty() && (type != null || category != null || matchedTypes.isNotEmpty() || matchedCategories.isNotEmpty())
+    val listState = rememberLazyListState()
+    val pager = rememberPager<Post>(word, browsing, chipCategories, key = { it.id }, fallback = { if (browsing) container.posts.feedQuery() else null }) {
+        when {
+            word.isNotEmpty() -> container.posts.searchQuery(word)
+            browsing -> container.posts.feedQuery(chipCategories)
+            else -> null
+        }
     }
-    val results = remember(q, posts, type, category, includeClosed, matchedTypes, matchedCategories) {
-        posts.filter { p ->
+    val page by pager.state.collectAsStateWithLifecycle()
+    val results = remember(page.items, words, type, category, includeClosed, matchedTypes, matchedCategories) {
+        page.items.filter { p ->
             (type == null || p.animalType == type) && (category == null || p.category == category) &&
+                (matchedTypes.isEmpty() || p.animalType in matchedTypes) &&
+                (matchedCategories.isEmpty() || category != null || p.category in matchedCategories) &&
                 (includeClosed || p.status == PostStatus.OPEN.key) &&
-                (q.isEmpty() || p.animalType in matchedTypes || p.category in matchedCategories ||
-                    p.keywords.any { it.startsWith(q) } || p.name.lowercase().contains(q) ||
-                    Dubai.byKey(p.neighborhood).let { h -> h.nameEn.lowercase().contains(q) || h.nameAr.contains(q) })
-        }.take(100)
+                words.all { w -> SearchTerms.matches(w, p.keywords) || p.name.lowercase().contains(w) }
+        }
     }
-    val catResults = remember(q, cats, type, category) {
-        if (q.isEmpty() || (type != null && type != AnimalType.CAT.key) || (category != null && category != PostCategory.STREET.key)) emptyList()
-        else cats.filter { it.name.lowercase().contains(q) || it.aliases.any { a -> a.lowercase().contains(q) } || Dubai.nameOf(it.neighborhood).lowercase().contains(q) }.take(20)
+    val catsWanted = word.isNotEmpty() && (type == null || type == AnimalType.CAT.key) && (category == null || category == PostCategory.STREET.key)
+    val catResults by produceState(emptyList<Cat>(), word, catsWanted) {
+        value = if (!catsWanted) emptyList() else runCatching { container.cats.searchQuery(word).limit(20).get().await().safeObjects<Cat>() }
+            .getOrDefault(emptyList())
+            .filter { c -> !c.hidden && c.mergedInto.isEmpty() && SearchTerms.words(c.name, *c.aliases.toTypedArray()).let { names -> words.all { SearchTerms.matches(it, names) } } }
     }
     val areas = remember(q) { if (q.length < 2) emptyList() else Dubai.search(q).take(3) }
 
@@ -125,7 +159,7 @@ fun SearchScreen(nav: NavHostController) {
             })
         },
     ) { padding ->
-        LazyColumn(Modifier.padding(padding).fillMaxSize().imePadding(), contentPadding = PaddingValues(bottom = 24.dp)) {
+        LazyColumn(Modifier.padding(padding).fillMaxSize().imePadding(), state = listState, contentPadding = PaddingValues(bottom = 24.dp)) {
             item {
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(AnimalType.entries,key={it.key},contentType={"animal-chip"}) { t ->
@@ -177,11 +211,13 @@ fun SearchScreen(nav: NavHostController) {
                     CategoryPill(PostCategory.STREET.key, solid = false)
                 }
             }
-            if (results.isEmpty() && catResults.isEmpty() && areas.isEmpty()) {
-                item { EmptyState(Icons.Outlined.SearchOff, stringResource(if (q.isEmpty()) R.string.search_empty_hint else R.string.no_results)) }
+            if (word.isNotEmpty() || browsing) item(contentType = "footer") { PagingFooter(page, pager::loadMore) }
+            if (results.isEmpty() && catResults.isEmpty() && areas.isEmpty() && (page.end || (word.isEmpty() && !browsing))) {
+                item { EmptyState(Icons.Outlined.SearchOff, stringResource(if (q.isEmpty() && !browsing) R.string.search_empty_hint else R.string.no_results)) }
             }
         }
     }
+    PagingEffects(pager, page, results.size, list = listState)
 }
 
 @Composable

@@ -1159,6 +1159,9 @@
     <string name="photo_not_animal">This looks like %1$s, not an animal.</string>
     <string name="photo_not_animal_unnamed">This photo doesn\'t look like an animal.</string>
     <string name="photo_not_animal_action">Remove it and add a photo of the animal to continue.</string>
+    <string name="load_more">Load more</string>
+    <string name="older_messages">Show older messages</string>
+    <string name="search_more_letters">Type at least 2 letters to search</string>
     <string name="tier_strong">تطابق محتمل قوي</string>
     <string name="tier_possible">تطابق محتمل</string>
     <string name="tier_weak">تطابق ضعيف</string>

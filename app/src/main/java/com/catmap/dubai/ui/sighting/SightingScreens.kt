@@ -127,7 +127,7 @@ fun SightingDetailScreen(nav: NavHostController, sightingId: String) {
             if (s.photoIds.isNotEmpty()) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(s.photoIds, key = { it }, contentType = { "photo" }) { id ->
-                        RemoteImage(id, Modifier.size(200.dp).clip(RoundedCornerShape(14.dp)).clickable { nav.navigate(Routes.photo(id, s.catId)) }, thumb = false)
+                        RemoteImage(id, Modifier.size(200.dp).clip(RoundedCornerShape(14.dp)).clickable { nav.navigate(Routes.photo(id, s.catId)) })
                     }
                 }
             }

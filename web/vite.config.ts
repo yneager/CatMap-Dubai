@@ -59,6 +59,8 @@ export default defineConfig(({ command, mode }) => {
           maximumFileSizeToCacheInBytes: 3000000,
           navigateFallback: '/index.html',
           cleanupOutdatedCaches: true,
+          runtimeCaching: [],
+          navigateFallbackDenylist: [/^\/(?:__|v1)\//],
         },
       }),
     ],
@@ -83,6 +85,7 @@ export default defineConfig(({ command, mode }) => {
     },
     preview: { port: 4173, strictPort: true },
     build: {
+      target: 'es2022',
       rollupOptions: {
         output: {
           manualChunks: (id: string) =>

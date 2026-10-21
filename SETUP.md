@@ -136,8 +136,11 @@ and you can check any time from **Settings → Check for updates**.
    * `CATMAP_KEY_PASSWORD`
 
    Also add these:
-   * `GOOGLE_SERVICES_JSON`: the full text of `app/google-services.json`.
+   * `GOOGLE_SERVICES_JSON` (required since the major update): the full text of `app/google-services.json`.
    * `MAPTILER_KEY`: optional.
+
+   Better still, put them in the `release` environment and turn on the other protections in
+   `docs/security/GITHUB_SETTINGS.md`.
 
 **Each release**
 
@@ -146,9 +149,13 @@ git tag v0.0.3
 git push origin v0.0.3
 ```
 
-The **Release APK** workflow runs the unit tests, builds the signed APK with that version, checks the
-signature, and attaches `CatMap-0.0.3.apk` to a new GitHub Release. The version must go up each time
-(0.0.3 → 0.0.4 → 0.1.0 → 1.0.0). Releases so far: v0.0.1 and v0.0.2. Edit the release text on GitHub if you like, because it is shown in the update dialog.
+The **Release APK** workflow checks that the tag is a new version on `main`, runs the unit tests and lint, waits
+for your approval of the `release` environment (once that's set up), builds the signed APK, checks its package
+name, version and signing certificate against the known one, and creates a new GitHub Release with
+`CatMap-<version>.apk`, its `.sha256`, a dependency list, an SBOM and a build attestation. It never replaces an
+existing release: a mistake needs a new version. The version must go up each time
+(0.0.9 → 0.1.0 → 0.1.1 → 1.0.0). Edit the release text on GitHub if you like, because it is shown in the update
+dialog (as plain text).
 
 **First install on a phone:** download the APK from the release page and allow "Install unknown apps"
 for the browser. If the phone has a debug build from Android Studio, uninstall that first. It is signed

@@ -58,6 +58,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.catmap.dubai.BuildConfig
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.catmap.dubai.data.NotificationRepository
+import com.catmap.dubai.data.model.AppNotification
+import com.catmap.dubai.ui.components.PagingFooter
+import com.catmap.dubai.ui.components.rememberPager
 import com.catmap.dubai.R
 import com.catmap.dubai.data.AppSettings
 import com.catmap.dubai.data.DemoAccounts
@@ -88,8 +93,16 @@ fun NotificationsScreen(nav: NavHostController) {
     val context = LocalContext.current
     val runner = rememberRunner()
     val uid = container.session.uid ?: return
-    val items by remember(uid) { container.notifications.notifications(uid) }.collectAsStateWithLifecycle(null)
+    val live by remember(uid) { container.notifications.notifications(uid) }.collectAsStateWithLifecycle(null)
     var confirmClear by remember { mutableStateOf(false) }
+    // Below the newest alerts (live), older ones are read a page at a time when asked for.
+    val oldestLive = live?.takeIf { it.size >= NotificationRepository.WINDOW }?.lastOrNull()?.createdAt
+    val older = rememberPager<AppNotification>(uid, oldestLive != null, key = { it.id }) {
+        oldestLive?.let { container.notifications.olderQuery(uid, it) }
+    }
+    val olderPage by older.state.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
+    val items = live?.let { l -> (l + olderPage.items).distinctBy { it.id } }
 
     Scaffold(
         topBar = {
@@ -103,7 +116,7 @@ fun NotificationsScreen(nav: NavHostController) {
         },
     ) { padding ->
         val list = items
-        LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
+        LazyColumn(Modifier.padding(padding).fillMaxSize(), state = listState, contentPadding = PaddingValues(vertical = 8.dp)) {
             if (list != null && list.isEmpty()) item { EmptyState(Icons.Outlined.NotificationsNone, stringResource(R.string.no_notifications)) }
             items(list.orEmpty(), key = { it.id }, contentType = { "SettingsAndNotifications" }) { n ->
                 val (title, body) = NotificationText.format(context, n)
@@ -112,7 +125,8 @@ fun NotificationsScreen(nav: NavHostController) {
                         .fillMaxWidth()
                         .clickable {
                             runner.run { if (!n.read) container.notifications.markRead(uid, n.id) }
-                            if (n.route.isNotBlank()) nav.navigate(n.route)
+                            // Only the screens alerts may open; an unknown route must not crash the inbox.
+                            com.catmap.dubai.util.AppRoutes.alert(n.route)?.let { route -> runCatching { nav.navigate(route) } }
                         }
                         .background(if (n.read) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f))
                         .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -146,12 +160,13 @@ fun NotificationsScreen(nav: NavHostController) {
                             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    IconButton(onClick = { runner.run { container.notifications.delete(uid, n.id) } }) {
+                    IconButton(onClick = { runner.run { container.notifications.delete(uid, n.id); older.remove(n.id) } }) {
                         Icon(Icons.Default.Delete, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.outline)
                     }
                 }
                 HorizontalDivider()
             }
+            if (oldestLive != null) item(contentType = "footer") { PagingFooter(olderPage, older::loadMore) }
         }
     }
     if (confirmClear) {

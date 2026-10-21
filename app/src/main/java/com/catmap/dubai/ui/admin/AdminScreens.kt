@@ -58,6 +58,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.catmap.dubai.ui.components.PagingEffects
+import com.catmap.dubai.ui.components.PagingFooter
+import com.catmap.dubai.ui.components.rememberPager
 import com.catmap.dubai.R
 import com.catmap.dubai.data.Dubai
 import com.catmap.dubai.data.model.Cat
@@ -232,7 +236,9 @@ fun MergeQueueScreen(nav: NavHostController) {
     val container = LocalContainer.current
     val runner = rememberRunner()
     val requests by remember { container.cats.mergeRequests() }.collectAsStateWithLifecycle(null)
-    val cats by remember { container.cats.allCats() }.collectAsStateWithLifecycle(emptyList())
+    // Only the profiles the open requests name.
+    val ids = requests.orEmpty().flatMap { listOf(it.primaryCatId, it.duplicateCatId) }.distinct()
+    val cats by remember(ids) { container.cats.catsByIds(ids) }.collectAsStateWithLifecycle(emptyList())
     val me by container.session.profile.collectAsStateWithLifecycle()
     var deciding by remember { mutableStateOf<Pair<MergeRequest, Boolean>?>(null) }
 
@@ -523,9 +529,12 @@ private fun targetTypeLabel(type: String): String = when (type) {
 @Composable
 fun ModLogScreen(nav: NavHostController) {
     val container = LocalContainer.current
-    val actions by remember { container.moderation.actions() }.collectAsStateWithLifecycle(null)
+    val listState = rememberLazyListState()
+    val pager = rememberPager<com.catmap.dubai.data.model.ModAction>(pageSize = 40, key = { it.id }) { container.moderation.actionsQuery() }
+    val page by pager.state.collectAsStateWithLifecycle()
+    val actions = page.items.takeIf { page.loaded }
     Scaffold(topBar = { AppTopBar(stringResource(R.string.moderation_log), onBack = { nav.popBackStack() }) }) { padding ->
-        LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(Modifier.padding(padding).fillMaxSize(), state = listState, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (actions?.isEmpty() == true) item { EmptyState(Icons.Outlined.History, stringResource(R.string.no_actions)) }
             items(actions.orEmpty(), key = { it.id }, contentType = { "AdminScreens" }) { a ->
                 Column(Modifier.fillMaxWidth()) {
@@ -536,6 +545,8 @@ fun ModLogScreen(nav: NavHostController) {
                     androidx.compose.material3.HorizontalDivider(Modifier.padding(top = 8.dp))
                 }
             }
+            item(contentType = "footer") { PagingFooter(page, pager::loadMore) }
         }
     }
+    PagingEffects(pager, page, actions?.size ?: 0, list = listState)
 }

@@ -164,6 +164,8 @@ fun CommunityMap(
     onMapClick: () -> Unit = {},
     onCameraIdle: (LatLng) -> Unit = {},
     onCameraMoveStarted: () -> Unit = {},
+    /** The visible box (south, west, north, east) whenever the camera stops, and once when the map is ready. */
+    onViewport: ((Double, Double, Double, Double) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val resources = androidx.compose.ui.platform.LocalResources.current
@@ -175,6 +177,7 @@ fun CommunityMap(
     val clickMap by rememberUpdatedState(onMapClick)
     val idle by rememberUpdatedState(onCameraIdle)
     val moveStarted by rememberUpdatedState(onCameraMoveStarted)
+    val viewport by rememberUpdatedState(onViewport)
 
     val mapView = remember {
         MapLibre.getInstance(context)
@@ -284,11 +287,13 @@ fun CommunityMap(
                     MapMemory.bearing = cam.bearing
                 }
                 idle(target)
+                viewport?.let { report -> map.reportViewport(report) }
             }
             mapView.addOnStyleImageMissingListener { id ->
                 holder.style?.let { style -> runCatching { style.addImage(id, holder.markers.bitmap(id)) } }
             }
             mapReady = true
+            viewport?.let { report -> map.reportViewport(report) }
         }
     }
 
@@ -513,6 +518,11 @@ private fun pulseColor(icon: String): String = when {
     icon.startsWith("p:needs_help") -> "#FB8C00"
     icon == MarkerIcons.RESCUE || icon.endsWith(":true") -> "#E53935"
     else -> "#7C4DFF"
+}
+
+private fun MapLibreMap.reportViewport(report: (Double, Double, Double, Double) -> Unit) {
+    val box = runCatching { projection.visibleRegion.latLngBounds }.getOrNull() ?: return
+    report(box.latitudeSouth, box.longitudeWest, box.latitudeNorth, box.longitudeEast)
 }
 
 private fun colorHex(argb: Long): String = String.format("#%06X", argb and 0xFFFFFF)

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.CancellationException
 import com.catmap.dubai.notifications.PushService
+import com.google.firebase.appcheck.FirebaseAppCheck
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,12 @@ class CatMapApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        // App Check first, before any Firebase call, so requests carry its token. Monitoring only; the local emulators
+        // don't check it.
+        if (container.firebaseReady && BuildConfig.EMULATOR_HOST.isEmpty()) {
+            runCatching { FirebaseAppCheck.getInstance().installAppCheckProviderFactory(AppCheckSetup.factory()) }
+        }
+        container.finishPendingWipe()
         AppErrors.init(this)
 
         // The map initializes lazily on its UI thread in CommunityMap, when it is actually shown.

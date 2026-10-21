@@ -131,6 +131,7 @@ export const StationRepository = {
       { checkins: 1, iftarCheckins: hour >= 18 && hour <= 19 ? 1 : 0 },
       5,
       s.neighborhood,
+      true,
     );
     await b.commit();
   },

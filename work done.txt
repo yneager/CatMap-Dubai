@@ -1,66 +1,108 @@
-CATMAP WEB - ROUND 2 IMPLEMENTATION REPORT
-14 October 2026. Source brief: CLAUDE_TO_CODEX.txt (round 2).
+CatMap Web round 3 - 21 October 2026
+==================================
 
-SCOPE AND SAFETY
-All three WEB_TODO items, the install-only gate, app behavior, and production map regression coverage have been implemented locally. Final results are below. No commits, pushes, tags, deploys, console changes or production Firebase requests were made in this run. No forbidden credential/configuration file or cat-server file was inspected, printed or edited. Android source, rules, indexes and CI were not changed. Existing owner/Claude changes were retained, including the higher-specificity map selector. The report itself is the explicit root-file exception in section 9.
+Status: implementation ready for Claude's review; release verification is INCOMPLETE.
+No commit, push, tag or deployment. Production Firebase was not contacted. Existing Android/rules/index work was preserved. Restricted credentials, web/.env.local and cat-server were not inspected/copied. No new dependency.
 
-SECTION 4 - INSTALL-ONLY APP
-web/src/platform/install.ts: one standalone/fullscreen/navigator.standalone helper; early beforeinstallprompt/appinstalled listeners; platform detection. web/src/platform/InstallRoot.tsx: full-screen themed/RTL gate, iOS Share steps and original inline icon, iPhone bottom/iPad top Share arrow, iOS 26 Open as Web App instruction, Safari handoff and Copy link for recognized in-app browsers, Android prompt/menu fallback, desktop QR and optional install.
-web/src/main.tsx and platform/Runtime.tsx: the gate sits outside a lazy runtime. Normal-tab gates do not import Firebase or mount AppProvider/Auth/Firestore listeners. Only local appearance settings are loaded. Install events are captured before React renders. The old dismissible iOS banner was removed from App.tsx.
-web/vite.config.ts: production gate is always on and rejects VITE_INSTALL_GATE=off. Emulator dev/builds skip it by default; VITE_INSTALL_GATE=on enables gate tests. No query/storage bypass exists. Manifest id=/, start_url=/map, scope=/, standalone display/display_override, portrait. The existing production-emulator safety guard remains.
-web/index.html: zoom-limited viewport, light/dark theme-color metas, Apple/mobile capable, black-translucent status bar and launch-image links. web/tools/generate-splash.py creates 16 images from the existing icon: light/dark at 375x812@3, 390x844@3, 393x852@3, 402x874@3, 420x912@3, 430x932@3, 440x956@3, 414x896@2. Total 392,504 bytes, well below 1.5 MB.
-Choices: recognized in-app brands and generic Mobile WebKit UAs lacking Safari/CriOS/FxiOS/EdgiOS/OPiOS markers receive the Safari handoff. Other unrecognized iOS browser UAs use the Safari-style instructions. In-app detection is necessarily heuristic; a website cannot inspect a browser's native Share menu. Android deep links remain within manifest scope. iPhone home-screen launch starts at /map, as the brief permits. Desktop F11/fullscreen follows the brief's installed definition. An appinstalled event alone displays the launch instruction; it does not unlock a normal tab.
+1. Changes by WEB_TODO item and brief section
+-------------------------------------------
 
-SECTION 5 - APP BEHAVIOR
-web/src/platform/appFeel.ts and appFeel.css, main.tsx, theme.css: fixed-height shell with internal scrolling; hidden scrollbars, no body/page scroll, no selection except editable fields, no image dragging or link/image callouts, no default context menu outside fields, touch tap highlights removed, keyboard-only focus outlines, hover effects restricted to fine hover pointers.
-Page gesture zoom, desktop modifier wheel and +/-/0 are suppressed. Every form control computes to at least 16px. Map gestures and photo zoom stay active. PhotoViewer.tsx also fixes an actual pinch bug: capture the ratio before React's deferred state update, so pointer-up cannot reset its denominator and force maximum zoom.
-WebKit in this installed Playwright build has no overscroll-behavior support (CSS.supports=false and empty computed values). CSS declares none for html/body, while the fixed frame and touch-edge prevention also stop overscroll on that engine. Tests exercise the fallback, not a falsely claimed computed property.
-App.tsx uses leading-edge swipe-back (20px start, left English/right Arabic); content follows the finger, with a 90px/25% completion threshold. Root tabs, editable fields, open dialogs and map/photo gesture targets are excluded. Back still uses browser history. Internal anchors remain in-window; external HTTP links use an outside window with noopener/noreferrer; phone/mail/application links retain their system handlers. Android message UI has no text-selection/copy handler to port; editable fields retain native selection.
-platform/updates.ts centralizes registration/update state, shared by App's existing in-app update banner and Settings -> About -> Check for updates. The title remains CatMap Dubai in both languages. Safe-area variables resolve to env(safe-area-inset-top/bottom); top bars and bottom navigation honor them.
+Missed in earlier rounds:
+- Post and cat sharing: Android-style summaries and cover JPEG files when navigator.canShare permits them, text/link fallback, clipboard fallback without Web Share. Existing post button retained; cat top-bar action added. Files: web/src/util/share.ts, web/src/ui/posts/PostDetailScreen.tsx, web/src/ui/cats/CatScreens.tsx.
+- Directions on post/rescue detail use stored public/report coordinates only, never privateLocations. Files: PostDetailScreen.tsx, RescueScreens.tsx.
+- Breed traits: all nine Android IDs, including white_deafness/gray, translated trait text and disclaimer. Files: web/src/ai/CatAnalyzer.ts, web/src/ui/components/BreedTraits.tsx, cat/new-sighting screens.
+- Admin match/reunion block: eight aggregate count queries for tiers, owner answers, credited/confirmed/verified reunions; chart labels/descriptions. Files: web/src/data/AdminAnalytics.ts, web/src/ui/admin/AdminScreens.tsx.
+- Chat View profile, update-form Add my location (Android rounding), sighting/progress success messages and owner adoption-request entry. Files: MessagesScreens.tsx, PostDetailScreen.tsx.
+- Metadata/multiple-subject/medical hints and JPEG metadata/thumbnail tests. Files: PostEditorScreen.tsx, SightingScreens.tsx, web/src/util/images.ts, web/e2e/local-hardening.spec.ts.
+- Reviewed all 264 unused-string entries. Per-key dispositions and intentionally unused native/browser wording: web/docs/round3-string-audit.txt. Additional gaps fixed: coat-based name suggestions, rejected AI suggestions disappearing, community health observations, source/accuracy text, next-level/re-application hints, station nearby-cat selection and empty states. Web-only name strings are in tools/strings/strings_web.py, Arabic equals English with TODO-AR; ran the shared generator. No Android strings hand-edited.
 
-SECTION 6 - PRODUCTION MAP REGRESSION
-The pre-existing .community-map > .map-canvas specificity fix is preserved. The only lazily imported library CSS is MapLibre's; all fonts and app CSS are entry imports. App overrides use higher specificity, including compact map geometry. LocationField's compact picker is now 320px high.
-web/e2e/preview-map.spec.ts tests the actual production-emulator JS/CSS/worker: full and compact map container heights >300px, nonzero canvas sizes, isStyleLoaded(), map double-tap zoom, photo double-tap/pinch, zoom prevention, internal scrolling, RTL/LTR edge back and 393x852/430x932 insets. A deterministic valid style is intercepted to avoid tile-provider/network outages; real external tile imagery is not asserted. The test map reference is attached only in emulator builds.
-web/tools/preview-tests.mjs and playwright.config.ts add Chromium-preview and WebKit-preview projects to default test runs. They build to ignored .preview-dist and serve on 4318. Existing dev projects remain because their schema/image fixtures import source modules. Gate projects run an emulator app with the gate on at 5174. Default Playwright runs include all six projects; no CI workflow was edited (outside this round's scope).
+Phase 2:
+- areaFollows now stores neighborhoods/updatedAt only. Centre is in users/<uid>/private/areaFollow in the same batch. Unfollow deletes both; screen combines them with legacy fallback; migration removes public lat/lng/radiusKm once per account using area_follow_private_<uid>. Export includes the private document. Files: PostRepository.ts, PostLists.tsx, state.tsx, UserDataExport.ts.
+- All 26 generated FromDoc readers validate scalars, finite numbers, maps/list entries, timestamps and nested rescue updates. Wrong fields get defaults. Files: web/tools/generate-models.py and web/src/data/model/ outputs.
+- Unknown-email sign-in maps to wrong credentials; reset swallows user-not-found. Files: Firestore.ts, AuthRepository.ts.
+- Check-in, merge-suggestion and reunion awards stamp rateLimited=true. Files: StationRepository.ts, CatRepository.ts, PostRepository.ts, MatchRepository.ts.
 
-SECTION 7 - ANDROID 0.0.8 PARITY
-PostChooser.tsx: Animal Spotted first, using chooser_street only in the chooser. Other street-animal wording stays unchanged.
-PostSteps.ts and PostEditorScreen.tsx: TYPE, PLACE, PHOTOS, DETAILS, CONTACT, REVIEW. Menu presets start at PLACE. Street posts have five visible steps, skip Contact in both directions, and publish in_app with empty phone/email. Drafts save stepName plus a numeric compatibility field; restore prefers the name, then maps old numeric positions through the old order. An old street draft on CONTACT resumes REVIEW instead of displaying a forbidden Contact step. PostDraftStore.ts preserves existing saved photos/post fields.
-PhotoCheck.ts and AiServer.ts: one kind=check job, up to six 320px JPEGs, optional cropped query plus nearest eight open street candidates within 1km, request/answeredRequestId matching, 390-second health window, 15-second timeout, throttling and cancellation. Classification preserves kind/type/phrase/score, checks batch length and safely treats missing/malformed answers as unknown.
-usePhotoCheck.ts: caches verdicts by local photo key, rechecks new photos and changed cover/location, filters candidates by animal type after the answer, auto-fills cover type only until manually picked, and falls back to unknown classification plus the existing >=0.85 color fingerprint matches. Like Kotlin, already-checked unchanged photos are not sent again just because a non-street photo is removed. Outdated requests cannot update the current photo list.
-PostEditorScreen.tsx: checking spinner, red photo outline and phrase, error/action card, blocked Next/Publish, and Already on the map? on Photos and Review. New matching happens before details. Existing add-to-post and publish-anyway confirmation remain.
-Tests: post-flow.test.ts covers parsing, blocking, unknown/bad answers, visible steps and old/new draft restoration. install.test.ts covers iPad/embedded/Android/version detection. photo-check.spec.ts uses fake-photo-worker.ts: a disposable account signs into the Auth emulator with catmapAiWorker, writes heartbeat and answers through the actual worker rules. It blocks a person, accepts a replacement animal and fills dog. Legacy duplicate, posting and screenshot flows use the new order.
+Phase 3:
+- Photo cache: 30 days, 80 MiB, disk and URL hits refresh LRU. Generation guard prevents in-flight loads repopulating a wiped cache. File: ImageRepository.ts.
+- AI cleanup: exact answer or 15-second timeout; cancellation/listener failure schedules cleanup for the timeout, never an early delete. Transaction checks requestId so a newer job is safe. Account deletion waits out a fresh pending job. Files: AiServer.ts, AccountDeletion.ts.
+- Admin analytics use counts; stale-post checks run at most twice daily. No Android background polling/worker sweep added to web.
 
-STRINGS, ASSETS AND DEPENDENCIES
-15 new web-only strings were appended to tools/strings/strings_web.py; Arabic repeats English with TODO-AR. Generated JSON has 1201 strings plus unread_notifications (1202 keys) per language. Existing 1162 Android strings and both XML files are unchanged. No dependency was added or changed. The splash script uses the already-installed Pillow, not a new npm dependency. Existing generated icons/fonts were reused.
+Phase 4:
+- Ported Geohash and Android's canonical shared test vectors. Posts create/edit and cat creation/movement/merge derive geoCells from stored positions. Files: Geohash.ts, PostRepository.ts, CatRepository.ts.
+- Viewport plan: precision 6/5/4, at most six cells, per-cell floor(300/cells) clamped 40..150, three concurrent cells. 24-hour stamps, complete-parent reuse, disappeared-pin reconciliation, week-old cache pruning on reopen. Two changes-since listeners: one-hour overlap and limit 300; overflow invalidates cells. Pin-only saved copy per account in IndexedDB. Missing-index area fallback uses old 400/800 queries; missing change-listener index leaves area loading working. Files: MapArea.ts, MapRepository.ts, useMapArea.ts, CommunityMap.tsx, MapScreen.tsx.
+- Removed the global whole-feed listener and retired old feed/allCats APIs. Saved map fields omit contact details, descriptions and exact private locations.
 
-CHECK RESULTS
-All required local checks passed. No command was refused by automatic approval review in this round.
-- npm.cmd run lint: passed.
-- npm.cmd run typecheck: passed (also included by both successful builds).
-- npm.cmd test: Test Files 5 passed (5); Tests 39 passed (39).
-- npm.cmd run strings:check: 93 source files, 1202 keys per language.
-- python tools/strings/build_strings.py . --check: missing []; unused []; 1162 Android strings; 1201 web strings plus unread_notifications. Android XML unchanged.
-- npm.cmd run build: passed, normal production mode with the install gate on; 92 precache entries, 4250.97 KiB. Log: web/round2-results/build-production.log. This package was not published or opened against production Firebase.
-- npm.cmd run build -- --mode emulators: passed with isolated local ports/project; 92 precache entries, 4248.30 KiB. Log: web/round2-results/build-emulators-final.log.
-- Production negative guard: VITE_INSTALL_GATE=off, VITE_USE_EMULATORS=false, node node_modules/vite/bin/vite.js build was rejected before building, as expected. Log: production-guard.log.
-- Full E2E: npx.cmd playwright test --grep-invert 'visual screenshots|production manifest' --reporter=line: 34 passed (12.4m), zero failed. This covered 12 regular scenarios per engine, 2 preview scenarios per engine and 3 gate scenarios per engine. Log: full-ready.log.
-- Final targeted platform run after mobile-device/touch/webview refinements: CATMAP_PWA=true npx.cmd playwright test e2e/pwa.spec.ts e2e/preview-map.spec.ts e2e/install-gate.spec.ts --reporter=line: 12 passed (1.1m), zero failed. This overlaps 10 full-suite platform cases and adds the 2 production-offline cases; it is not 12 extra unique cases. Log: platform-accepted.log.
-- Production PWA in both engines: 87 cached assets; persistent login and Explore survive reload with the test-owned origin stopped. Chromium additionally disconnected network; WebKit uses origin shutdown due to its known offline-emulation issue. Manifest name/display/display_override/id/scope/orientation/maskable icons passed. Worker/cache and the installed app's lazy runtime were exercised.
-- Final preview projects use Pixel 7 Chromium and iPhone 15 WebKit at 393x852. Native touchscreen taps are placed on an unoccupied canvas point, with page focus and 100ms between taps. map.getZoom() increases. Before the final platform run, WebKit passed 3 consecutive repetitions (55.6s): mobile-paced.log. Photo double-click and synthetic pointer-touch pinch passed (scale 3.4); overscroll/gesture/modifier-zoom/context-menu/16px controls and RTL/LTR back/inset checks passed.
-- npm.cmd run screens: 3 passed (6.0m), zero failed; 214 PNGs (72 light, 71 dark, 71 Arabic), 54 concrete routes per variant plus sheets, auth, editor and component fixtures. Log: screens-final.log. Viewed the location/photo sequence, the install gate, and 393x852/430x932 phone renders with simulated 59px top/34px bottom insets; controls clear the protected areas.
-- Splash generation: 16 portrait PNGs; 392,504 bytes total. No new npm or Python dependency was installed.
-- git diff --check: passed. Protected Android/rules/index/CI/release/shared-generator paths have no diff. Existing owner edits and staged deletions were preserved.
-All logs and diagnostic scripts are in ignored web/round2-results or normal ignored test result folders, not docs. All three completed WEB_TODO items were removed and the requested empty-list/date/version line restored.
+Phase 5:
+- SearchTerms matches Android word/prefix order, first 25/last 6 words, prefixes 3..7 and cap 200. Updates on post saves and cat creation/rename/alias/merge. Files: SearchTerms.ts, repositories, generated models.
+- Search: 350 ms debounce, animal/category words as filters, longest other word plus its seven-letter prefix queried, remaining terms/chips/closed flag checked locally. Posts page at 25; cat search at 20. Files: SearchQuery.ts, ExploreScreen.tsx.
+- Cursor pages with startAfter document snapshots, never offsets: Explore, Adoption, Cats and admin posts/users/sitters/log. Sparse filtered pages refill up to 150 automatically, then explicit Load more; Refresh/downward pull resets the cursor. Category/adoption/neighborhood missing-index fallback retains local filters. Search itself needs its index and reports failures. Files: Pager.ts, usePager.tsx and those screens.
+- Nearest uses map area data. Nearby: duplicate posts 3 km, same-animal posts 1 km, sighting cats 3 km, station cats 0.8 km, merge suggestions 5 km or by name. Without a sighting position, newest 300 cats as Android does. Favorites read individual posts; cats/followed profiles use ID chunks of 30; profile contributions query contributors. Backup matching asks for newest 200 opposite-side posts. Files: repositories and editor/sighting/station/cat/profile/match screens.
+- Live windows: inbox 30, chat 50, updates 30, with cursor-based older-item loading/deduplication. Rescue moderation: newest 150 and server-side status chips. Files: NotificationRepository.ts, ChatRepository.ts, PostRepository.ts, RescueRepository.ts, useOlder.ts and screens.
 
+Phase 6:
+- JPEG re-encode everywhere. Full cap 650,000 bytes; thumbnails retain 72 starting quality with a 190,000-byte cap. Browser tests inject an EXIF/GPS-like APP1 block and check its absence in both outputs, FF D8 FF headers and rule-compatible sizes.
+- One write per alert recipient, including non-deduplicated sends; one block cannot cancel everyone else. File: NotificationRepository.ts.
+- Chat/rescue/sighting strips use thumbnails; tapping opens full viewer. AI crops remain at most 320 px. Worker-only changes have no web edit.
 
-INTERMEDIATE FAILURES / REPAIRS
-Initial focused run: install cases passed, while ambiguous Back selectors failed in the photo test; those now target the editor footer. The photo pinch test exposed and fixed the deferred-ratio bug. This WebKit engine cannot compute unsupported overscroll CSS; the test now verifies support where present and touch-edge prevention everywhere. Swipe tests initially started before a lazy screen committed; they now wait for the committed route and two frames. An initial full run switched offline after language initialization but before the lazy runtime loaded; the test now waits for the signed-in settings route before disconnecting. The common navigate helper now waits for the mounted app and committed route before dispatching history events after a reload. Rejected photos also exposed a navigation trap in earlier steps; the block is now confined to Photos/Review, and the return path is tested. A capture-script step-index replacement also tried to fill Details on Place; the capture condition was corrected. A too-fast WebKit tap sequence was intermittent; the test now focuses the page and uses an empty canvas point with human-paced taps. A temporary diagnostic once emitted an ephemeral emulator credential in a verbose error; its error output was then sanitized. No password is in this report or tracked source; the disposable emulator state is discarded at shutdown. These failed/interrupted runs are not the acceptance evidence.
+Phase 7:
+- Logout/deletion sign out, terminate Firestore, clear its IndexedDB persistence, revoke photo URLs, clear photo/map/draft/delivery/vault/account data and GPS, reset account preferences, and remove known account localStorage/sessionStorage data. Language/theme/large-text/install preferences and app precache remain. Account IDB writes are blocked during wipe. Persistent recovery marker finishes an interrupted wipe before queries. Other tabs release persistence when sign-out begins. Files: LocalWipe.ts, DeviceWipe.ts, util/idb.ts, firebase.ts, AuthRepository.ts, AccountDeletion.ts, ImageRepository.ts.
+- Inbox and stale-post action navigation uses the exact Android allowlist and alphanumeric-first IDs. Invalid routes do nothing. Files: util/AppRoutes.ts, SettingsAndNotifications.tsx.
+- No web push/system notifications added. Android private-intent key, lock screen, network manifest and APK installer remain native features.
 
-LIMITATIONS / OWNER STEPS
-A real installed iPhone/iPad, actual notch/status-bar/home-indicator, Safari/Chrome/Edge native menus, physical multi-touch/keyboard and storage separation/eviction cannot be verified with desktop WebKit. Browser tests synthesize touch/prompt/display-mode events. Phone-layout tests simulate 59px top /34px bottom insets and retain screenshots in round2-results; ordinary route captures remain in docs/screens. Actual tile-provider imagery and real PC model inference were not exercised; the worker protocol was exercised with a real claimed emulator account. No file in cat-server was touched.
-No production deployment, production security headers, live rules/worker state or hosted CI run is claimed. Existing round-1 visual differences remain documented in web/docs/parity.md. The initial worktree already contained Claude's map fix and edits to the brief/HANDOFF plus staged deletions; these were preserved rather than attributed to this run.
-Next: Claude reviews this report and the changed web files; the owner approves the changes and then runs web/publish.cmd. Real-phone install/photo/share/GPS checks follow on the deployed app. The agent did not run publish.cmd or any deployment command.
+Phase 9:
+- Regenerated model serializers retain Kotlin field allowlists, omit document IDs and round integer fields. Compared current capped collection writes with models/rules. Chat updates change only the sender's own name/photo and keep previews bounded. Actual server acceptance is emulator-unverified here.
+- App Check initializes before Firestore only with nonempty VITE_RECAPTCHA_SITE_KEY and emulator mode off: ReCaptchaEnterpriseProvider, auto refresh, monitoring only. Empty placeholder in web/.env.example; no actual key read/written. File: firebase.ts.
 
-FINAL CLEANUP
-Stopped the verified task-owned isolated Firebase emulator process tree (three processes). All round-2 test service ports are closed: 5173, 5174, 4317, 4318, 8180, 9098, 9198, 4402, 4502 and 9150. Disposable test accounts/state were discarded without export. No unrelated emulator or owner service was stopped.
+Hosting/service worker (brief section 6):
+- firebase.json hosting CSP now uses explicit Firebase REST/App Check, Google/gstatic, maps and GitHub origins, removing wildcard origins. No unsafe-eval/wildcard. Retained frame-ancestors none, object-src none, nosniff, referrer and permissions policies; allowed Google's App Check frame.
+- Added HSTS max-age=31536000 and COOP same-origin. Email/password sign-in has no popup-opener dependency; directions use noopener. Deployed header/App Check behavior remains unverified.
+- VitePWA has runtimeCaching: [] and only built-file precaching; reserved endpoints excluded from navigation fallback. Device wipe discards non-precache Cache Storage entries. Unit check asserts cache/header constraints. ES2022 target supports awaited startup recovery.
+
+2. Choices
+----------
+- Used Android's observed individual-post favorite reads: an in-query containing a deleted post fails current rules. Cats still use ID chunks.
+- Copied shared vectors from Android; did not open cat-server because access is prohibited by the brief.
+- Web wipes drafts too to honor nothing of the account in the browser; Android retains per-account drafts. Presentation/install preferences stay.
+- No alternate-account offline authentication invented. Offline scenarios cover sign-out, then authenticating the next account online and checking isolation offline; Firebase password sign-in needs a connection.
+- Transactional AI cleanup adds a read but prevents deletion of a replacement job. Canceled jobs wait until timeout.
+- Google Maps universal directions URLs use only stored public/report coordinates.
+- Native pickers/number controls and existing translated screen wording replace duplicate Android labels. All 264 keys have individual dispositions.
+- No rules/index changes were necessary for the ported Android contract. Owner deployment and backfill remain required.
+
+3. Checks and read counts
+------------------------
+Completed local summaries:
+- npm.cmd run lint: exit 0, no errors.
+- npm.cmd run typecheck: exit 0, no TypeScript errors.
+- npm.cmd test: Test Files 8 passed (8); Tests 93 passed (93).
+- npm.cmd run strings:check: String keys checked: 111 source files, 1316 keys per language.
+- npm.cmd run build: success; PWA generateSW, precache 111 entries (4352.55 KiB). Existing map/Firebase large-chunk warning remains.
+- python tools/strings/build_strings.py . --check: missing: []; checked 1267 strings per language; checked 1315 web strings plus unread_notifications per language. Android-only unused search_more_letters is informational; web now uses it; exit 0.
+- Scoped git diff --check: pass after removing a trailing blank line from the generator.
+- npm.cmd run test:e2e -- e2e/local-hardening.spec.ts --project=chromium --project=webkit --reporter=line: final completed run: 6 passed (7.7s), 3 per browser: EXIF/size, actual PostCard/plain-text rendering, interrupted-wipe recovery.
+- npm.cmd run test:e2e -- e2e/major-update.spec.ts --list: Total: 12 tests in 1 file. Discovery is not execution.
+
+Blocked, NOT passes:
+- Isolated fixtures copied current rules/indexes byte-for-byte. Starting demo-catmap-web-test on isolated ports failed while fetching firebase-tools@15.34.0: EACCES to registry.npmjs.org. A version probe failed likewise. The brief says not to bypass refused commands; no workaround/escalation/alternate download was attempted.
+- tools/rulestest: node test.mjs ../../firestore.rules: exit 1, ECONNREFUSED 127.0.0.1:8080. No rule pass count can be claimed. Brief says 485; newest HANDOFF records 486 after route fix. Rules were not edited.
+- npm.cmd audit --fetch-retries=0 --fetch-timeout=10000: exit 1, audit endpoint denied/unavailable. No current vulnerability verdict.
+- Full authenticated Chromium/WebKit suite, current-rules shape parity and 12 new emulator scenarios: NOT RUN because no emulator is running. No production fallback.
+- Seeded map/Explore read counts: NOT MEASURED. MapRepository.metrics/flush and PagerMetrics instrument query results; new emulator spec prints cold/warm map queries/reads and Explore page query/read counts. The one-read empty-query minimum is counted; these are not index-entry/billing audits. Zero repeated warm cell queries and a 25-document first Explore page are expectations, not measurements. Android baseline numbers are not substituted.
+- Some server-owning Playwright invocations stalled during Windows server shutdown and were interrupted. The final completed rerun reused those local servers and exited 0; task-owned servers were then stopped.
+- Prettier reported UNKNOWN opening/writing AuthRepository.ts; it was not bypassed. Functional contents still pass lint/typecheck. Other changed web sources were formatted.
+
+4. Not done / limitations
+------------------------
+- Release gate remains: full emulator/rules suites, read measurements and registry audit. WEB_TODO.txt retains one explicit verification item instead of claiming complete verified parity.
+- Actual App Check key/deployed CSP/COOP, real iPhone install/share/camera/GPS, real worker interoperation and Android reading web records remain owner checks. No new screenshot/pixel-parity claim.
+- The 264-key audit is a source review. New web-only name strings have TODO-AR English placeholders. User-saved exports/shared files outside the browser remain under their control.
+- Updated web/README.md and web/docs/parity.md with behavior, commands and verification limits.
+
+5. Owner / Claude next steps
+---------------------------
+1) Claude reviews first. Restore emulator/registry access, run blocked checks with web/README.md's isolated demo setup, record read counters and clear the remaining WEB_TODO verification item only when green.
+2) After review/approval, owner deploys rules AND indexes.
+3) Owner runs cat-server\backfill.cmd (dry run first, then backfill).
+4) Owner releases the APK.
+5) Owner runs web\publish.cmd and checks a real iPhone.
+6) Register the web app in Firebase App Check with reCAPTCHA Enterprise; add the site key to the owner's web/.env.local and rebuild/publish when ready. Leave enforcement OFF. Never commit the environment file.

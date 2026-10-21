@@ -141,7 +141,30 @@ object NotificationText {
 
 object SystemNotifications {
     const val EXTRA_ROUTE = "route"
+    private const val EXTRA_ROUTE_KEY = "route_key"
     private val deliveryMutex = Mutex()
+
+    /**
+     * A random key known only to this install, carried by CatMap's own notification taps. MainActivity must stay
+     * exported (launcher and catmap://post links), so without it any other app could open any screen by sending a
+     * route (threat model S10).
+     */
+    internal fun routeKey(context: Context): String {
+        val prefs = context.getSharedPreferences("catmap_routes", Context.MODE_PRIVATE)
+        prefs.getString(EXTRA_ROUTE_KEY, null)?.let { return it }
+        val key = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
+        // apply(): readable at once in this process; a key lost to a crash only voids notifications already shown.
+        prefs.edit().putString(EXTRA_ROUTE_KEY, key).apply()
+        return key
+    }
+
+    /** The screen a tapped CatMap notification asks for, or null for any other intent. */
+    fun routeFrom(context: Context, intent: Intent?): String? = runCatching {
+        // Reading extras unparcels them; a malformed bundle from another app must not crash the launch.
+        val key = intent?.getStringExtra(EXTRA_ROUTE_KEY) ?: return null
+        if (!java.security.MessageDigest.isEqual(key.toByteArray(), routeKey(context).toByteArray())) return null
+        com.catmap.dubai.util.AppRoutes.alert(intent.getStringExtra(EXTRA_ROUTE))
+    }.getOrNull()
 
     private fun channelId(c: NotifCategory) = "catmap_" + c.name.lowercase()
 
@@ -179,15 +202,24 @@ object SystemNotifications {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_ROUTE, n.route.ifBlank { "notifications" })
+            putExtra(EXTRA_ROUTE_KEY, routeKey(context))
         }
         val pending = PendingIntent.getActivity(
             context, n.id.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        // On a locked screen only "CatMap · Messages" shows; names and message text appear once unlocked.
+        val publicVersion = NotificationCompat.Builder(context, channelId(category))
+            .setSmallIcon(R.drawable.ic_stat_cat)
+            .setContentTitle(context.getString(R.string.app_name))
+            .setContentText(context.getString(channelName(category)))
+            .build()
         val notification = NotificationCompat.Builder(context, channelId(category))
             .setSmallIcon(R.drawable.ic_stat_cat)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicVersion)
             .setContentIntent(pending)
             .setAutoCancel(true)
             .build()
@@ -229,8 +261,23 @@ class NotificationWorker(context: Context, params: WorkerParameters) : Coroutine
         if (!container.firebaseReady) return Result.success()
         val uid = container.authRepo.currentUid ?: return Result.success()
         return runCatching {
-            SystemNotifications.deliver(container, uid, container.notifications.latest(uid))
+            val started = System.currentTimeMillis()
+            val lastCheck = container.settings.lastInboxCheck(uid)
+            // The first check (or one without a delivery baseline) reads the full window once; after that only alerts
+            // newer than the previous check, with an hour of overlap for senders whose clock runs a little behind.
+            // Alerts seen twice are filtered by NotificationDelivery's remembered ids.
+            val inbox = if (lastCheck == null || container.settings.deliveredNotifications(uid) == null) {
+                container.notifications.latest(uid)
+            } else {
+                container.notifications.since(uid, lastCheck - CHECK_OVERLAP_MS)
+            }
+            SystemNotifications.deliver(container, uid, inbox)
+            container.settings.setLastInboxCheck(uid, started)
             Result.success()
         }.getOrElse { if (it is CancellationException) throw it else Result.retry() }
+    }
+
+    private companion object {
+        const val CHECK_OVERLAP_MS = 60L * 60 * 1000
     }
 }

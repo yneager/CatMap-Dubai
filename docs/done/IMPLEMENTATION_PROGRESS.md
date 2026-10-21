@@ -1,6 +1,6 @@
 # Prompt implementation completed - 13 October 2026
 
-All tasks0,A-C,1-15 are implemented. Final required tests/lint/builds passed; see the dated top section of [HANDOFF.md](../HANDOFF.md) for commands, counts, evidence and limits.
+All tasks0,A-C,1-15 are implemented. Final required tests/lint/builds passed; see the dated top section of [HANDOFF.md](../../HANDOFF.md) for commands, counts, evidence and limits.
 
 * Android:63 methods,0 failures/errors;14 screenshot fixtures.
 * Firestore rules:244 passed,0 failed; no production deploy.

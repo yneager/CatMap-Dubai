@@ -14,7 +14,7 @@ export const LocationRepository = {
       listeners.delete(listener);
     };
   },
-  set: (position: DeviceFix) => {
+  set: (position: DeviceFix | null) => {
     fix = position;
     listeners.forEach((listener) => listener());
   },

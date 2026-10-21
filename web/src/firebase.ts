@@ -4,6 +4,7 @@ import {
   getAuth,
   indexedDBLocalPersistence,
   connectAuthEmulator,
+  signOut,
 } from 'firebase/auth';
 import {
   initializeFirestore,
@@ -11,8 +12,12 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
   connectFirestoreEmulator,
+  clearIndexedDbPersistence,
+  terminate,
 } from 'firebase/firestore';
 import { config } from './config';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
+import { clearDeviceData } from './data/DeviceWipe';
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
@@ -55,6 +60,11 @@ const app = configured
         : real,
     ))
   : null;
+if (app && !shared && !existingApp && !config.emulators && import.meta.env.VITE_RECAPTCHA_SITE_KEY)
+  initializeAppCheck(app, {
+    provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
+    isTokenAutoRefreshEnabled: true,
+  });
 export const auth = app
   ? (shared?.auth ??
     (existingApp ? getAuth(app) : initializeAuth(app, { persistence: indexedDBLocalPersistence })))
@@ -81,6 +91,35 @@ if (config.emulators && auth && db && !shared && !existingApp) {
 }
 const clients: Clients = shared ?? { app, auth, db, storageWired: false };
 clientRegistry[clientsKey] = clients;
+// A crashed/interrupted logout finishes before the first query or account screen.
+if (
+  auth &&
+  db &&
+  typeof localStorage !== 'undefined' &&
+  localStorage.getItem('catmap_pending_wipe')
+) {
+  await signOut(auth);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await clearIndexedDbPersistence(db);
+      break;
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'failed-precondition' || attempt >= 5) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    }
+  }
+  await clearDeviceData();
+  localStorage.removeItem('catmap_pending_wipe');
+  location.replace('/login');
+}
+if (auth && db && typeof window !== 'undefined')
+  window.addEventListener('storage', (event) => {
+    if (event.key !== 'catmap_pending_wipe' || event.newValue !== '1') return;
+    // Other open tabs release the Firestore persistence lease, and discard their React state.
+    void signOut(auth)
+      .then(() => terminate(db))
+      .finally(() => location.replace('/login'));
+  });
 export async function videoStorage() {
   if (!app || !config.blaze) throw new Error('Videos are disabled');
   const { getStorage, connectStorageEmulator } = await import('firebase/storage');

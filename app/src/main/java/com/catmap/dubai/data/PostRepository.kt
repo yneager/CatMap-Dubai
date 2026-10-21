@@ -13,7 +13,11 @@ import com.catmap.dubai.data.model.labeledFrom
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 import java.util.Locale
@@ -58,17 +62,47 @@ class PostRepository(
 
     fun ref(id: String) = posts.document(id)
 
-    /** Public feed: visible posts, newest first. Search, filters and distance work on this list. */
-    fun feed(limit: Long = 400): Flow<List<Post>> =
-        posts.whereEqualTo("hidden", false).orderBy("createdAt", Query.Direction.DESCENDING).limit(limit).listFlow()
+    /** The newest visible posts within [radiusKm], found through the map-area cells (Phase 4) instead of the whole feed. */
+    suspend fun near(lat: Double, lng: Double, radiusKm: Double, perCell: Long = NEAR_PER_CELL): List<Post> = coroutineScope {
+        Geohash.around(lat, lng, radiusKm).map { cell ->
+            async {
+                posts.whereEqualTo("hidden", false).whereArrayContains("geoCells", cell)
+                    .orderBy("updatedAt", Query.Direction.DESCENDING).limit(perCell).get().await().safeObjects<Post>()
+            }
+        }.awaitAll().flatten().distinctBy { it.id }.filter { distanceKm(lat, lng, it.lat, it.lng) <= radiusKm }
+    }
 
-    suspend fun feedOnce(limit: Long = 400): List<Post> =
-        posts.whereEqualTo("hidden", false).orderBy("createdAt", Query.Direction.DESCENDING).limit(limit).get().await()
-            .toObjects(Post::class.java)
+    /** The newest visible posts, for when there's no place to search around yet. */
+    suspend fun newest(limit: Long): List<Post> = feedQuery().limit(limit).get().await().safeObjects()
 
-    /** Moderators also see hidden posts. */
-    fun allPosts(): Flow<List<Post>> =
-        posts.orderBy("createdAt", Query.Direction.DESCENDING).limit(600).listFlow()
+    /**
+     * Visible posts by id (favourites); deleted and hidden ones are left out. One read per post, like a query, but
+     * read one by one: the rules refuse an `id in [...]` query as soon as one of the posts has been deleted.
+     */
+    suspend fun byIds(ids: List<String>): List<Post> = coroutineScope {
+        ids.distinct().map { id -> async { runCatching { ref(id).get().await().safeObject<Post>() }.getOrNull() } }
+            .awaitAll().filterNotNull().filter { !it.hidden }
+    }
+
+    /** Visible posts, newest first: Explore and the lists page through this (optionally only some categories). */
+    fun feedQuery(categories: Collection<String> = emptyList()): Query {
+        val base = posts.whereEqualTo("hidden", false)
+        return (if (categories.isEmpty()) base else base.whereIn("category", categories.toList()))
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+    }
+
+    /** Posts whose search words include [word] (or its stored first letters), newest first. */
+    fun searchQuery(word: String): Query =
+        posts.whereEqualTo("hidden", false).whereArrayContainsAny("searchTerms", SearchTerms.query(word))
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+
+    /** Every post for moderators, hidden ones included (or only hidden ones, or one category), newest first. */
+    fun moderationQuery(hiddenOnly: Boolean, category: String?): Query {
+        var q: Query = posts
+        if (hiddenOnly) q = q.whereEqualTo("hidden", true)
+        if (category != null) q = q.whereEqualTo("category", category)
+        return q.orderBy("createdAt", Query.Direction.DESCENDING)
+    }
 
     fun postFlow(id: String): Flow<Post?> = ref(id).objectFlow()
 
@@ -98,7 +132,7 @@ class PostRepository(
             // Everyone following this area hears about it, at most once per post.
             val followers = runCatching {
                 areas.whereArrayContains("neighborhoods", post.neighborhood).limit(300).get().await()
-                    .toObjects(AreaFollow::class.java).map { it.uid }
+                    .safeObjects<AreaFollow>().map { it.uid }
             }.getOrDefault(emptyList()) - me.uid
             notifications.send(followers, NotifType.LOST_NEARBY, params, "post/${ref.id}", dedupeKey = "lost_${ref.id}")
         }
@@ -120,6 +154,8 @@ class PostRepository(
             "keywords" to fresh.keywords, "updatedAt" to fresh.updatedAt, "lastActivityAt" to fresh.updatedAt,
             "fingerprint" to fresh.fingerprint,
             "microchip" to fresh.microchip,
+            "geoCells" to fresh.geoCells,
+            "searchTerms" to fresh.searchTerms,
         )
         ref(existing.id).update(changes).await()
     }
@@ -142,8 +178,9 @@ class PostRepository(
             fingerprint = fingerprint,
             microchip = microchip,
             keywords = keywords(name, color, breed, features, description, hood),
+            geoCells = Geohash.cells(lat, lng),
             updatedAt = time,
-        )
+        ).apply { searchTerms = SearchTerms.of(keywords) }
     }
 
     suspend fun setStatus(post: Post, status: PostStatus, me: UserProfile) {
@@ -153,7 +190,7 @@ class PostRepository(
             if (status == PostStatus.OPEN) changes += mapOf("resolution" to "", "resolvedMatchId" to "")
             b.update(ref(post.id), changes)
             if (status == PostStatus.REUNITED && post.status != PostStatus.REUNITED.key && post.ownerId == me.uid) {
-                users.addStats(b, me.uid, mapOf(Stats.REUNITED to 1), points = 25)
+                users.addStats(b, me.uid, mapOf(Stats.REUNITED to 1), points = 25, rateLimited = true)
             }
         }.await()
     }
@@ -164,7 +201,7 @@ class PostRepository(
 
     suspend fun remindStalePosts(uid: String) {
         val at = now()
-        posts.whereEqualTo("ownerId", uid).get().await().toObjects(Post::class.java)
+        posts.whereEqualTo("ownerId", uid).get().await().safeObjects<Post>()
             .filter { !it.hidden && PostStaleness.needsReminder(it, at) }.forEach { post ->
                 notifications.send(listOf(uid), NotifType.STALE_POST, mapOf("name" to post.name), "post/${post.id}", PostStaleness.reminderId(post,at))
             }
@@ -205,8 +242,12 @@ class PostRepository(
 
     // ---------- updates and sightings on a post ----------
 
+    /** The newest [UPDATES_WINDOW] updates of a post, live; older ones are read a page at a time ([olderUpdatesQuery]). */
     fun updates(postId: String): Flow<List<PostUpdate>> =
-        ref(postId).collection(Col.UPDATES).orderBy("createdAt", Query.Direction.DESCENDING).limit(200).listFlow()
+        ref(postId).collection(Col.UPDATES).orderBy("createdAt", Query.Direction.DESCENDING).limit(UPDATES_WINDOW).listFlow()
+
+    fun olderUpdatesQuery(postId: String, before: Long): Query =
+        ref(postId).collection(Col.UPDATES).orderBy("createdAt", Query.Direction.DESCENDING).startAfter(before)
 
     suspend fun addUpdate(post: Post, kind: UpdateKind, text: String, photoId: String, lat: Double, lng: Double, me: UserProfile) {
         val doc = ref(post.id).collection(Col.UPDATES).document()
@@ -241,22 +282,53 @@ class PostRepository(
 
     // ---------- area alerts ----------
 
-    fun areaFollow(uid: String): Flow<AreaFollow?> = areas.document(uid).objectFlow()
+    // The shared areaFollows document only says which neighbourhoods someone follows, which is all a lost-pet poster
+    // needs to alert them. Where the alert area is centred (often near home) is kept in users/{uid}/private/areaFollow,
+    // which only its owner can read.
+    private fun areaCentre(uid: String) = db.collection(Col.USERS).document(uid).collection(Col.PRIVATE).document("areaFollow")
+
+    fun areaFollow(uid: String): Flow<AreaFollow?> =
+        combine(areas.document(uid).objectFlow<AreaFollow>(), areaCentre(uid).objectFlow<AreaFollow>()) { follow, centre ->
+            // Versions up to 0.0.9 kept the centre in the shared document; it's used until it has been moved.
+            if (follow != null && centre != null) follow.copy(lat = centre.lat, lng = centre.lng, radiusKm = centre.radiusKm) else follow
+        }
 
     /** Follows every neighbourhood whose centre lies within [radiusKm] of the point (at least the nearest one). */
     suspend fun followArea(uid: String, lat: Double, lng: Double, radiusKm: Double) {
         val hoods = Dubai.neighborhoods.filter { distanceKm(lat, lng, it.lat, it.lng) <= radiusKm }.map { it.key }
             .ifEmpty { listOf(Dubai.nearest(lat, lng).key) }
-        areas.document(uid).set(AreaFollow(neighborhoods = hoods, lat = lat, lng = lng, radiusKm = radiusKm, updatedAt = now())).await()
+        val at = now()
+        db.runBatch { b ->
+            b.set(areas.document(uid), mapOf("neighborhoods" to hoods, "updatedAt" to at))
+            b.set(areaCentre(uid), mapOf("lat" to lat, "lng" to lng, "radiusKm" to radiusKm, "updatedAt" to at))
+        }.await()
     }
 
     suspend fun unfollowArea(uid: String) {
-        areas.document(uid).delete().await()
+        db.runBatch { b ->
+            b.delete(areas.document(uid))
+            b.delete(areaCentre(uid))
+        }.await()
+    }
+
+    /** Moves a centre saved by version 0.0.9 or older out of the shared document into the private one. */
+    suspend fun moveAreaCentreToPrivate(uid: String) {
+        val legacy = areas.document(uid).get().await()
+        val lat = legacy.getDouble("lat") ?: return
+        val lng = legacy.getDouble("lng") ?: return
+        db.runBatch { b ->
+            b.set(areaCentre(uid), mapOf("lat" to lat, "lng" to lng, "radiusKm" to (legacy.getDouble("radiusKm") ?: 3.0), "updatedAt" to now()))
+            b.update(areas.document(uid), mapOf("lat" to FieldValue.delete(), "lng" to FieldValue.delete(), "radiusKm" to FieldValue.delete()))
+        }.await()
     }
 
     companion object {
         const val MAX_PHOTOS = 6
         const val MATCH_RADIUS_KM = 5.0
+        const val DUPLICATE_RADIUS_KM = 3.0
+        const val UPDATES_WINDOW = 30L
+        /** Newest posts asked per map cell by [near]: duplicates and same-animal checks only need recent ones. */
+        const val NEAR_PER_CELL = 30L
         private val SPLIT = Regex("[^\\p{L}\\p{N}]+")
 
         fun keywords(vararg parts: String): List<String> {
@@ -272,7 +344,7 @@ class PostRepository(
             val words = draft.keywords.toSet()
             return candidates.asSequence()
                 .filter { it.id != draft.id && it.animalType == draft.animalType && it.status == PostStatus.OPEN.key }
-                .filter { draft.lat == 0.0 || distanceKm(it.lat, it.lng, draft.lat, draft.lng) <= 3.0 }
+                .filter { draft.lat == 0.0 || distanceKm(it.lat, it.lng, draft.lat, draft.lng) <= DUPLICATE_RADIUS_KM }
                 .filter { draft.createdAt == 0L || kotlin.math.abs(it.createdAt - draft.createdAt) <= 21L * 24 * 3600 * 1000 }
                 .map { it to it.keywords.count { w -> w in words } + if (it.category == draft.category) 1 else 0 }
                 .filter { (_, score) -> score >= 2 }

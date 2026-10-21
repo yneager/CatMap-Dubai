@@ -14,6 +14,8 @@ import { CatMapIcons, catMapSvg } from '../../icons/CatMapIcons';
 import { enums } from '../../data/model/Enums';
 import { t } from '../../i18n';
 import { config } from '../../config';
+import type { Box } from '../../data/MapArea';
+import { Dubai } from '../../data/Neighborhoods';
 export interface MapPoint {
   id: string;
   kind: 'post' | 'cat' | 'station' | 'sitter';
@@ -163,6 +165,7 @@ export default function CommunityMap({
   onSelect,
   center,
   onMove,
+  onViewport,
   radius = 0,
   interactive = true,
   compact = false,
@@ -174,6 +177,7 @@ export default function CommunityMap({
   onSelect?: (p: MapPoint) => void;
   center?: [number, number];
   onMove?: (lat: number, lng: number) => void;
+  onViewport?: (box: Box) => void;
   radius?: number;
   interactive?: boolean;
   compact?: boolean;
@@ -184,9 +188,11 @@ export default function CommunityMap({
     mapRef = useRef<LibreMap | null>(null),
     pointsRef = useRef(points),
     moveRef = useRef(onMove),
+    viewportRef = useRef(onViewport),
     selectRef = useRef(onSelect);
   pointsRef.current = points;
   moveRef.current = onMove;
+  viewportRef.current = onViewport;
   selectRef.current = onSelect;
   const settings = useSettings(),
     [ready, setReady] = useState(0),
@@ -327,13 +333,30 @@ export default function CommunityMap({
       const p = pointsRef.current.find((p) => p.id === id);
       if (p) selectRef.current?.(p);
     });
+    let viewportTimer: ReturnType<typeof setTimeout>;
+    const viewport = () => {
+      clearTimeout(viewportTimer);
+      viewportTimer = setTimeout(() => {
+        const b = map.getBounds(),
+          clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+        viewportRef.current?.({
+          south: clamp(b.getSouth(), Dubai.SOUTH - 0.3, Dubai.NORTH + 0.3),
+          north: clamp(b.getNorth(), Dubai.SOUTH - 0.3, Dubai.NORTH + 0.3),
+          west: clamp(b.getWest(), Dubai.WEST - 0.3, Dubai.EAST + 0.3),
+          east: clamp(b.getEast(), Dubai.WEST - 0.3, Dubai.EAST + 0.3),
+        });
+      }, 400);
+    };
+    map.on('load', viewport);
     map.on('moveend', () => {
+      viewport();
       const pos = map.getCenter();
       moveRef.current?.(pos.lat, pos.lng);
       if (!compact)
         memory = { center: [pos.lng, pos.lat], zoom: map.getZoom(), bearing: map.getBearing() };
     });
     return () => {
+      clearTimeout(viewportTimer);
       mapRef.current = null;
       map.remove();
     };

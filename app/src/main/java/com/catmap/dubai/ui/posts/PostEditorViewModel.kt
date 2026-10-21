@@ -348,7 +348,12 @@ class PostEditorViewModel(
     fun checkDuplicates(me: UserProfile?) {
         if (postId != null) return
         viewModelScope.launch {
-            val feed = runCatching { container.posts.feedOnce(300) }.getOrDefault(emptyList())
+            val la = lat
+            val ln = lng
+            // Posts near the chosen place (duplicates are within 3 km), or the newest ones while there's no place yet.
+            val feed = runCatching {
+                if (la != null && ln != null) container.posts.near(la, ln, PostRepository.DUPLICATE_RADIUS_KM) else container.posts.newest(100)
+            }.getOrDefault(emptyList())
             duplicates = PostRepository.likelyDuplicates(previewPost(me), feed)
         }
     }
@@ -380,7 +385,7 @@ class PostEditorViewModel(
             sameAnimalChecking = compare
             try {
                 // Street posts of any animal type: the type is only known once the photo is checked.
-                val nearby = if (!compare) emptyList() else runCatching { container.posts.feedOnce(400) }.getOrDefault(emptyList()).asSequence()
+                val nearby = if (!compare) emptyList() else runCatching { container.posts.near(la!!, ln!!, SAME_ANIMAL_RADIUS_KM) }.getOrDefault(emptyList()).asSequence()
                     .filter { it.category == PostCategory.STREET.key && it.status == "open" && !it.hidden && it.photoIds.isNotEmpty() }
                     .map { it to com.catmap.dubai.data.distanceKm(la!!, ln!!, it.lat, it.lng) }
                     .filter { (_, d) -> d.isFinite() && d <= SAME_ANIMAL_RADIUS_KM }

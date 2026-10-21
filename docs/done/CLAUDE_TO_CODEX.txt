@@ -1,0 +1,162 @@
+# CatMap Web, round 3: the major security + cost update (brief from Claude to Codex)
+
+Run from the project root, `C:\Users\mohammad\Desktop\cat`. Do the whole brief in one run.
+
+Claude is the architect and reviewer; you are the implementer. You built `web/` in rounds 1 and 2 (earlier briefs are
+in git history: `git show 801d9b9:CLAUDE_TO_CODEX.txt`, `git show e779edd:CLAUDE_TO_CODEX.txt`). The decisions below
+come from Claude and the owner. Where something is left open, choose what keeps parity with Android and costs the
+fewest Firestore reads, and record each such choice in your report.
+
+====================================================================================================================
+## 1. What this round is about
+
+The Android app has just been through a 10-phase security and cost update (`docs/done/MAJOR_UPDATE_PLAN.md`). The web app
+must catch up **before the owner deploys the new rules**, because the new rules and the new data fields affect what the
+web app writes and reads.
+
+1. Implement **every item under "Pending" in `WEB_TODO.txt`**: the "missed in earlier rounds" list and the Major
+   update Phase 2, 3, 4, 5, 6, 7 and 9 items. Remove each item from `WEB_TODO.txt` when it's done; if nothing is left,
+   put back the "(nothing yet …)" line with today's date and "matches Android 0.1.x (major update)".
+2. Review the Firebase Hosting security headers and the service worker (section 6).
+3. Prove it with tests (section 7), including the web e2e suite against the **new** `firestore.rules`.
+
+====================================================================================================================
+## 2. Read first
+
+1. `WEB_TODO.txt`, all of "Pending". Each item names the Android files and has "Web notes". **The Kotlin code is the
+   specification**: read the named Android files before building the web side.
+2. `HANDOFF.md`, the sections dated 20 and 21 October 2026 (Phases 1–9).
+3. `docs/done/MAJOR_UPDATE_PLAN.md` ("Phase 4 design, as built", "Phase 5 design, as built").
+4. `docs/security/THREAT_MODEL.md` (status sections), `docs/security/PRIVACY_AUDIT.md`,
+   `docs/security/ABUSE_LIMITS.md`, `docs/security/APP_CHECK.md`, `docs/cost/BASELINE.md`.
+5. `firestore.rules` and `firestore.indexes.json`: what the server now accepts, and the indexes the queries need.
+6. `C:\Users\mohammad\.claude\skills\catmap\SKILL.md`: the working guide. Read it; don't edit it.
+7. `web/README.md`, `web/docs/parity.md`: your own notes.
+
+====================================================================================================================
+## 3. Hard rules (never break)
+
+* **Secrets.** Never read out, print, log, copy or modify: `keystore.properties`, `release-keys/`, `*.jks`,
+  `local.properties`, `app/google-services.json`, `tools/seed/demo-accounts.local.json`, `test-accounts.local.txt`,
+  `web/.env.local`, anything in `C:\Users\mohammad\Desktop\cat-server`. No password or key in any committed file.
+* **Git and production:** no commits, pushes or tags; no deploys of any kind (hosting, rules, indexes). Never touch
+  production Firebase (`catmap-dubai`). Local emulators only (`demo-*` projects), disposable accounts, random
+  passwords.
+* **Scope:** don't change the Android app, `firestore.rules`, `firestore.indexes.json` or `storage.rules`. The web app
+  must work with them exactly as they are now. If a rules or index change looks unavoidable, stop that part and
+  explain in the report. Outside `web/` you may only edit `WEB_TODO.txt`, `tools/strings/strings_web.py` (+ generator
+  outputs) and `firebase.json`'s hosting headers (section 6).
+* **Strings:** no hard-coded UI text. Android strings come through the generator; new web-only text goes in
+  `tools/strings/strings_web.py` with the Arabic column equal to the English one and `# TODO-AR`, then
+  `python tools/strings/build_strings.py .`.
+* **Logs:** keep runtime logs out of `web/docs/`; test output goes in the ignored result folders.
+* **Codex permissions:** if a command is refused, don't look for a way around it; note it and move on.
+
+====================================================================================================================
+## 4. Order of work (data shape first)
+
+Do it in this order, so the web app never writes something the new rules refuse:
+
+1. **Shared fields and algorithms** (Phases 4–5): `geoCells` and `searchTerms` on every post and cat write, with the
+   exact Android algorithms. Port the test vectors: `app/src/test/java/com/catmap/dubai/data/GeohashTest.kt`,
+   `SearchTermsTest.kt` and `cat-server/tests/test_geocells.py` / `test_searchterms.py` must give identical results
+   in `web/tests/` (copy the vectors into the web tests; don't read cat-server at runtime).
+2. **Rules-related writes** (Phases 2, 6, 9): the private alert-area centre, `rateLimited` stamps, alerts one write per
+   person, AI-job delete only after the answer or the 15 s timeout, exactly the Android model fields on every
+   collection the Phase 9 caps cover.
+3. **Safe reading** (Phase 2): type-safe `*FromDoc` functions; one malformed document never breaks a screen.
+4. **Cost** (Phases 3–5): map by area with the saved copy, cursor paging (never offsets), Firestore search with
+   `searchTerms`, nearby and by-id queries, the smaller live windows (inbox 30, chat 50, updates 30), 30-day photo
+   cache. A failed-precondition (index still building) must fall back the way Android does.
+5. **Privacy** (Phases 6–7): logout and account deletion leave nothing of the account in the browser; alert routes
+   from the fixed list only; thumbnails first.
+6. **App Check, monitoring only** (Phase 9): see the `WEB_TODO.txt` item and `docs/security/APP_CHECK.md`. Read the
+   site key from `VITE_RECAPTCHA_SITE_KEY` (add it to `.env.example` empty, never a real value); no key = App Check
+   off. Never enforce from code, and never initialise it in the emulator build.
+7. **The "missed in earlier rounds" parity items** (share post/cat, directions, breed traits, admin match analytics,
+   chat "View profile", "Add my location", adoption-requests entry, small hints, `docs/done/web-parity-unused-strings.txt`).
+
+====================================================================================================================
+## 5. Notes Claude wants followed
+
+* **Map by area (Phase 4):** follow `MapRepository.kt` / `MapArea.kt` (cells per screen, per-cell limit 40–150,
+  24 h cell refresh, "changes since" listeners with limit 300, saved copy per account in IndexedDB with pin fields
+  only, cleared on logout). Measure: a cold map open on the seeded emulator data should read about the same as
+  Android (`docs/cost/BASELINE.md` "After Phase 4"); put your numbers in the report.
+* **Logout (Phase 7):** `signOut`, then `terminate(db)` and `clearIndexedDbPersistence(db)` (or a full page reload that
+  clears before Firestore starts), the photo cache, the map's saved copy and account-specific `localStorage` keys.
+  Language, theme and the install-gate state stay. A user who signs in next on the same phone must see nothing of the
+  previous account, online or offline.
+* **Routes (Phase 7):** one helper, the same regex as Android's `util/AppRoutes.kt`; anything else is ignored with no
+  navigation and no error.
+* **Phase 9 caps:** compare every web write to the Android model in `app/src/main/java/com/catmap/dubai/data/model/`
+  (field names and types). Chats: a member updates only `names.<self>`/`photos.<self>`, `lastText` ≤ 300.
+* **Alerts:** never one batch for several recipients (one refusal would cancel all).
+* **No new dependencies** unless needed for App Check (`firebase/app-check` is part of the existing `firebase`
+  package).
+
+====================================================================================================================
+## 6. Hosting headers and service worker (review, don't deploy)
+
+* Read `firebase.json` (hosting) and `web/vite.config.ts` (VitePWA). Check the Content-Security-Policy still allows
+  exactly what the app needs after App Check (reCAPTCHA Enterprise: `https://www.google.com`,
+  `https://www.gstatic.com`, `https://recaptchaenterprise.googleapis.com`,
+  `https://content-firebaseappcheck.googleapis.com`), and nothing broader (no `unsafe-eval`, no `*`).
+* Keep `frame-ancestors 'none'`, `object-src 'none'`, `nosniff`, the referrer and permissions policies. Add
+  `Strict-Transport-Security` (max-age=31536000) and `Cross-Origin-Opener-Policy: same-origin` if they don't break
+  sign-in or the map; say what you decided.
+* The service worker caches only the app's own files: no Firestore, Auth or photo responses, and no runtime cache
+  that could carry one account's data to the next. Add a unit or e2e check for this.
+
+====================================================================================================================
+## 7. Checks (all must pass; paste the summary lines in your report)
+
+From `web/`:
+
+```
+npm.cmd run lint
+npm.cmd run typecheck
+npm.cmd test
+npm.cmd run strings:check
+npm.cmd run build
+npm.cmd audit
+```
+
+From the root:
+
+```
+python tools/strings/build_strings.py . --check
+cd tools\rulestest && node test.mjs ..\..\firestore.rules
+```
+
+(the last one needs a Firestore emulator; it must stay at 485 passed, 0 failed: you don't change the rules).
+
+**E2E**, with the isolated emulators as in `web/README.md`, on Chromium **and WebKit**, against the repo's current
+`firestore.rules`: the full suite plus new specs for:
+* posting a lost report and a street post (the documents carry valid `geoCells` and `searchTerms`; the rules accept
+  them);
+* the map loading by area (pins appear; a second open uses the saved copy: count the Firestore requests);
+* search by a word and a 3-letter prefix; Explore paging (the second page loads on scroll);
+* logout wiping: sign in as A, open a chat, log out, sign in as B → nothing of A visible; the same while offline;
+* a malformed post and notification in the emulator don't break the map, Explore or the inbox;
+* an alert with a route outside the list does nothing when tapped;
+* the AI job is deleted after the answer (fake worker as in round 2).
+
+`e2e/shape-parity.spec.ts` fails today only because web posts lack `geoCells` and `searchTerms` (checked by Claude on
+21 Oct 2026, 34 other tests pass against the new rules); it must pass after your changes.
+
+Unit tests: geohash and search-term vectors identical to Android's, `*FromDoc` type safety, route helper, plain-text
+handling.
+
+====================================================================================================================
+## 8. Report
+
+Overwrite `work done.txt` in the project root with:
+1. what you changed, per `WEB_TODO.txt` item and per section of this brief, with file paths;
+2. the choices you made where the brief was open;
+3. the check results (commands and pass/fail counts), and the measured read counts for the map and Explore;
+4. anything not done or not verified, and why;
+5. what the owner must do next. (Claude reviews first. Then the owner deploys the rules and indexes, runs
+   `cat-server\backfill.cmd`, releases the APK, and runs `web\publish.cmd`, in that order.)
+
+Don't commit; Claude reviews and commits after the owner approves.

@@ -54,6 +54,7 @@ export const UserDataExportRepository = {
     for (const [key, path, always] of [
       ['profile', `users/${uid}`, true],
       ['account', `users/${uid}/private/account`, true],
+      ['areaFollowPrivate', `users/${uid}/private/areaFollow`, false],
       ['sitters', `sitters/${uid}`, false],
       ['areaFollows', `areaFollows/${uid}`, false],
       ['volunteerApplications', `volunteerApplications/${uid}`, false],

@@ -1,4 +1,4 @@
-import { getCountFromServer, where, limit, updateDoc } from 'firebase/firestore';
+import { getCountFromServer, where, orderBy, startAt, endAt, updateDoc } from 'firebase/firestore';
 import { ref, listQuery } from './Firestore';
 import { enums } from './model/Enums';
 import type { UserProfile } from './model';
@@ -9,7 +9,12 @@ export const count = async (
   ...clauses: Parameters<typeof listQuery> extends [string, ...infer R] ? R : never
 ) => (await getCountFromServer(listQuery(path, ...clauses))).data().count;
 export const AdminRepository = {
-  users: () => listQuery('users', limit(1000)),
+  users: (prefix = '', suspended = false) =>
+    prefix
+      ? listQuery('users', orderBy('username'), startAt(prefix), endAt(prefix + '\uf8ff'))
+      : suspended
+        ? listQuery('users', where('suspended', '==', true))
+        : listQuery('users', orderBy('createdAt', 'desc')),
   stats: async () => {
     const queries: Record<string, Promise<number>> = {
       users: count('users'),

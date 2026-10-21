@@ -20,13 +20,11 @@ import { SettingsRepository } from './data/SettingsRepository';
 import { LocationRepository } from './data/LocationRepository';
 import {
   UserProfileFromDoc,
-  PostFromDoc,
   AppNotificationFromDoc,
   FavoriteFromDoc,
   ChatFromDoc,
   type Chat,
   type UserProfile,
-  type Post,
   type AppNotification,
 } from './data/model';
 import { UserRepository } from './data/UserRepository';
@@ -97,7 +95,6 @@ interface State {
   verified: boolean;
   profile: UserProfile | null | undefined;
   ready: boolean;
-  posts: Post[] | undefined;
   inbox: AppNotification[];
   favoriteIds: string[];
   chats: Chat[] | undefined;
@@ -109,7 +106,6 @@ const Context = createContext<State>({
   verified: false,
   profile: null,
   ready: false,
-  posts: undefined,
   inbox: [],
   favoriteIds: [],
   chats: undefined,
@@ -160,11 +156,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => (uid ? UserRepository.profileFlow(uid) : null),
     UserProfileFromDoc,
     'profile-' + uid,
-  );
-  const posts = useList(
-    () => (uid && session.verified ? PostRepository.feed() : null),
-    PostFromDoc,
-    'feed-' + uid + '-' + session.verified,
   );
   const inbox = useList(
     () => (uid ? NotificationRepository.notifications(uid) : null),
@@ -220,6 +211,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (uid && session.verified) {
       void PostRepository.remindStalePosts(uid).catch(AppErrors.report);
+      void PostRepository.moveAreaCentreToPrivate(uid).catch(AppErrors.report);
     }
   }, [uid, session.verified]);
   useEffect(() => {
@@ -255,7 +247,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         ...session,
         profile: uid ? profile : null,
-        posts,
         inbox: inbox ?? [],
         favoriteIds: favorites?.map((f) => f.id) ?? [],
         chats,

@@ -183,15 +183,14 @@ fun PostMatchesSection(nav: NavHostController, post: Post) {
     val uid = container.session.uid.orEmpty()
     val me by container.session.profile.collectAsStateWithLifecycle()
     val all by remember(post.id, uid) { container.matches.forPost(uid, post.id) }.collectAsStateWithLifecycle(null)
-    val feed by remember { container.communityFeed }.collectAsStateWithLifecycle(emptyList())
     val pcOnline by produceState<Boolean?>(null, post.id) { value = container.aiServer.health() != null }
     var showWeak by rememberSaveable { mutableStateOf(false) }
     val isLost = post.category == PostCategory.LOST.key
     val isOwner = post.ownerId == uid
     // While the PC is off, the owner's phone pairs the report with sightings posted since (case: sighting first).
-    LaunchedEffect(post.id, me?.uid, feed.size, pcOnline) {
+    LaunchedEffect(post.id, me?.uid, pcOnline) {
         val profile = me ?: return@LaunchedEffect
-        if (pcOnline == false && feed.isNotEmpty() && isOwner) runCatching { container.matches.reconcile(post, feed, profile) }
+        if (pcOnline == false && isOwner) runCatching { container.matches.reconcile(post, profile) }
     }
     val list = all ?: return
     // A pair someone turned down leaves their list (it stays stored, so it is never suggested again).

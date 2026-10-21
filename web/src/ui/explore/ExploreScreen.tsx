@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useApp, useSettings, useDeviceLocation } from '../../state';
 import { LocationRepository } from '../../data/LocationRepository';
@@ -13,12 +13,23 @@ import {
   Icon,
   ControlIcon,
   Switch,
-  enumLabel,
 } from '../components/Components';
 import { CatMapIcons } from '../../icons/CatMapIcons';
 import { FilterSheet, matches, layers, toggle } from './Filtering';
 import { SettingsRepository } from '../../data/SettingsRepository';
 import { distanceKm, Dubai } from '../../data/Neighborhoods';
+import { PostRepository } from '../../data/PostRepository';
+import { CatRepository } from '../../data/CatRepository';
+import { PostFromDoc } from '../../data/model';
+import { usePager, PagingFooter, useDebounced } from '../../data/usePager';
+import { useAsyncList } from '../../data/useAsyncList';
+import { list } from '../../data/Firestore';
+import { query, limit } from 'firebase/firestore';
+import { SearchTerms } from '../../data/SearchTerms';
+import { CatFromDoc } from '../../data/model';
+import { parseSearch } from '../../data/SearchQuery';
+import { useMapArea } from '../../data/useMapArea';
+import { MapRepository } from '../../data/MapRepository';
 const shortcuts = [
   { to: '/help-directory', label: 'help_directory', icon: CatMapIcons.HELP, color: '#00696B' },
   { to: '/adoption', label: 'adoption', icon: CatMapIcons.ADOPTION, color: '#8E24AA' },
@@ -29,7 +40,7 @@ const shortcuts = [
   { to: '/area-alerts', label: 'area_alerts', icon: CatMapIcons.BELL, color: '#F9A825' },
 ];
 export default function ExploreScreen() {
-  const { posts, profile } = useApp(),
+  const { profile } = useApp(),
     settings = useSettings(),
     searchMode = useLocation().pathname === '/search';
   const [search, setSearch] = useState(''),
@@ -37,24 +48,71 @@ export default function ExploreScreen() {
     [sort, setSort] = useState('newest'),
     [includeClosed, setClosed] = useState(false);
   const fix = useDeviceLocation();
+  const settled = useDebounced(search),
+    parsed = parseSearch(searchMode ? settled : '');
+  const categories = settings.filters.layers.filter((l) => l !== 'street_cats' && l !== 'sitting');
+  if (settings.filters.layers.includes('street_cats')) categories.push('street');
+  const queryCategories = categories.length ? categories : parsed.categories;
+  const page = usePager(
+    () =>
+      sort === 'nearest' && !searchMode
+        ? null
+        : searchMode && parsed.word
+          ? PostRepository.searchQuery(parsed.word)
+          : !searchMode || parsed.types.length || queryCategories.length
+            ? PostRepository.feedQuery(queryCategories)
+            : null,
+    PostFromDoc,
+    'explore-' +
+      profile?.uid +
+      '-' +
+      sort +
+      '-' +
+      searchMode +
+      '-' +
+      settled +
+      '-' +
+      queryCategories.join(','),
+    25,
+    () => (parsed.word ? null : PostRepository.feedQuery()),
+  );
+  const area = useMapArea(profile?.uid ?? '', sort === 'nearest' && !searchMode);
+  useEffect(() => {
+    if (sort !== 'nearest' || searchMode || !fix) return;
+    const timer = setTimeout(
+      () =>
+        void MapRepository.viewport({
+          south: fix.lat - 0.045,
+          north: fix.lat + 0.045,
+          west: fix.lng - 0.05,
+          east: fix.lng + 0.05,
+        }),
+      400,
+    );
+    return () => clearTimeout(timer);
+  }, [sort, searchMode, fix, profile?.uid]);
+  const nearby = Object.values(area.posts).filter((p) => !p.hidden);
+  const catResults = useAsyncList(
+    () =>
+      searchMode &&
+      parsed.word &&
+      (!parsed.types.length || parsed.types.includes('cat')) &&
+      (!queryCategories.length || queryCategories.includes('street'))
+        ? list(query(CatRepository.searchQuery(parsed.word), limit(20)), CatFromDoc)
+        : Promise.resolve([]),
+    'search-cats-' + settled + '-' + queryCategories.join(','),
+  );
+  const posts = sort === 'nearest' && fix && !searchMode ? nearby : page.items;
   const results = posts
     ?.filter((p) => matches(p, settings.filters, fix, searchMode && includeClosed))
+    .filter((p) => !searchMode || includeClosed || p.status === 'open')
     .filter(
       (p) =>
-        !search ||
-        [
-          p.name,
-          p.breed,
-          p.color,
-          p.description,
-          enumLabel('AnimalType', p.animalType),
-          enumLabel('PostCategory', p.category),
-          Dubai.nameOf(p.neighborhood),
-          ...p.keywords,
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(search.toLowerCase()),
+        (!parsed.types.length || parsed.types.includes(p.animalType)) &&
+        (!parsed.categories.length || parsed.categories.includes(p.category)) &&
+        parsed.words.every(
+          (w) => SearchTerms.matches(w, p.keywords) || p.name.toLowerCase().includes(w),
+        ),
     )
     .sort((a, b) =>
       sort === 'nearest' && fix
@@ -107,6 +165,9 @@ export default function ExploreScreen() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
+        )}
+        {searchMode && settled.trim().length < 2 && (
+          <p className="muted">{t('search_more_letters')}</p>
         )}
         <div className="row between">
           <SectionHeader>{t('nearby_reports')}</SectionHeader>
@@ -171,7 +232,7 @@ export default function ExploreScreen() {
         {!results ? (
           <Loading />
         ) : results.length ? (
-          results.slice(0, searchMode ? 100 : 400).map((p) => <PostCard post={p} key={p.id} />)
+          results.map((p) => <PostCard post={p} key={p.id} />)
         ) : (
           <EmptyState
             text={t(
@@ -183,6 +244,22 @@ export default function ExploreScreen() {
             )}
           />
         )}
+        {sort !== 'nearest' && <PagingFooter page={page} visibleCount={results?.length} />}
+        {searchMode &&
+          catResults
+            ?.filter(
+              (c) =>
+                !c.hidden &&
+                !c.mergedInto &&
+                parsed.words.every((w) =>
+                  SearchTerms.matches(w, SearchTerms.words(c.name, ...c.aliases)),
+                ),
+            )
+            .map((c) => (
+              <Link className="card" key={c.id} to={'/cat/' + c.id}>
+                {c.name} · {Dubai.nameOf(c.neighborhood)}
+              </Link>
+            ))}
       </div>
       {filter && (
         <FilterSheet

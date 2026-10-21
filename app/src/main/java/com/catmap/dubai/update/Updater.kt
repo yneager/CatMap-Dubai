@@ -46,37 +46,8 @@ class Updater(private val context: Context, private val settings: SettingsReposi
     /** The newest release, or null when there is none (or no APK attached). */
     suspend fun latest(): Release? = withContext(Dispatchers.IO) {
         if (!configured) return@withContext null
-        val connection = (URL("https://api.github.com/repos/$repo/releases/latest").openConnection() as HttpURLConnection).apply {
-            setRequestProperty("Accept", "application/vnd.github+json")
-            setRequestProperty("User-Agent", "CatMap/${BuildConfig.VERSION_NAME}")
-            connectTimeout = 10_000
-            readTimeout = 15_000
-        }
-        try {
-            if (connection.responseCode == 404) return@withContext null
-            if (connection.responseCode !in 200..299) throw IOException("GitHub responded ${connection.responseCode}")
-            val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-            if (json.optBoolean("draft") || json.optBoolean("prerelease")) return@withContext null
-            val version=json.optString("tag_name").removePrefix("v")
-            if(version.length>32 || !version.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+"))) return@withContext null
-            val assets = json.optJSONArray("assets") ?: return@withContext null
-            val apk = (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.optString("name").endsWith(".apk") }
-                ?: return@withContext null
-            val url = apk.optString("browser_download_url")
-            if (!url.startsWith("https://github.com/")) return@withContext null
-            val checksum=(0 until assets.length()).map {assets.getJSONObject(it)}.firstOrNull {it.optString("name")==apk.optString("name")+".sha256"}?.optString("browser_download_url")
-            Release(
-                version = version,
-                title = json.optString("name"),
-                notes = json.optString("body").trim(),
-                apkUrl = url,
-                sizeBytes = apk.optLong("size"),
-                checksumUrl = checksum?.takeIf {it.startsWith("https://github.com/")},
-                assetName = apk.optString("name"),
-            )
-        } finally {
-            connection.disconnect()
-        }
+        val text = httpsText("https://api.github.com/repos/$repo/releases/latest", notFoundIsNull = true) ?: return@withContext null
+        parseRelease(JSONObject(text), repo)
     }
 
     fun isNewer(version: String): Boolean = compare(version, BuildConfig.VERSION_NAME) > 0
@@ -84,6 +55,10 @@ class Updater(private val context: Context, private val settings: SettingsReposi
     /** Checks at most every 12 hours, and stays quiet about a version the person chose to skip. */
     suspend fun checkIfDue(): Release? {
         if (!configured) return null
+        // An APK from an earlier session is either installed by now or abandoned; it's downloaded again if needed.
+        if (_download.value == DownloadState.Idle) withContext(Dispatchers.IO) {
+            File(context.cacheDir, "updates").listFiles()?.forEach { it.delete() }
+        }
         val s = settings.settings.first()
         if (System.currentTimeMillis() - s.lastUpdateCheck < CHECK_INTERVAL_MS) return null
         // A failed check (offline, GitHub busy) isn't recorded, so the next launch tries again.
@@ -96,8 +71,8 @@ class Updater(private val context: Context, private val settings: SettingsReposi
 
     /** Downloads the APK into the app's private cache, reporting progress through [download]. */
     suspend fun fetch(release: Release) = withContext(Dispatchers.IO) {
-        if(release.version.length>32 || !release.version.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+"))) {
-            _download.value=DownloadState.Failed
+        if (!UpdateChecks.apkAssetOk(repo, release.version, release.assetName, release.apkUrl, release.sizeBytes)) {
+            _download.value = DownloadState.Failed
             return@withContext
         }
         _download.value = DownloadState.Downloading(0f)
@@ -105,94 +80,115 @@ class Updater(private val context: Context, private val settings: SettingsReposi
         dir.listFiles()?.forEach { it.delete() }
         val target = File(dir, "catmap-${release.version}.apk")
         try {
-            var url = URL(release.apkUrl)
-            var connection: HttpURLConnection
-            // GitHub redirects asset downloads to its storage host; follow a few HTTPS redirects only.
-            var hops = 0
-            while (true) {
-                connection = (url.openConnection() as HttpURLConnection).apply {
-                    instanceFollowRedirects = false
-                    setRequestProperty("User-Agent", "CatMap/${BuildConfig.VERSION_NAME}")
-                    connectTimeout = 15_000
-                    readTimeout = 30_000
-                }
-                val code = connection.responseCode
-                if (code in 300..399 && hops < 5) {
-                    val next = URL(url, connection.getHeaderField("Location"))
-                    connection.disconnect()
-                    if (next.protocol != "https") throw IOException("Refusing non-HTTPS redirect")
-                    url = next
-                    hops++
-                    continue
-                }
-                if (code !in 200..299) throw IOException("Download failed: $code")
-                break
-            }
-            val total = connection.contentLengthLong.takeIf { it > 0 } ?: release.sizeBytes
-            connection.inputStream.use { input ->
-                target.outputStream().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    var read = 0L
-                    while (true) {
-                        val n = input.read(buffer)
-                        if (n < 0) break
-                        output.write(buffer, 0, n)
-                        read += n
-                        if (total > 0) _download.value = DownloadState.Downloading((read.toFloat() / total).coerceIn(0f, 1f))
+            val connection = open(release.apkUrl, readTimeout = 30_000)
+            try {
+                if (connection.responseCode !in 200..299) throw IOException("Download failed: ${connection.responseCode}")
+                val total = connection.contentLengthLong.takeIf { it > 0 } ?: release.sizeBytes
+                if (total > UpdateChecks.MAX_APK_BYTES || total != release.sizeBytes) throw IOException("Unexpected APK size")
+                connection.inputStream.use { input ->
+                    target.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var read = 0L
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            read += n
+                            if (read > total) throw IOException("APK larger than announced")
+                            output.write(buffer, 0, n)
+                            _download.value = DownloadState.Downloading((read.toFloat() / total).coerceIn(0f, 1f))
+                        }
                     }
                 }
+            } finally {
+                connection.disconnect()
             }
-            connection.disconnect()
-            if(total>0 && target.length()!=total) throw IOException("Incomplete APK")
+            if (target.length() != release.sizeBytes) throw IOException("Incomplete APK")
+            // A quick check for a damaged download; trust comes from verifyPackage (see UpdateChecks).
             release.checksumUrl?.let { checksumUrl ->
-                if(!ApkChecksum.verify(target,httpsText(checksumUrl),release.assetName)) throw IOException("APK checksum mismatch")
+                val sidecar = httpsText(checksumUrl) ?: throw IOException("Checksum missing")
+                if (!ApkChecksum.verify(target, sidecar, release.assetName)) throw IOException("APK checksum mismatch")
             }
-            settings.saveReleaseNotes(release.version,release.notes)
-            verifyPackage(target,release.version)
+            verifyPackage(target, release.version)
+            settings.saveReleaseNotes(release.version, release.notes)
             _download.value = DownloadState.Ready(target)
         } catch (e: Exception) {
+            // Nothing that failed a check stays on the phone.
             target.delete()
             _download.value = DownloadState.Failed
-            if(e is kotlinx.coroutines.CancellationException) throw e
+            if (e is kotlinx.coroutines.CancellationException) throw e
         }
     }
 
     @Suppress("DEPRECATION")
-    private fun verifyPackage(file:File,version:String) {
-        val flags=if(android.os.Build.VERSION.SDK_INT>=28) android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES else android.content.pm.PackageManager.GET_SIGNATURES
-        val archive=context.packageManager.getPackageArchiveInfo(file.absolutePath,flags) ?: throw IOException("Invalid APK")
-        val installed=context.packageManager.getPackageInfo(context.packageName,flags)
-        require(archive.packageName==context.packageName && archive.versionName==version) {"Wrong APK package or version"}
-        val incomingCode=if(android.os.Build.VERSION.SDK_INT>=28) archive.longVersionCode else archive.versionCode.toLong()
-        val installedCode=if(android.os.Build.VERSION.SDK_INT>=28) installed.longVersionCode else installed.versionCode.toLong()
-        require(incomingCode>installedCode) {"APK is not a newer version"}
-        fun certificates(info:android.content.pm.PackageInfo):Set<String> {
-            val signatures=if(android.os.Build.VERSION.SDK_INT>=28) info.signingInfo?.apkContentsSigners else info.signatures
-            return signatures.orEmpty().map {signature -> java.security.MessageDigest.getInstance("SHA-256").digest(signature.toByteArray()).joinToString("") {"%02x".format(it)} }.toSet()
+    private fun verifyPackage(file: File, version: String) {
+        val pm = context.packageManager
+        val flags = if (android.os.Build.VERSION.SDK_INT >= 28) android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES else android.content.pm.PackageManager.GET_SIGNATURES
+        val archive = pm.getPackageArchiveInfo(file.absolutePath, flags) ?: throw IOException("Invalid APK")
+        val installed = pm.getPackageInfo(context.packageName, flags)
+        fun code(info: android.content.pm.PackageInfo) = if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
+        fun certificates(info: android.content.pm.PackageInfo): Set<String> {
+            val signatures = if (android.os.Build.VERSION.SDK_INT >= 28) info.signingInfo?.apkContentsSigners else info.signatures
+            return signatures.orEmpty().map { signature ->
+                java.security.MessageDigest.getInstance("SHA-256").digest(signature.toByteArray()).joinToString("") { "%02x".format(it) }
+            }.toSet()
         }
-        require(certificates(archive).isNotEmpty() && certificates(archive)==certificates(installed)) {"APK signing identity mismatch"}
+        UpdateChecks.packageProblem(
+            installedPackage = context.packageName, installedCode = code(installed), installedCerts = certificates(installed),
+            apkPackage = archive.packageName, apkVersionName = archive.versionName, apkCode = code(archive), apkCerts = certificates(archive),
+            expectedVersion = version,
+        )?.let { throw IOException("Update refused: $it") }
     }
 
-    private fun httpsText(value:String):String {
-        var url=URL(value)
-        repeat(6) { hop ->
-            require(url.protocol=="https")
-            val connection=(url.openConnection() as HttpURLConnection).apply {instanceFollowRedirects=false; connectTimeout=15_000; readTimeout=15_000}
-            try {
-                val code=connection.responseCode
-                if(code in 300..399 && hop<5) {url=URL(url,connection.getHeaderField("Location")); return@repeat}
-                if(code !in 200..299) throw IOException("HTTP $code")
-                val text=connection.inputStream.bufferedReader().use {it.readText()}
-                require(text.length<=500_000)
-                return text
-            } finally {connection.disconnect()}
+    /** Opens [value], following at most 5 redirects, each to a GitHub host over HTTPS ([UpdateChecks.allowedUrl]). */
+    private fun open(value: String, readTimeout: Int = 15_000): HttpURLConnection {
+        var url = value
+        repeat(6) {
+            if (!UpdateChecks.allowedUrl(url)) throw IOException("Refusing a non-GitHub address")
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = false
+                setRequestProperty("User-Agent", "CatMap/${BuildConfig.VERSION_NAME}")
+                if (url.startsWith("https://api.github.com/")) setRequestProperty("Accept", "application/vnd.github+json")
+                connectTimeout = 15_000
+                this.readTimeout = readTimeout
+            }
+            val code = connection.responseCode
+            if (code !in 300..399) return connection
+            val location = connection.getHeaderField("Location")
+            connection.disconnect()
+            url = URL(URL(url), location ?: throw IOException("Redirect without a target")).toString()
         }
         throw IOException("Too many redirects")
     }
 
-    suspend fun installedReleaseNotes():String?=withContext(Dispatchers.IO) {
-        if(!configured) return@withContext null
-        runCatching {JSONObject(httpsText("https://api.github.com/repos/$repo/releases/tags/v${BuildConfig.VERSION_NAME}")).optString("body").trim().takeIf {it.isNotBlank()} }.getOrNull()
+    /** A small text response (release JSON, checksum), capped at [UpdateChecks.MAX_TEXT_BYTES]. */
+    private fun httpsText(value: String, notFoundIsNull: Boolean = false): String? {
+        val connection = open(value)
+        try {
+            val code = connection.responseCode
+            if (code == 404 && notFoundIsNull) return null
+            if (code !in 200..299) throw IOException("HTTP $code")
+            val out = java.io.ByteArrayOutputStream()
+            connection.inputStream.use { input ->
+                val buffer = ByteArray(16 * 1024)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    out.write(buffer, 0, n)
+                    if (out.size() > UpdateChecks.MAX_TEXT_BYTES) throw IOException("Response too large")
+                }
+            }
+            return out.toString("UTF-8")
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    suspend fun installedReleaseNotes(): String? = withContext(Dispatchers.IO) {
+        if (!configured) return@withContext null
+        runCatching {
+            val text = httpsText("https://api.github.com/repos/$repo/releases/tags/v${BuildConfig.VERSION_NAME}") ?: return@runCatching null
+            UpdateChecks.plainNotes(JSONObject(text).optString("body")).takeIf { it.isNotBlank() }
+        }.getOrNull()
     }
 
     fun reset() {
@@ -220,6 +216,35 @@ class Updater(private val context: Context, private val settings: SettingsReposi
 
     companion object {
         private const val CHECK_INTERVAL_MS = 12L * 60 * 60 * 1000
+
+        /**
+         * The release from GitHub's JSON, or null unless it's a published (not draft or pre-release) version tag with
+         * the workflow's `CatMap-<version>.apk` from this repository ([UpdateChecks.apkAssetOk]).
+         */
+        fun parseRelease(json: JSONObject, repo: String): Release? {
+            if (json.optBoolean("draft") || json.optBoolean("prerelease")) return null
+            val tag = json.optString("tag_name")
+            if (!tag.startsWith("v")) return null
+            val version = tag.removePrefix("v")
+            if (!UpdateChecks.validVersion(version)) return null
+            val assets = json.optJSONArray("assets") ?: return null
+            val list = (0 until assets.length()).mapNotNull { assets.optJSONObject(it) }
+            val name = "CatMap-$version.apk"
+            val apk = list.firstOrNull { it.optString("name") == name } ?: return null
+            val url = apk.optString("browser_download_url")
+            val size = apk.optLong("size")
+            if (!UpdateChecks.apkAssetOk(repo, version, name, url, size)) return null
+            val checksum = list.firstOrNull { it.optString("name") == "$name.sha256" }?.optString("browser_download_url")
+            return Release(
+                version = version,
+                title = UpdateChecks.plainNotes(json.optString("name")).take(120),
+                notes = UpdateChecks.plainNotes(json.optString("body")),
+                apkUrl = url,
+                sizeBytes = size,
+                checksumUrl = checksum?.takeIf { it == "$url.sha256" },
+                assetName = name,
+            )
+        }
 
         /** Compares dotted versions numerically ("2.10.0" > "2.9.3"). */
         fun compare(a: String, b: String): Int {

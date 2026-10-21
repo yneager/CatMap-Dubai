@@ -1,3 +1,5 @@
+import { useAsyncList } from '../../data/useAsyncList';
+import { useDebounced } from '../../data/usePager';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PostDefaults, type Post } from '../../data/model';
@@ -49,7 +51,7 @@ export default function PostEditorScreen() {
   const { id } = useParams(),
     location = useLocation(),
     navigate = useNavigate(),
-    { profile, posts } = useApp(),
+    { profile } = useApp(),
     settings = useSettings(),
     action = useAction();
   const uid = profile?.uid;
@@ -78,6 +80,11 @@ export default function PostEditorScreen() {
     queue = useRef(Promise.resolve()),
     photoRef = useRef(photos);
   photoRef.current = photos;
+  const nearPosition = useDebounced(post.lat + ',' + post.lng);
+  const posts = useAsyncList(
+    () => (post.lat || post.lng ? PostRepository.near(post.lat, post.lng, 3) : Promise.resolve([])),
+    'duplicate-posts-' + nearPosition,
+  );
   const animalTypePicked = useRef(params.has('type') || editing);
   const { verdicts, matches, checking } = usePhotoCheck(
     photos,
@@ -424,6 +431,8 @@ export default function PostEditorScreen() {
         {step === 'PHOTOS' && (
           <>
             <p>{t('add_photos_hint')}</p>
+            <p className="small muted">{t('metadata_removed_note')}</p>
+            <p className="small muted">{t('several_subjects_hint')}</p>
             <div className="photo-grid">
               {post.photoIds.map((id) => (
                 <div key={id}>

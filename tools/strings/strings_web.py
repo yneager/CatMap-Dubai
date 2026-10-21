@@ -46,3 +46,16 @@ S += [
     ('web_install_desktop', 'Install on this computer', 'Install on this computer'), # TODO-AR
     ('web_update_checked', 'Update check complete. A new version will appear here when available.', 'Update check complete. A new version will appear here when available.'), # TODO-AR
 ]
+
+# Name suggestions ported from Android NameIdeas.forCoat.
+S += [
+    ('web_name_ideas_orange', 'Zafran|Mishmish|Asal|Burtuqala', 'Zafran|Mishmish|Asal|Burtuqala'), # TODO-AR
+    ('web_name_ideas_black', 'Qahwa|Layl|Fahm|Dukhoon', 'Qahwa|Layl|Fahm|Dukhoon'), # TODO-AR
+    ('web_name_ideas_white', 'Thalj|Lulu|Qamar|Haleeb', 'Thalj|Lulu|Qamar|Haleeb'), # TODO-AR
+    ('web_name_ideas_gray', 'Ramadi|Ghaim|Fidda|Dukhan', 'Ramadi|Ghaim|Fidda|Dukhan'), # TODO-AR
+    ('web_name_ideas_black_white', 'Domino|Shatranj|Oreo|Bisbis', 'Domino|Shatranj|Oreo|Bisbis'), # TODO-AR
+    ('web_name_ideas_calico', 'Fusaifisa|Kunafa|Zainab|Sadu', 'Fusaifisa|Kunafa|Zainab|Sadu'), # TODO-AR
+    ('web_name_ideas_cream', 'Luqaimat|Karak|Sukkar|Hareera', 'Luqaimat|Karak|Sukkar|Hareera'), # TODO-AR
+    ('web_name_ideas_brown', 'Tamr|Dallah|Bunni|Khubz', 'Tamr|Dallah|Bunni|Khubz'), # TODO-AR
+    ('web_name_ideas_unknown', 'Bissa|Najma|Sahm|Habibi', 'Bissa|Najma|Sahm|Habibi'), # TODO-AR
+]

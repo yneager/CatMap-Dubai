@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useApp, useList, useDoc, useAction } from '../../state';
+import { useAsyncList } from '../../data/useAsyncList';
+import { CatRepository } from '../../data/CatRepository';
+import { distanceKm } from '../../data/Neighborhoods';
 import { StationRepository } from '../../data/StationRepository';
 import {
   FeedingStationDefaults,
@@ -107,7 +110,23 @@ function StationDetail() {
     [food, setFood] = useState('unknown'),
     [water, setWater] = useState('unknown'),
     [note, setNote] = useState(''),
-    [issue, setIssue] = useState('other');
+    [issue, setIssue] = useState('other'),
+    [selectedCats, setSelectedCats] = useState<string[]>([]);
+  const nearbyCats = useAsyncList(
+    () =>
+      station && modal === 'checkin'
+        ? CatRepository.near(station.lat, station.lng, 0.8).then((cats) =>
+            cats
+              .sort(
+                (a, b) =>
+                  distanceKm(a.lat, a.lng, station.lat, station.lng) -
+                  distanceKm(b.lat, b.lng, station.lat, station.lng),
+              )
+              .slice(0, 12),
+          )
+        : Promise.resolve([]),
+    'station-cats-' + id + '-' + modal + '-' + station?.lat,
+  );
   if (station === undefined) return <Loading />;
   if (!station) return <EmptyState text={t('station_not_found')} />;
   return (
@@ -151,6 +170,7 @@ function StationDetail() {
           </button>
         </div>
         <SectionHeader>{t('total_checkins')}</SectionHeader>
+        {checkins?.length === 0 && <p>{t('no_checkins_yet')}</p>}
         {checkins
           ?.sort((a, b) => b.at - a.at)
           .slice(0, 50)
@@ -196,6 +216,25 @@ function StationDetail() {
       </div>
       {modal === 'checkin' && (
         <Dialog title={t('check_in')} onClose={() => setModal('')}>
+          {!!nearbyCats?.length && (
+            <>
+              <SectionHeader>{t('known_cats_nearby')}</SectionHeader>
+              {nearbyCats.map((c) => (
+                <label key={c.id}>
+                  <input
+                    type="checkbox"
+                    checked={selectedCats.includes(c.id)}
+                    onChange={(e) =>
+                      setSelectedCats((ids) =>
+                        e.target.checked ? [...ids, c.id] : ids.filter((id) => id !== c.id),
+                      )
+                    }
+                  />
+                  {c.name}
+                </label>
+              ))}
+            </>
+          )}
           <Field
             label={t('cats_seen_here')}
             value={cats}
@@ -217,7 +256,7 @@ function StationDetail() {
                 await StationRepository.checkIn(
                   station,
                   Number(cats),
-                  [],
+                  selectedCats,
                   food,
                   water,
                   note,

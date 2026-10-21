@@ -7,6 +7,7 @@ import {
   updateDoc,
   arrayUnion,
   increment,
+  documentId,
 } from 'firebase/firestore';
 import { database } from '../firebase';
 import { col, ref, read, list, listQuery } from './Firestore';
@@ -28,7 +29,9 @@ import {
   type UserProfile,
   type MergeRequest,
 } from './model';
-import { Dubai, LocationPrivacy } from './Neighborhoods';
+import { Dubai, LocationPrivacy, distanceKm } from './Neighborhoods';
+import { Geohash } from './Geohash';
+import { SearchTerms } from './SearchTerms';
 import { UserRepository as users } from './UserRepository';
 import { NotificationRepository as notifications } from './NotificationRepository';
 import { ModerationRepository as moderation } from './ModerationRepository';
@@ -61,13 +64,56 @@ export interface SightingDraft {
   rejectedCatIds: string[];
 }
 export const CatRepository = {
+  directoryQuery: (field = 'lastSeen', descending = true) =>
+    listQuery('cats', orderBy(field, descending ? 'desc' : 'asc')),
+  neighborhoodQuery: (key: string) =>
+    listQuery('cats', where('neighborhoods', 'array-contains', key), orderBy('lastSeen', 'desc')),
+  searchQuery: (word: string) =>
+    listQuery(
+      'cats',
+      where('searchTerms', 'array-contains-any', SearchTerms.query(word)),
+      orderBy('lastSeen', 'desc'),
+    ),
+  byIds: async (ids: string[]) => {
+    const unique = [...new Set(ids)],
+      result: Cat[] = [];
+    for (let i = 0; i < unique.length; i += 30)
+      result.push(
+        ...(await list(
+          listQuery('cats', where(documentId(), 'in', unique.slice(i, i + 30))),
+          CatFromDoc,
+        )),
+      );
+    return result
+      .filter((c) => !c.hidden && !c.mergedInto)
+      .sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+  },
+  near: async (lat: number, lng: number, radius: number, perCell = 150) => {
+    const pages = await Promise.all(
+      Geohash.around(lat, lng, radius).map((cell) =>
+        list(
+          listQuery(
+            'cats',
+            where('geoCells', 'array-contains', cell),
+            orderBy('updatedAt', 'desc'),
+            limit(perCell),
+          ),
+          CatFromDoc,
+        ),
+      ),
+    );
+    return [...new Map(pages.flat().map((c) => [c.id, c])).values()].filter(
+      (c) => !c.hidden && !c.mergedInto && distanceKm(lat, lng, c.lat, c.lng) <= radius,
+    );
+  },
   privateLocation: (id: string) =>
     read(`privateLocations/${id}`, PrivateLocationFromDoc).catch(() => null),
-  allCats: () => listQuery('cats', orderBy('lastSeen', 'desc'), limit(800)),
   catFlow: (id: string) => ref(`cats/${id}`),
   cat: (id: string) => read(`cats/${id}`, CatFromDoc),
-  allCatsOnce: async () =>
-    (await list(CatRepository.allCats(), CatFromDoc)).filter((c) => !c.hidden && !c.mergedInto),
+  newest: async (count = 300) =>
+    (await list(listQuery('cats', orderBy('lastSeen', 'desc'), limit(count)), CatFromDoc)).filter(
+      (c) => !c.hidden && !c.mergedInto,
+    ),
   sightingsForCat: (id: string) => listQuery('sightings', where('catId', '==', id)),
   sightingsForUser: (uid: string) => listQuery('sightings', where('userId', '==', uid)),
   recentSightings: () => listQuery('sightings', orderBy('seenAt', 'desc'), limit(600)),
@@ -129,6 +175,8 @@ export const CatRepository = {
           lastSeen: d.seenAt,
           sightingCount: 1,
           ...position,
+          geoCells: Geohash.cells(position.lat, position.lng),
+          searchTerms: SearchTerms.of(SearchTerms.words(name)),
           neighborhood: hood,
           neighborhoods: [hood],
           tnrStatus: tnr,
@@ -152,7 +200,12 @@ export const CatRepository = {
         if (!existing.coverPhotoId) changes.coverPhotoId = d.photoIds[0];
       }
       if (d.seenAt >= existing.lastSeen)
-        Object.assign(changes, { lastSeen: d.seenAt, ...position, neighborhood: hood });
+        Object.assign(changes, {
+          lastSeen: d.seenAt,
+          ...position,
+          geoCells: Geohash.cells(position.lat, position.lng),
+          neighborhood: hood,
+        });
       if (d.features.length) {
         const n = Math.max(1, Math.min(9, existing.sightingCount));
         changes.features =
@@ -240,10 +293,26 @@ export const CatRepository = {
       );
     return catRef.id;
   },
-  updateCat: (id: string, changes: Record<string, unknown>) =>
-    updateDoc(ref(`cats/${id}`), { ...changes, updatedAt: Date.now() }),
-  addAlias: (id: string, alias: string) =>
-    CatRepository.updateCat(id, { aliases: arrayUnion(alias.trim()) }),
+  updateCat: async (id: string, changes: Record<string, unknown>) => {
+    if (typeof changes.name === 'string' || Array.isArray(changes.aliases)) {
+      const cat = await CatRepository.cat(id);
+      if (cat)
+        changes.searchTerms = SearchTerms.of(
+          SearchTerms.words(
+            typeof changes.name === 'string' ? changes.name : cat.name,
+            ...(Array.isArray(changes.aliases) ? (changes.aliases as string[]) : cat.aliases),
+          ),
+        );
+    }
+    if (typeof changes.lat === 'number' && typeof changes.lng === 'number')
+      changes.geoCells = Geohash.cells(changes.lat, changes.lng);
+    await updateDoc(ref(`cats/${id}`), { ...changes, updatedAt: Date.now() });
+  },
+  addAlias: async (id: string, alias: string) => {
+    const cat = await CatRepository.cat(id);
+    if (cat)
+      await CatRepository.updateCat(id, { aliases: [...new Set([...cat.aliases, alias.trim()])] });
+  },
   setCoverPhoto: (id: string, photoId: string) =>
     CatRepository.updateCat(id, { coverPhotoId: photoId }),
   updateSighting: (s: Sighting, changes: Record<string, unknown>) =>
@@ -331,7 +400,7 @@ export const CatRepository = {
         createdAt: Date.now(),
       }),
     );
-    users.addStats(b, me.uid, { mergeSuggestions: 1 }, 5);
+    users.addStats(b, me.uid, { mergeSuggestions: 1 }, 5, undefined, true);
     await b.commit();
   },
   rejectMerge: async (r: MergeRequest, me: UserProfile, note: string) => {
@@ -391,11 +460,15 @@ export const CatRepository = {
       if (duplicate[field].length) changes[field] = arrayUnion(...duplicate[field]);
     const aliases = [duplicate.name, ...duplicate.aliases].filter((n) => n && n !== primary.name);
     if (aliases.length) changes.aliases = arrayUnion(...aliases);
+    changes.searchTerms = SearchTerms.of(
+      SearchTerms.words(primary.name, ...new Set([...primary.aliases, ...aliases])),
+    );
     if (duplicate.lastSeen > primary.lastSeen)
       Object.assign(changes, {
         lastSeen: duplicate.lastSeen,
         lat: duplicate.lat,
         lng: duplicate.lng,
+        geoCells: Geohash.cells(duplicate.lat, duplicate.lng),
         neighborhood: duplicate.neighborhood,
       });
     b.update(ref(`cats/${primary.id}`), changes);

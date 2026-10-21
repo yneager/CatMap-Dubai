@@ -1,4 +1,8 @@
 let connection: Promise<IDBDatabase> | undefined;
+let accountWritesEnabled = true;
+export function blockAccountWrites() {
+  accountWritesEnabled = false;
+}
 function open() {
   return (connection ??= new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open('catmap-device', 1);
@@ -16,7 +20,9 @@ export async function get<T>(key: string): Promise<T | undefined> {
   });
 }
 export async function put(key: string, value: unknown) {
+  if (key !== 'settings' && !accountWritesEnabled) return;
   const db = await open();
+  if (key !== 'settings' && !accountWritesEnabled) return;
   return new Promise<void>((resolve, reject) => {
     const tx = db.transaction('values', 'readwrite');
     tx.objectStore('values').put(value, key);
@@ -29,6 +35,23 @@ export async function remove(key: string) {
   return new Promise<void>((resolve, reject) => {
     const tx = db.transaction('values', 'readwrite');
     tx.objectStore('values').delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+export async function clearAccountData() {
+  blockAccountWrites();
+  const db = await open();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('values', 'readwrite'),
+      store = tx.objectStore('values');
+    const r = store.openCursor();
+    r.onsuccess = () => {
+      const cursor = r.result;
+      if (!cursor) return;
+      if (cursor.key !== 'settings') cursor.delete();
+      cursor.continue();
+    };
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });

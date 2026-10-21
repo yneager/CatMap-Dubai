@@ -8,7 +8,7 @@ SOURCE = ROOT / 'app/src/main/java/com/catmap/dubai'
 DEST = ROOT / 'web/src/data/model'
 DEST.mkdir(parents=True, exist_ok=True)
 schema = {}
-out = ['// Generated from Android Kotlin models. Run npm run models:generate.', "import type { Timestamp } from 'firebase/firestore';"]
+out = ['// Generated from Android Kotlin models. Run npm run models:generate.', "import { Timestamp } from 'firebase/firestore';"]
 for path in sorted((SOURCE / 'data/model').glob('*.kt')):
     text = re.sub(r'/\*.*?\*/|//[^\n]*', '', path.read_text(encoding='utf-8'), flags=re.S)
     for match in re.finditer(r'data class (\w+)\(\s*\n(.*?)\n\)', text, re.S):
@@ -35,7 +35,24 @@ for path in sorted((SOURCE / 'data/model').glob('*.kt')):
         out += [f'export interface {name} {{'] + [f'  {key}: {ts};' for key,_,ts,_,_ in fields] + ['}']
         out += [f'export const {name}Defaults: {name} = {{'] + [f'  {key}: {default},' for key,_,_,default,_ in fields] + ['};']
         identity = next((key for key,_,_,_,isid in fields if isid), None)
-        out += [f'export function {name}FromDoc(id: string, data: Record<string, unknown>): {name} {{', f'  return Object.assign(Object.fromEntries(Object.entries({name}Defaults).map(([key, value]) => [key, key in data ? data[key] : value]))'+(f', {{ {identity}: id }}' if identity else '')+f') as unknown as {name};', '}']
+        out += [f'export function {name}FromDoc(id: string, data: Record<string, unknown>): {name} {{', '  return {']
+        for key,kind,ts,default,isid in fields:
+            raw = f'data.{key}'
+            if isid: expr = 'id'
+            elif kind.startswith('List<'):
+                element = 'number' if kind == 'List<Double>' else 'string'
+                if kind not in ('List<String>', 'List<Double>'):
+                    nested = kind[5:-1]
+                    expr = f'Array.isArray({raw}) ? {raw}.filter(v => v && typeof v === "object" && !Array.isArray(v)).map(v => {nested}FromDoc("", v)) : []'
+                else:
+                    expr = f'Array.isArray({raw}) ? {raw}.filter((v): v is {element} => typeof v === "{element}"'+(' && Number.isFinite(v)' if element == 'number' else '')+f') : []'
+            elif kind.startswith('Map<'):
+                element = 'number' if 'Long>' in kind else 'string'
+                expr = f'{raw} && typeof {raw} === "object" && !Array.isArray({raw}) ? Object.fromEntries(Object.entries({raw}).filter(([, v]) => typeof v === "{element}"'+(' && Number.isFinite(v)' if element == 'number' else '')+f')) as {ts} : {{}}'
+            elif kind == 'Timestamp?': expr = f'{raw} instanceof Timestamp ? {raw} : null'
+            else: expr = f'typeof {raw} === "{ts}"'+(f' && Number.isFinite({raw})' if ts == 'number' else '')+f' ? {raw} : {default}'
+            out.append(f'    {key}: {expr},')
+        out += ['  };','}']
         # Restrict every serialization to Kotlin fields, omit @DocumentId, round all integer values.
         out += [f'export function {name}ToDoc(value: {name}): Record<string, unknown> {{','  return {']
         for key,kind,_,_,isid in fields:

@@ -9,6 +9,7 @@ import com.catmap.dubai.data.model.UserProfile
 import com.catmap.dubai.gamification.Points
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
@@ -30,8 +31,10 @@ class RescueRepository(
     fun volunteerBoard(): Flow<List<RescueReport>> =
         col.whereIn("status", volunteerStatuses).listFlow<RescueReport>().map { l -> l.sortedByDescending { it.updatedAt } }
 
-    fun allReports(): Flow<List<RescueReport>> =
-        col.listFlow<RescueReport>().map { l -> l.sortedByDescending { it.createdAt } }
+    /** The newest reports for moderators (live; rescues are urgent), optionally of one status. */
+    fun allReports(status: String? = null): Flow<List<RescueReport>> =
+        (if (status == null) col else col.whereEqualTo("status", status)).orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(MODERATION_WINDOW).listFlow()
 
     fun pending(): Flow<List<RescueReport>> =
         col.whereEqualTo("status", RescueStatus.SUBMITTED.key).listFlow<RescueReport>().map { l -> l.sortedBy { it.createdAt } }
@@ -93,6 +96,11 @@ class RescueRepository(
         val update = RescueUpdate(report.status, note.trim(), by.uid, by.username, now())
         col.document(report.id).update(mapOf("updates" to FieldValue.arrayUnion(update.asMap()), "updatedAt" to now())).await()
         notifications.send(listOf(report.reporterId) - by.uid, NotifType.RESCUE_UPDATE, mapOf("status" to report.status, "area" to report.neighborhood), "rescue/${report.id}")
+    }
+
+    companion object {
+        /** How many of the newest rescue reports the moderation list shows live. */
+        const val MODERATION_WINDOW = 150L
     }
 }
 

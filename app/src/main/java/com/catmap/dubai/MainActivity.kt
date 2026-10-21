@@ -91,8 +91,9 @@ class MainActivity : AppCompatActivity() {
         super.onSaveInstanceState(outState)
     }
 
+    /** A catmap://post link from anywhere, or a screen from CatMap's own notifications ([SystemNotifications.routeFrom]). */
     private fun routeFrom(intent: Intent?): String? =
-        PostLinks.parse(intent?.dataString)?.let { "post/$it" } ?: intent?.getStringExtra(SystemNotifications.EXTRA_ROUTE)
+        PostLinks.parse(intent?.dataString)?.let { "post/$it" } ?: SystemNotifications.routeFrom(this, intent)
 }
 
 @androidx.compose.runtime.Composable

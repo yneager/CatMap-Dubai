@@ -1,118 +1,74 @@
 # CatMap Dubai
 
-A community app for Dubai's animals: lost, found and spotted pets of any kind, animals that need help,
-street cats, adoption, and a pet-sitting marketplace. It has a live vector map, messaging, alerts for
-lost animals nearby, on-device AI for cat photos, Ehsan feeding stations, an admin dashboard, and full
-English/Arabic support (RTL). New strings from the 13 October work temporarily use English in Arabic;
-their `# TODO-AR` entries await the owner's translation pass. Updates are delivered from GitHub Releases.
+**A free community app that helps Dubai's animals: find lost pets, help street cats, and find homes for animals
+that need one.** It works in English and Arabic, on Android, and on iPhone as a web app.
 
-## Lost to reunited, with AI matching (16 October 2026)
+![CatMap icons](docs/icons-preview.png)
 
-A lost report and a sighting (found, Animal Spotted or street post) are matched in both directions by the
-pet-recognition-base model on the owner's PC (with a DETR animal detector), or by the phone's colour fingerprint
-when the PC is off. The owner and the person who saw the animal get one alert, compare the photos side by side,
-answer (might be mine / not mine / more info), talk in the existing chat, and the owner marks the pet reunited,
-crediting the sighting. Design: [docs/MATCHING.md](docs/MATCHING.md). Measured accuracy, calibrated thresholds and
-limits: [docs/AI_EVALUATION.md](docs/AI_EVALUATION.md).
+## What you can do with it
 
-## Improvements added on 13 October 2026
+* **Report a lost pet, or an animal you found or spotted.** Your post goes on a live map of Dubai with photos, the
+  area it was last seen in, and an optional reward. People who follow that area get an alert.
+* **Get help finding your pet.** When someone posts a sighting, CatMap compares the photos with lost reports
+  nearby and tells both of you if it might be the same animal. You can look at the photos side by side, chat, and
+  mark your pet as reunited.
+* **Look after street cats.** Record sightings of the cats in your neighbourhood. The app recognises cats it has
+  seen before, keeps a profile for each one (health, neutering, where it was seen), and lists feeding stations you
+  can check in at.
+* **Ask for urgent help.** Report an injured or sick animal so volunteers and rescuers can pick it up.
+* **Adopt or rehome.** Browse animals looking for a home and send an adoption request, or list one yourself.
+* **Find a pet sitter.** Sitters list their services and rates; you book, and leave a review afterwards.
+* **Search and explore.** Search every post by name, breed, colour or area, filter by animal and distance, or
+  switch the map to a list.
+* **Share.** Send a post to WhatsApp or print a "lost pet" poster with a QR code.
 
-* Original CatMap vector icons, shared screen components and readable Explore status-bar insets.
-  [Preview all 60 icons](docs/icons-preview.png).
-* Post drafts save per account, including cached photos; continue or discard after restarting.
-* Lost/found reminders after 14 inactive days, with Still looking / Mark reunited actions. Open posts
-  inactive for 90 days are hidden by default; **Include older posts** restores them.
-* Photo-assisted possible matches use a small on-device colour/layout fingerprint, distance and time.
-  Older posts without fingerprints use a clearly labelled type/location/time comparison.
-* A microchip yes/no/unknown field in posts and filters. Chip numbers are never requested or stored publicly.
-* Map/List toggle with the same filtered points, sorted by GPS distance or the map center when GPS is absent.
-* Help directory from Explore or login, maintained by admins; verified sitter badges and a Verified only filter.
-* Settings → **Download my data** shares the signed-in account's JSON records through Android's share sheet.
-  It includes posts, authored updates, chats, requests, sitter profile, alert subscriptions and private own
-  locations, with photo IDs instead of image bytes. Auth credentials and push tokens are excluded.
-* Settings → **Quiet hours** uses device time, including overnight windows. Inbox alerts remain available;
-  suppressed system notifications are not replayed later.
-* Admin weekly post/member charts and an eight-week lost/found reunion rate, using Firestore count queries.
-* `catmap://post/<id>` links in shared text and poster QR codes. The app must be installed to open these links.
-* Release notes once after upgrading; optional SHA-256 release sidecars plus package, version and signing checks.
-* Shared feed listeners, thumbnail/target-size decoding, memory/disk caching and a device-generated baseline profile.
+## Get the app
 
-Implementation, verification boundaries, new fields/indexes and remaining owner work are in
-[the dated handoff](HANDOFF.md). No production deployment or release was made for this round.
+* **Android:** download `CatMap-<version>.apk` from the
+  [latest release](https://github.com/yneager/CatMap-Dubai/releases/latest) and open it (your phone will ask you to
+  allow installing apps from your browser or file manager). After that, the app updates itself: it checks for new
+  versions and installs them when you agree.
+* **iPhone:** open [catmap-dubai.web.app](https://catmap-dubai.web.app) in Safari, tap **Share → Add to Home
+  Screen**, and open CatMap from your home screen.
 
-**First time? Follow [SETUP.md](SETUP.md).** It takes about 15 minutes: create a free Firebase project,
-add `google-services.json`, publish the rules, then press Run. To try it with no Firebase project at all,
-use the local emulators and the demo accounts ([SETUP.md → Local demo](SETUP.md#local-demo-no-firebase-project-needed)).
+You need an account with a verified email address to post, chat or see other people's posts.
 
-## Where each feature lives
+## Your privacy
 
-| Area | In the app | Code |
-| --- | --- | --- |
-| Web app | iPhone Safari/Home Screen and browser PWA with shared Firebase data, rules, strings and icons. Local implementation and owner publishing instructions | [`web/README.md`](web/README.md), [`web/docs/parity.md`](web/docs/parity.md) |
-| Map | Map tab with **Modern** (tilted 3D buildings, recoloured streets) and **Classic** styles, light/dark, optional satellite. Shows clustered status markers (pulsing for urgent posts), a tap preview card, recenter, and filter chips (multi-select + Clear). The chosen style is remembered | `ui/map` (MapLibre + OpenFreeMap) |
-| Posts | **+ Post**: Lost / Found / Spotted / Needs help / Street animal / Adoption / Other, for any animal. A 6-step guided form takes up to 6 photos plus an optional video, a pin and search-area radius, last seen time, reward, and a contact method. It warns about likely duplicates. Posts can be edited, deleted, or marked reunited/resolved. "I saw this animal" sends updates with a photo and location | `ui/posts`, `data/PostRepository.kt` |
-| Explore & search | Nearby feed (newest/closest), filters for type, distance, date and reward (remembered), and search across names, breeds, colours and areas in both languages | `ui/explore` |
-| Adoption | Listings with Available / Pending / Adopted. People send adoption requests; owners approve or decline | `ui/adoption`, `data/AdoptionRepository.kt` |
-| Pet sitting | Sitter profiles (services, rates, area), search, booking requests, accept/decline/complete, and reviews with ratings | `ui/sitting`, `data/SittingRepository.kt` |
-| Messages | One-to-one chats with post links and photos, an optional phone/email shown only when chosen, and block/report | `ui/messages`, `data/ChatRepository.kt` |
-| Alerts | Lost animals near a followed area, sightings of your post, possible matches, messages, adoption and booking updates. Each category can be switched off, and repeats are de-duplicated | `notifications/`, `data/NotificationRepository.kt` |
-| Sharing | Share to WhatsApp and other apps; a printable **poster** image (1080×1350) for lost and found animals | `util/Share.kt`, `util/PosterMaker.kt` |
-| Street cats | Sightings with on-device AI (coat colour/pattern, possible matches), cat profiles, health & TNR, rescue reports, Ehsan feeding stations, badges | `ui/cats`, `ui/sighting`, `ui/rescue`, `ui/stations`, `ai/` |
-| Admin | Dashboard with stats, posts (hide/delete), members (suspend/restore), sitters, reports, rescue approvals, roles, and a moderation log. Admin rights are checked by `firestore.rules`, not by the app | `ui/admin`, `data/AdminRepository.kt` |
-| Updates | Checks GitHub Releases (Settings → Check for updates, and automatically every 12 h), then downloads and installs the signed APK | `update/` |
-| Privacy & security | Photos re-encoded without GPS/EXIF, approximate public locations, a private email, role-based rules, rate limits, suspended accounts blocked server-side | `firestore.rules`, `storage.rules` |
+* Photos are re-saved by the app before upload, which removes the hidden location and camera details that phones
+  add to pictures.
+* You can choose to show only an approximate location on a post; the exact spot is never stored.
+* Messages can only be read by the two people in the chat, and you can block or report anyone.
+* You can download all your data, and delete your account and everything you posted, from **Settings**.
+* Logging out clears your data from the phone.
 
-## Plans: what works on the free Spark plan
+## What's new in 0.1.0
 
-Everything above works on the free plan, with two exceptions that need the paid **Blaze** plan:
+A big update focused on safety and speed:
 
-* **Videos on posts**, which need Cloud Storage. Photos are stored in Firestore and work on the free plan.
-* **Instant push notifications**, which need the Cloud Function in `functions/`. Without it, alerts still arrive in real time while the app is open and through a background check about every 15 minutes.
+* Much stricter security rules on the server, so nobody can change other people's posts, points or cats, fake
+  alerts, or upload anything except photos.
+* The map loads only the part of Dubai you're looking at and remembers what it already has, so it opens faster and
+  uses far less data.
+* Search now covers every post, not only the newest ones, and lists load as you scroll.
+* Safer updates: the app only installs updates signed by CatMap and downloaded from this project.
+* Logging out now clears your data from the phone, and message previews are hidden on the lock screen.
 
-Build with `-Pcatmap.blaze=true` once the project is on Blaze (see SETUP.md). Local demo builds
-automatically enable the free Storage emulator; push still needs its flag and function/FCM test setup.
+## Free to run
 
-## Project layout
+CatMap runs on Firebase's free plan. Two extras are switched off in this version because they need the paid plan:
+videos on posts, and instant push alerts while the app is closed (alerts still arrive within about 15 minutes, and
+straight away while the app is open).
 
-```
-app/src/main/java/com/catmap/dubai/
-  ai/              on-device cat photo analysis + similarity
-  data/            Firebase repositories and models (posts, adoption, sitting, chats, admin…)
-  notifications/   Android notifications, background check, FCM receiver
-  update/          GitHub Releases updater
-  ui/              Compose screens (map, explore, posts, adoption, sitting, messages, admin…)
-  util/            images, sharing, poster
-functions/         Cloud Function: content-free push when an alert is written (Blaze)
-firestore.rules    security rules (roles, privacy, rate limits, admin)
-.github/workflows  CI (tests, lint, rules) and signed releases on version tags
-tools/             string generator, rules tests, demo seed, adb helper, release secrets helper
-```
+## For developers
 
-## Build and checks
+* **Set up your own copy:** [SETUP.md](SETUP.md) (about 15 minutes, or try it on local emulators with demo data).
+* **How the code is organised and the current state of the project:** [HANDOFF.md](HANDOFF.md).
+* **Web app:** [web/README.md](web/README.md).
+* **AI matching:** [docs/MATCHING.md](docs/MATCHING.md) (design) and [docs/AI_EVALUATION.md](docs/AI_EVALUATION.md)
+  (measured accuracy).
+* **Costs and privacy:** [docs/cost](docs/cost) and [docs/security](docs/security). Reporting a security problem:
+  [SECURITY.md](SECURITY.md).
 
-Use Android Studio's bundled JDK and the checked-in Gradle wrapper (see HANDOFF.md for the exact toolchain).
-
-```powershell
-$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
-python tools/strings/build_strings.py .
-.\gradlew.bat --no-parallel --max-workers=1 :app:testDebugUnitTest :app:verifyRoborazziDebug :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease
-```
-
-* **63 Android tests** include drafts, staleness, strict link parsing, matching, image-cache hits, quiet hours,
-  export JSON, checksums and upgrade-note policy. Three rendering tests produce **14 screenshot fixtures**.
-* **Screenshot re-record:** run `.\gradlew.bat :app:recordRoborazziDebug`, inspect changes under
-  `app/src/test/screenshots`, then run `.\gradlew.bat :app:verifyRoborazziDebug` in a separate invocation.
-  Rendering is English light/dark, device-free; MapLibre and Arabic are deliberately excluded.
-* **Firestore rules suite** (`tools/rulestest`, 244 checks) covers every collection, including admin-only actions, suspension, blocking and rate limits:
-  `npx.cmd -y firebase-tools@latest emulators:exec --config firebase.rules-test.json --only firestore --project demo-catmap-rules-test "npm --prefix tools/rulestest test"`
-* **Push function test**: `npm --prefix functions test`, with the Firestore emulator running and FCM stubbed.
-* **Staging build**: R8-shrunk like a release, but debug-signed and able to use the emulators:
-  `.\gradlew.bat :app:installStaging '-Pcatmap.emulatorHost=10.0.2.2'`. Use it to catch shrinking problems before tagging a release.
-
-A release APK is signed only when `keystore.properties` (or the CI secrets) is present. It contains ARM code only (about 24 MB).
-
-To regenerate the baseline profile with a connected emulator:
-`.\gradlew.bat :app:generateStagingBaselineProfile '-Pcatmap.emulatorHost=10.0.2.2'`.
-Copy the generated staging profile files into `app/src/main/generated/baselineProfiles` after review.
-Normal builds consume the checked-in profile without requiring a device. Profile collection may reset the
-staging app's local sign-in; use a disposable demo account. Keep all demo writes in local emulators.
+Built with Kotlin and Jetpack Compose, Firebase (Firestore and Authentication), MapLibre with OpenFreeMap maps, and
+an optional AI server (`cat-server`, not in this repository) that runs the photo-recognition models.

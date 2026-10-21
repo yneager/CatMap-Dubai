@@ -171,3 +171,66 @@ without evidence.
 
 Image credits: DogFaceNet © 2018 Guillaume Mougeot (MIT). Oxford-IIIT Pet © Parkhi, Vedaldi, Zisserman, Jawahar
 2012 (CC BY-SA 4.0); the montage is a derivative under the same licence.
+
+## 10. Two cheap ways to a stronger model, measured (17 October 2026)
+
+Tested: **(1) the larger sibling model**, `open-noodle/pet-recognition-large` (frozen DINOv2-large + 512-d
+projection, Apache-2.0, same input and output as base, 1.16 GB ONNX vs 0.33 GB), and **(2) flip test-time
+augmentation**: each crop and its mirror image are embedded, averaged and re-normalised. Same data, same splits
+(seed 7), same detector and the same CatMap scoring (C'') as sections 5 and 6. Nothing live was changed: the worker
+still uses base without flip. Raw results: `docs/evaluation/model-variants-2026-10-17/`.
+
+| | base (live) | base + flip | large | large + flip |
+|---|---|---|---|---|
+| **DogFaceNet, C''** top-1 / top-3 | 0.954 / 0.986 | 0.954 / 0.986 | 0.964 / 0.989 | 0.966 / 0.989 |
+| AUC / EER | 0.998 / 0.014 | 0.999 / 0.015 | 0.999 / 0.012 | 0.999 / 0.012 |
+| **Live, 20 candidates** (face-tuned labels): right animal on top, possible+ / strong | 0.979 / 0.910 | 0.978 / 0.912 | 0.986 / 0.926 | 0.986 / 0.926 |
+| wrong animal on top, possible+ | 0.002 | 0.002 | 0.000 | 0.000 |
+| unseen animal: possible+ / strong / nothing shown | 0.187 / 0.011 / 0.421 | 0.187 / 0.013 / 0.412 | 0.175 / 0.011 / 0.433 | 0.175 / 0.011 / 0.441 |
+| **Cats, same breed, different animals** (Oxford, crop): mean | 0.526 | 0.531 | 0.574 | 0.577 |
+| 95 / 99 / 99.9 % score below | 0.787 / 0.836 / 0.884 | 0.791 / 0.839 / 0.888 | 0.841 / 0.879 / 0.917 | 0.843 / 0.881 / 0.919 |
+| other breeds, 99 % below | 0.678 | 0.681 | 0.729 | 0.731 |
+| **Dogs, same breed, different animals**: mean | 0.341 | 0.345 | 0.348 | 0.350 |
+| 95 / 99 / 99.9 % score below | 0.656 / 0.764 / 0.888 | 0.661 / 0.769 / 0.895 | 0.702 / 0.805 / 0.906 | 0.704 / 0.808 / 0.908 |
+| other breeds, 99 % below | 0.267 | 0.268 | 0.249 | 0.249 |
+| **Strict labels this model would need** (section 6 rule), cats strong / possible / weak | 0.88 / 0.79 / 0.68 | 0.89 / 0.79 / 0.68 | 0.92 / 0.84 / 0.73 | 0.92 / 0.84 / 0.73 |
+| dogs strong / possible / weak | 0.89 / 0.66 / 0.27 | 0.89 / 0.66 / 0.27 | 0.91 / 0.70 / 0.25 | 0.91 / 0.70 / 0.25 |
+| **Same dog (DogFaceNet sightings) still reaching those labels**, cat labels strong / possible / weak | 0.056 / 0.261 / 0.561 | 0.054 / 0.268 / 0.570 | 0.021 / 0.157 / 0.464 | 0.022 / 0.160 / 0.467 |
+| dog labels strong / possible / weak | 0.052 / 0.624 / 0.992 | 0.050 / 0.629 / 0.992 | 0.038 / 0.538 / 0.995 | 0.034 / 0.543 / 0.995 |
+| Edited copy of a cat photo, 5th percentile: blurred / partly covered / low resolution | 0.54 / 0.70 / 0.64 | 0.54 / 0.70 / 0.64 | 0.58 / 0.79 / 0.70 | 0.58 / 0.79 / 0.71 |
+| **Speed** (RX 9070 XT, DirectML): one photo detect + crop + embed, median of 30 | 205 ms | 209 ms | 295 ms | 322 ms |
+| batched embedding, ms per photo | 14.5 | 18.5 | 24.4 | 36.4 |
+| **Memory**: GPU dedicated, detector + embedder loaded | 1.18 GB | 1.43 GB | 2.26 GB | 2.76 GB |
+| process memory with models loaded (evaluate.py, 64 MB at start) | 186 MB | 237 MB | 253 MB | 232 MB |
+
+How to read it: the first rows use labels tuned on dog faces, where large is slightly better (top-1 +1 point,
+"strong" for the right dog 0.910 → 0.926). The "same dog still reaching" rows apply each variant's own strict,
+look-alike-based labels (the ones CatMap actually uses, section 6) to the same DogFaceNet same-dog sightings, the
+way section 6's trade-off was measured. That mixes dog faces with whole-body look-alike labels, so it is a
+comparison between variants, not a real cat recall. Speed rows come from one benchmark run per variant on the same
+256 Oxford cat photos (`model-variants-2026-10-17/bench.py`); the earlier 112 ms in section 5.5 was measured
+without the detector.
+
+**Recommendation: don't switch, and don't turn on flip.** The large model separates individual dogs a little better,
+but it also makes different cats of the same breed look more alike (mean 0.53 → 0.57; the "strong" line would have to
+move from 0.88 to 0.92). Under CatMap's strict labels, which exist to keep look-alikes out, fewer true matches get
+through with large than with base ("strong" 5.6 % → 2.1 %, "possible" 26 % → 16 % on the cat labels). It also costs
+about 1.4× the time per photo and about twice the GPU memory. Large does hold up better on blurred, covered and
+low-resolution photos, but that test only compares a photo with an edited copy of itself. Flip changed nothing that
+matters with either model (every difference is 0.01 or less), at about 4 ms (base) to 12 ms (large) more per photo
+batched. If large were ever adopted anyway, the cat labels in `matching.py`, `MatchEngine.kt` and `MatchEngine.ts`
+would have to become **strong ≥ 0.92, possible ≥ 0.84, weak ≥ 0.73** (dogs 0.91 / 0.70 / 0.25), and
+every stored vector would be re-embedded (the version string becomes `pet-recognition-large+detr-resnet-50/v1`).
+The step that would actually tell us more is still the labelled set of real cats from section 8. With it,
+`evaluate.py` can compare base and large on cat recall directly (`set CATMAP_EMBEDDER=large` before running it).
+
+Reproduce (from `Desktop\cat-server`, in cmd; the variant's caches and outputs get their own `-large`, `-base-flip`,
+`-large-flip` names):
+```
+set CATMAP_EMBEDDER=large
+set CATMAP_FLIP_TTA=0
+.venv\Scripts\python.exe eval\evaluate.py --data eval\data\dogfacenet --name dogfacenet-large --no-crop --animal-type dog
+.venv\Scripts\python.exe eval\lookalikes.py cat
+.venv\Scripts\python.exe eval\lookalikes.py dog
+```
+(`CATMAP_EMBEDDER=base` with `CATMAP_FLIP_TTA=1` for base + flip. Both variables unset, or `base` and `0`, give the live model.)

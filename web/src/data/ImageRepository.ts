@@ -9,9 +9,10 @@ interface Cached {
 }
 const urls = new Map<string, { url: string; size: number }>();
 const pending = new Map<string, Promise<Uint8Array | null>>();
-const MAX_BYTES = 40 * 1024 * 1024,
-  TTL = 86400000;
+const MAX_BYTES = 80 * 1024 * 1024,
+  TTL = 30 * 86400000;
 let cacheQueue = Promise.resolve();
+let epoch = 0;
 function cache(key: string, data: Uint8Array) {
   cacheQueue = cacheQueue.catch(() => {}).then(() => writeCache(key, data));
   return cacheQueue;
@@ -31,15 +32,22 @@ async function writeCache(key: string, data: Uint8Array) {
 }
 async function bytes(id: string, thumb = false): Promise<Uint8Array | null> {
   if (!id) return null;
-  const key = id + (thumb ? '_t' : '');
+  const key = id + (thumb ? '_t' : ''),
+    version = epoch;
   const saved = await idb.get<Cached>('image_' + key).catch(() => undefined);
-  if (saved && Date.now() - saved.at < TTL) return saved.data;
+  if (version !== epoch) return null;
+  if (saved && Date.now() - saved.at < TTL) {
+    await cache(key, saved.data).catch(() => {});
+    return saved.data;
+  }
   if (pending.has(key)) return pending.get(key)!;
   const load = (async () => {
+    const version = epoch;
     try {
       const snap = await getDoc(ref('images/' + key));
       const value = snap.data()?.data;
       const data = value instanceof Bytes ? value.toUint8Array() : null;
+      if (version !== epoch) return null;
       if (data) await cache(key, data).catch(() => {});
       return data ?? (thumb ? bytes(id, false) : null);
     } catch {
@@ -61,6 +69,7 @@ export const ImageRepository = {
     if (cached) {
       urls.delete(key);
       urls.set(key, cached);
+      void bytes(id, thumb);
       return cached.url;
     }
     const data = await bytes(id, thumb);
@@ -107,6 +116,7 @@ export const ImageRepository = {
     );
   },
   clearCache: async () => {
+    epoch++;
     await cacheQueue.catch(() => {});
     for (const value of urls.values()) URL.revokeObjectURL(value.url);
     urls.clear();

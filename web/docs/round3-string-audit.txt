@@ -1,0 +1,537 @@
+Round 3 Android unused-string review - 21 October 2026
+=====================================================
+
+Every key in docs/done/web-parity-unused-strings.txt is listed below. A label not duplicated on web is intentional when its existing field, status, action or browser control supplies the same function. This is a source review, not a claim of pixel equality or a real-iPhone check. Android ML Kit and APK installation remain platform adaptations documented in web/docs/parity.md.
+
+Additional gaps found during this review were implemented: coat-based name suggestions, rejected AI candidates disappearing, community health observations, profile progress/re-application hints, source-of-location text, metadata/privacy notes, missing empty states and station nearby-cat selection.
+
+about_you -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+accuracy_m -> web/src/ui/sighting/SightingScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: NewSightingScreen.kt 
+activity_6_months -> web/src/ui/profile/ProfileScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: ProfileScreens.kt 
+add_my_location -> web/src/ui/posts/PostDetailScreen.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: PostDetailScreen.kt 
+add_photos_title -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+add_station -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+adding_to_profile -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingScreen.kt 
+admin_note -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+adoption_status -> web/src/ui/posts/PostDetailScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostDetailScreen.kt 
+ai_breed_traits -> web/src/ui/cats/CatScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: CatProfileScreen.kt NewSightingScreen.kt 
+ai_disclaimer -> web/src/ui/sighting/SightingScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: NewSightingScreen.kt 
+ai_match_score -> web/src/ui/sighting/SightingScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: SightingScreens.kt 
+ai_needs_photo -> web/src/ui/sighting/SightingScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: NewSightingScreen.kt 
+ai_no_cat -> web/src/ui/sighting/SightingScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: NewSightingScreen.kt 
+ai_results -> web/src/ui/sighting/SightingScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: NewSightingScreen.kt 
+ai_similarity_x -> web/src/ui/admin/AdminScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: AdminScreens.kt 
+aka -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatListScreen.kt 
+alerts_disabled_note -> web/src/ui/posts/PostLists.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostLists.kt 
+alerts_enabled_note -> web/src/ui/posts/PostLists.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostLists.kt 
+alerts_stopped -> web/src/ui/posts/PostLists.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostLists.kt 
+all_matches_rejected -> web/src/ui/sighting/SightingScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: NewSightingScreen.kt 
+allow_installs -> web/src/platform/InstallRoot.tsx; web/src/platform/updates.ts
+  Intentionally platform-specific: APK permissions/download/install/version controls or OS notification settings. Web uses its install gate and service-worker update flow. Android reference: UpdateUi.kt 
+analytics_axis -> web/src/ui/admin/AdminScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: AnalyticsPanel.kt 
+analytics_matches -> web/src/ui/admin/AdminScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: AnalyticsPanel.kt 
+analytics_matches_body -> web/src/ui/admin/AdminScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: AnalyticsPanel.kt 
+analytics_reunions_body -> web/src/ui/admin/AdminScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: AnalyticsPanel.kt 
+analyzing_photos -> web/src/ui/sighting/SightingScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: NewSightingScreen.kt 
+app_updates -> web/src/platform/InstallRoot.tsx; web/src/platform/updates.ts
+  Intentionally platform-specific: APK permissions/download/install/version controls or OS notification settings. Web uses its install gate and service-worker update flow. Android reference: SettingsAndNotifications.kt 
+application_sent -> web/src/ui/profile/ProfileScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: ProfileScreens.kt 
+apply_again_volunteer -> web/src/ui/profile/ProfileScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: ProfileScreens.kt 
+approximate_location -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt 
+approximate_location_hint -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+area_x -> web/src/ui/admin/AdminScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: AdminScreens.kt 
+auto_time -> web/src/ui/sighting/SightingScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: NewSightingScreen.kt 
+availability_hint -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+awaiting_review -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatProfileScreen.kt 
+badges -> web/src/ui/profile/ProfileScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: ProfileScreens.kt 
+badges_earned -> web/src/ui/profile/ProfileScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: ProfileScreens.kt 
+become_sitter -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+block_body -> web/src/ui/messages/MessagesScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: MessagesScreens.kt 
+blocked_done -> web/src/ui/messages/MessagesScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: MessagesScreens.kt 
+call_x -> web/src/ui/posts/PostDetailScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostDetailScreen.kt 
+change_location -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SightingScreens.kt StationScreens.kt 
+change_photo -> web/src/ui/posts/PostDetailScreen.tsx
+  Intentionally represented by the browser file/camera picker, native input controls or existing Add photo label. Android reference: PostDetailScreen.kt ProfileScreens.kt 
+checked_in -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+checkin_by -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+checking -> web/src/platform/updates.ts; web/src/ui/settings/SettingsAndNotifications.tsx
+  Browser update/release-note equivalent uses web update text and the service-worker check (plain-text notes). Android reference: SettingsAndNotifications.kt 
+choose_on_map -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt PostLists.kt SittingScreens.kt 
+clear -> web/src/ui/explore/ExploreScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SearchScreen.kt MapScreen.kt 
+clear_all_body -> web/src/ui/settings/SettingsAndNotifications.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SettingsAndNotifications.kt 
+community -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatProfileScreen.kt 
+community_observation_label -> web/src/ui/cats/CatScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: CatProfileScreen.kt 
+confirmed_same_cat -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingScreen.kt 
+current_status -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatProfileScreen.kt 
+current_version_x -> web/src/platform/updates.ts; web/src/ui/settings/SettingsAndNotifications.tsx
+  Browser update/release-note equivalent uses web update text and the service-worker check (plain-text notes). Android reference: SettingsAndNotifications.kt 
+date_range -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+dates -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+decrease -> web/src/ui/stations/StationScreens.tsx
+  Intentionally represented by the browser file/camera picker, native input controls or existing Add photo label. Android reference: StationScreens.kt 
+delete_forever -> web/src/ui/settings/SettingsAndNotifications.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SettingsAndNotifications.kt 
+delete_sighting -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SightingScreens.kt 
+delete_sighting_body -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SightingScreens.kt 
+delete_station -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+delete_station_body -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+deleted -> web/src/ui/help/HelpDirectoryScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: HelpDirectoryScreen.kt PostDetailScreen.kt SightingScreens.kt 
+deleted_member -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+demo_switching -> web/src/ui/settings/SettingsAndNotifications.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SettingsAndNotifications.kt 
+describe_situation -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt 
+details_required -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+directions -> web/src/ui/posts/PostDetailScreen.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: PostDetailScreen.kt RescueScreens.kt 
+distinctive_marks_hint -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingScreen.kt 
+downloading_x -> web/src/platform/InstallRoot.tsx; web/src/platform/updates.ts
+  Intentionally platform-specific: APK permissions/download/install/version controls or OS notification settings. Web uses its install gate and service-worker update flow. Android reference: UpdateUi.kt 
+ear_tip_question -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingScreen.kt 
+edit_sighting -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SightingScreens.kt 
+edit_sitter_profile -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+edit_station -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+email_x -> web/src/ui/posts/PostDetailScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostDetailScreen.kt 
+emergency_note -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt 
+err_location_required -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorViewModel.kt 
+err_name_required -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingViewModel.kt 
+err_not_signed_in -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingViewModel.kt 
+filters_n -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatListScreen.kt ExploreScreen.kt MapScreen.kt 
+find_sitter -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+first_sighting -> web/src/ui/admin/AdminScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: AdminScreens.kt SightingScreens.kt 
+flag_medical -> web/src/ui/cats/CatScreens.tsx
+  Enum/status/observation is displayed through the existing translated dynamic label or equivalent health/location/filter control. Android reference: CatProfileScreen.kt 
+flag_needs_medical -> web/src/ui/sighting/SightingScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: NewSightingScreen.kt SightingScreens.kt 
+food -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+from_gallery -> web/src/ui/rescue/RescueScreens.tsx
+  Intentionally represented by the browser file/camera picker, native input controls or existing Add photo label. Android reference: RescueScreens.kt NewSightingScreen.kt 
+from_x -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+gallery -> web/src/ui/posts/PostEditorScreen.tsx
+  Intentionally represented by the browser file/camera picker, native input controls or existing Add photo label. Android reference: PostEditorScreen.kt 
+handled_by -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt 
+has_water -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+health_info -> web/src/ui/posts/PostDetailScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostDetailScreen.kt PostEditorScreen.kt 
+help_phone -> web/src/ui/help/HelpDirectoryScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: HelpDirectoryScreen.kt 
+hidden_by_moderators -> web/src/ui/cats/CatScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: CatProfileScreen.kt 
+i_will_handle -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt 
+increase -> web/src/ui/stations/StationScreens.tsx
+  Intentionally represented by the browser file/camera picker, native input controls or existing Add photo label. Android reference: StationScreens.kt 
+install_permission_hint -> web/src/platform/InstallRoot.tsx; web/src/platform/updates.ts
+  Intentionally platform-specific: APK permissions/download/install/version controls or OS notification settings. Web uses its install gate and service-worker update flow. Android reference: UpdateUi.kt 
+install_update -> web/src/platform/InstallRoot.tsx; web/src/platform/updates.ts
+  Intentionally platform-specific: APK permissions/download/install/version controls or OS notification settings. Web uses its install gate and service-worker update flow. Android reference: UpdateUi.kt 
+keep -> web/src/ui/admin/AdminScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: AdminScreens.kt 
+km_away -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt NewSightingScreen.kt 
+known_cats_nearby -> web/src/ui/stations/StationScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: StationScreens.kt 
+landmark_hint -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt 
+lang_system -> web/src/ui/settings/SettingsAndNotifications.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SettingsAndNotifications.kt 
+last_checkin -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+last_seen_x -> web/src/ui/map/MapScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: MapScreen.kt 
+last_visit -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+later -> web/src/platform/InstallRoot.tsx; web/src/platform/updates.ts
+  Intentionally platform-specific: APK permissions/download/install/version controls or OS notification settings. Web uses its install gate and service-worker update flow. Android reference: UpdateUi.kt 
+layer_street_cats -> web/src/ui/explore/Filtering.tsx
+  Enum/status/observation is displayed through the existing translated dynamic label or equivalent health/location/filter control. Android reference: Filtering.kt 
+location_added -> web/src/ui/posts/PostDetailScreen.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: PostDetailScreen.kt 
+location_hint -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingScreen.kt 
+location_source -> web/src/ui/sighting/SightingScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: SightingScreens.kt 
+looks_good -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+make_cover -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+matches_hint -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingScreen.kt 
+max_level -> web/src/ui/profile/ProfileScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: ProfileScreens.kt 
+medical_rescue_tip -> web/src/ui/sighting/SightingScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: NewSightingScreen.kt 
+members_n -> web/src/ui/admin/AdminScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: AdminCommunityScreens.kt 
+merge_into_keep -> web/src/ui/admin/AdminScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: AdminScreens.kt 
+merge_sent -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatToolsScreens.kt 
+metadata_always_removed -> web/src/ui/settings/SettingsAndNotifications.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: SettingsAndNotifications.kt 
+metadata_removed_note -> web/src/ui/sighting/SightingScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: NewSightingScreen.kt 
+moderation_note -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatProfileScreen.kt 
+moderation_queue -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt 
+my_reports -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt 
+n_sightings -> web/src/ui/admin/AdminScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: AdminScreens.kt 
+name_ideas -> web/src/ui/sighting/SightingScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: NewSightingScreen.kt 
+near_x -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt NewSightingScreen.kt 
+needs_review -> web/src/ui/admin/AdminScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: AdminScreens.kt 
+new_sighting_of -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingScreen.kt 
+new_sitter -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+no_activity -> web/src/ui/stations/StationScreens.tsx
+  Equivalent empty/error/rejection state uses the screen's existing translated wording; no duplicate message added. Android reference: StationScreens.kt 
+no_board_reports -> web/src/ui/rescue/RescueScreens.tsx
+  Equivalent empty/error/rejection state uses the screen's existing translated wording; no duplicate message added. Android reference: RescueScreens.kt 
+no_bookings_sitter -> web/src/ui/sitting/SittingScreens.tsx
+  Equivalent empty/error/rejection state uses the screen's existing translated wording; no duplicate message added. Android reference: SittingScreens.kt 
+no_checkins_yet -> web/src/ui/stations/StationScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: StationScreens.kt 
+no_contributed_cats -> web/src/ui/profile/ProfileScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: ProfileScreens.kt 
+no_my_posts -> web/src/ui/posts/PostLists.tsx
+  Equivalent empty/error/rejection state uses the screen's existing translated wording; no duplicate message added. Android reference: PostLists.kt 
+no_observations -> web/src/ui/cats/CatScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: CatProfileScreen.kt 
+no_release_notes -> web/src/platform/updates.ts
+  Equivalent empty/error/rejection state uses the screen's existing translated wording; no duplicate message added. Android reference: UpdateUi.kt 
+no_results -> web/src/ui/explore/ExploreScreen.tsx
+  Equivalent empty/error/rejection state uses the screen's existing translated wording; no duplicate message added. Android reference: SearchScreen.kt MapScreen.kt 
+no_sightings_yet -> web/src/ui/cats/CatScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: CatProfileScreen.kt ProfileScreens.kt 
+not_following_any -> web/src/ui/profile/ProfileScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: ProfileScreens.kt 
+not_neutered -> web/src/ui/posts/PostDetailScreen.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: PostDetailScreen.kt 
+not_taking_bookings -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+not_this_cat -> web/src/ui/sighting/SightingScreens.tsx
+  Equivalent empty/error/rejection state uses the screen's existing translated wording; no duplicate message added. Android reference: NewSightingScreen.kt 
+not_vaccinated -> web/src/ui/posts/PostDetailScreen.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: PostDetailScreen.kt 
+obs_ear_tipped -> web/src/ui/cats/CatScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: CatProfileScreen.kt 
+obs_not_neutered -> web/src/ui/cats/CatScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: CatProfileScreen.kt SightingScreens.kt 
+on_map_n -> web/src/ui/map/MapScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: MapScreen.kt 
+outside_dubai -> web/src/ui/map/LocationPickerScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: LocationPickerScreen.kt PostEditorScreen.kt NewSightingViewModel.kt 
+outside_dubai_hint -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt NewSightingScreen.kt 
+pending_sightings_n -> web/src/ui/admin/AdminScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: AdminScreens.kt 
+pets_cared_for -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+photo_not_found -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatToolsScreens.kt 
+photo_of -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatProfileScreen.kt CatToolsScreens.kt 
+physical_characteristics -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingScreen.kt 
+pick_on_map -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt NewSightingScreen.kt 
+pick_search_area -> web/src/ui/map/LocationPickerScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: LocationPickerScreen.kt 
+pin_and_area -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+play_video -> web/src/ui/posts/PostDetailScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostDetailScreen.kt 
+points_to_next -> web/src/ui/profile/ProfileScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: ProfileScreens.kt 
+possible_matches -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingScreen.kt 
+posted_by -> web/src/ui/posts/PostDetailScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostDetailScreen.kt 
+posted_x -> web/src/ui/posts/PostDetailScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostDetailScreen.kt 
+privacy_public_map -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingScreen.kt 
+problem -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+problem_reported -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+rate_ask -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+read -> web/src/ui/settings/SettingsAndNotifications.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SettingsAndNotifications.kt 
+recent_activity -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+recognition_ai_top1 -> web/src/ui/admin/AdminScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: RecognitionTestScreen.kt 
+recognition_analysing -> web/src/ui/admin/AdminScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: RecognitionTestScreen.kt 
+recognition_dataset -> web/src/ui/admin/AdminScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: RecognitionTestScreen.kt 
+recognition_false_strong -> web/src/ui/admin/AdminScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: RecognitionTestScreen.kt 
+recognition_false_suggestion -> web/src/ui/admin/AdminScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: RecognitionTestScreen.kt 
+recognition_test_intro -> web/src/ui/admin/AdminScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: RecognitionTestScreen.kt 
+recognition_time -> web/src/ui/admin/AdminScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: RecognitionTestScreen.kt 
+recognition_top1 -> web/src/ui/admin/AdminScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: RecognitionTestScreen.kt 
+recognition_top1_best_photo -> web/src/ui/admin/AdminScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: RecognitionTestScreen.kt 
+recognition_top3 -> web/src/ui/admin/AdminScreens.tsx
+  Intentionally uses the web analyser/worker and existing recognition metrics/progress wording; Android ML Kit detection and native dataset controls are not available in the browser. Android reference: RecognitionTestScreen.kt 
+registered_by_x_time -> web/src/ui/admin/AdminScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: AdminScreens.kt 
+registered_on -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatProfileScreen.kt 
+release_notes_unavailable -> web/src/platform/updates.ts; web/src/ui/settings/SettingsAndNotifications.tsx
+  Browser update/release-note equivalent uses web update text and the service-worker check (plain-text notes). Android reference: UpdateUi.kt 
+reopen -> web/src/ui/posts/PostDetailScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostDetailScreen.kt 
+report_user -> web/src/ui/messages/MessagesScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: MessagesScreens.kt 
+reported -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt 
+reported_by -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt SightingScreens.kt 
+reported_by_x_time -> web/src/ui/admin/AdminScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: AdminScreens.kt 
+request_to_adopt_x -> web/src/ui/posts/PostDetailScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostDetailScreen.kt 
+rescue_for_cat -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt 
+rescue_sent -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt 
+rescue_visibility_note -> web/src/ui/rescue/RescueScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: RescueScreens.kt 
+review_x -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+reviews_n -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+reward_optional -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+same_cat -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingScreen.kt 
+samples_added -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+say_hello -> web/src/ui/messages/MessagesScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: MessagesScreens.kt 
+search_area_none -> web/src/ui/map/LocationPickerScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: LocationPickerScreen.kt 
+see_all -> web/src/ui/profile/ProfileScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: ProfileScreens.kt 
+seen_at -> web/src/ui/posts/PostDetailScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostDetailScreen.kt SightingScreens.kt 
+seen_by_in -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatProfileScreen.kt 
+send_report -> web/src/ui/components/Components.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: Components.kt RescueScreens.kt 
+setup_steps -> web/src/ui/auth/AuthScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: AuthScreens.kt 
+several_subjects_hint -> web/src/ui/sighting/SightingScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: NewSightingScreen.kt 
+share_cat -> web/src/ui/cats/CatScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: CatProfileScreen.kt Share.kt 
+share_cat_text -> web/src/util/share.ts
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: Share.kt 
+share_post_footer -> web/src/util/share.ts
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: Share.kt 
+sharing_post -> web/src/ui/messages/MessagesScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: MessagesScreens.kt 
+show_on_map -> web/src/ui/explore/ExploreScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SearchScreen.kt PostDetailScreen.kt 
+sighting_thanks -> web/src/ui/posts/PostDetailScreen.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: PostDetailScreen.kt 
+similarity -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingScreen.kt 
+skip_version -> web/src/platform/InstallRoot.tsx; web/src/platform/updates.ts
+  Intentionally platform-specific: APK permissions/download/install/version controls or OS notification settings. Web uses its install gate and service-worker update flow. Android reference: UpdateUi.kt 
+source_gps -> web/src/ui/sighting/SightingScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: SightingScreens.kt 
+source_manual -> web/src/ui/sighting/SightingScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: SightingScreens.kt 
+start_alerts -> web/src/ui/posts/PostLists.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostLists.kt 
+station_name -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+stations_intro -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+statistics -> web/src/ui/profile/ProfileScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: ProfileScreens.kt 
+stop_alerts -> web/src/ui/posts/PostLists.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostLists.kt 
+system_notification_settings -> web/src/platform/InstallRoot.tsx; web/src/platform/updates.ts
+  Intentionally platform-specific: APK permissions/download/install/version controls or OS notification settings. Web uses its install gate and service-worker update flow. Android reference: SettingsAndNotifications.kt 
+take_photo -> web/src/ui/rescue/RescueScreens.tsx
+  Intentionally represented by the browser file/camera picker, native input controls or existing Add photo label. Android reference: RescueScreens.kt NewSightingScreen.kt 
+taking_bookings -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+tell_us_more -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+tnr_section -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingScreen.kt SightingScreens.kt 
+tnr_status -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatProfileScreen.kt 
+tnr_verified_note -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatProfileScreen.kt 
+to_x -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+total_sightings -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatProfileScreen.kt 
+unblock_body -> web/src/ui/messages/MessagesScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: MessagesScreens.kt 
+unblocked -> web/src/ui/messages/MessagesScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: MessagesScreens.kt 
+up_to_date -> web/src/platform/updates.ts; web/src/ui/settings/SettingsAndNotifications.tsx
+  Browser update/release-note equivalent uses web update text and the service-worker check (plain-text notes). Android reference: SettingsAndNotifications.kt 
+update_added -> web/src/ui/posts/PostDetailScreen.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: PostDetailScreen.kt 
+update_alerts -> web/src/platform/updates.ts; web/src/ui/settings/SettingsAndNotifications.tsx
+  Browser update/release-note equivalent uses web update text and the service-worker check (plain-text notes). Android reference: PostLists.kt 
+update_available -> web/src/platform/InstallRoot.tsx; web/src/platform/updates.ts
+  Intentionally platform-specific: APK permissions/download/install/version controls or OS notification settings. Web uses its install gate and service-worker update flow. Android reference: UpdateUi.kt 
+update_check_failed -> web/src/platform/updates.ts; web/src/ui/settings/SettingsAndNotifications.tsx
+  Browser update/release-note equivalent uses web update text and the service-worker check (plain-text notes). Android reference: SettingsAndNotifications.kt 
+update_failed -> web/src/platform/InstallRoot.tsx; web/src/platform/updates.ts
+  Intentionally platform-specific: APK permissions/download/install/version controls or OS notification settings. Web uses its install gate and service-worker update flow. Android reference: UpdateUi.kt 
+update_now -> web/src/platform/InstallRoot.tsx; web/src/platform/updates.ts
+  Intentionally platform-specific: APK permissions/download/install/version controls or OS notification settings. Web uses its install gate and service-worker update flow. Android reference: UpdateUi.kt 
+update_safety_note -> web/src/platform/InstallRoot.tsx; web/src/platform/updates.ts
+  Intentionally platform-specific: APK permissions/download/install/version controls or OS notification settings. Web uses its install gate and service-worker update flow. Android reference: UpdateUi.kt 
+update_versions -> web/src/platform/InstallRoot.tsx; web/src/platform/updates.ts
+  Intentionally platform-specific: APK permissions/download/install/version controls or OS notification settings. Web uses its install gate and service-worker update flow. Android reference: UpdateUi.kt 
+updates_not_configured -> web/src/platform/updates.ts; web/src/ui/settings/SettingsAndNotifications.tsx
+  Browser update/release-note equivalent uses web update text and the service-worker check (plain-text notes). Android reference: SettingsAndNotifications.kt 
+use_gps -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt NewSightingScreen.kt 
+verified_by -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatProfileScreen.kt 
+verified_record_hint -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatProfileScreen.kt 
+verified_station -> web/src/ui/stations/StationScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: StationScreens.kt 
+video_attached -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+video_limits -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+video_needs_setup -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+video_optional -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+view -> web/src/ui/admin/AdminScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: AdminScreens.kt 
+view_adoption_requests -> web/src/ui/posts/PostDetailScreen.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: PostDetailScreen.kt 
+view_cat -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt 
+view_post -> web/src/ui/messages/MessagesScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: MessagesScreens.kt 
+view_profile -> web/src/ui/messages/MessagesScreens.tsx
+  Used in the web source now (including dynamic/enum labels where applicable). Android reference: MessagesScreens.kt PostDetailScreen.kt SightingScreens.kt 
+what_did_you_see -> web/src/ui/posts/PostDetailScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostDetailScreen.kt 
+what_happened -> web/src/ui/rescue/RescueScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: RescueScreens.kt 
+when_seen -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+where_is_it -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+where_last_seen -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+where_seen -> web/src/ui/cats/CatScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: CatProfileScreen.kt 
+which_animal -> web/src/ui/posts/PostEditorScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostEditorScreen.kt 
+which_pets -> web/src/ui/sitting/SittingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: SittingScreens.kt 
+will_create_new -> web/src/ui/sighting/SightingScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: NewSightingScreen.kt 
+you_prefix -> web/src/ui/messages/MessagesScreens.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: MessagesScreens.kt 
+your_request_x -> web/src/ui/posts/PostDetailScreen.tsx
+  Existing translated field, section, status, link or action supplies this information in the referenced web screen; the alternate Android wording is intentionally not duplicated. Android reference: PostDetailScreen.kt 
+
+Total reviewed: 264 keys. No original checklist key was removed from its source file.

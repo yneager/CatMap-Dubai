@@ -43,6 +43,8 @@ class UserDataExportRepository(private val context:Context,private val db:Fireba
         val user=db.collection(Col.USERS).document(uid)
         records["profile"]=listOf(snapshot(user.get().await()))
         records["account"]=listOf(snapshot(user.collection(Col.PRIVATE).document("account").get().await()))
+        val areaCentre=user.collection(Col.PRIVATE).document("areaFollow").get().await()
+        records["areaFollowCentre"]=if(areaCentre.exists()) listOf(snapshot(areaCentre)) else emptyList()
         for(collection in listOf(Col.SITTERS,Col.AREA_FOLLOWS,Col.VOLUNTEER_APPS)) {
             val document=db.collection(collection).document(uid).get().await()
             records[collection]=if(document.exists()) listOf(snapshot(document)) else emptyList()

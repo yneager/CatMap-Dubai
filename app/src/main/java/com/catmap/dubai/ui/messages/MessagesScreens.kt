@@ -82,6 +82,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.catmap.dubai.data.ChatRepository
 import com.catmap.dubai.R
 import com.catmap.dubai.data.model.Chat
 import com.catmap.dubai.data.model.Message
@@ -193,7 +194,24 @@ fun ChatScreen(nav: NavHostController, chatId: String, sharePostId: String?) {
     val me by container.session.profile.collectAsStateWithLifecycle()
     val uid = container.session.uid ?: return
     val chat by remember(chatId) { container.chats.chatFlow(chatId) }.collectAsStateWithLifecycle(null)
-    val messages by remember(chatId) { container.chats.messages(chatId) }.collectAsStateWithLifecycle(null)
+    val live by remember(chatId) { container.chats.messages(chatId) }.collectAsStateWithLifecycle(null)
+    // The newest messages are live; older ones are read 50 at a time when asked for.
+    var older by remember(chatId) { mutableStateOf(emptyList<Message>()) }
+    var noOlder by remember(chatId) { mutableStateOf(false) }
+    var loadingOlder by remember(chatId) { mutableStateOf(false) }
+    val messages = live?.let { l -> (older + l).distinctBy { it.id } }
+    val mayHaveOlder = !noOlder && (live?.size ?: 0) >= ChatRepository.MESSAGE_WINDOW
+    fun loadOlder() {
+        val first = messages?.firstOrNull() ?: return
+        if (loadingOlder) return
+        scope.launch {
+            loadingOlder = true
+            runCatching { container.chats.olderMessages(chatId, first.createdAt) }
+                .onSuccess { page -> older = page + older; if (page.size < ChatRepository.MESSAGE_WINDOW) noOlder = true }
+                .onFailure { snackbar.showSnackbar(it.userMessage(context)) }
+            loadingOlder = false
+        }
+    }
     val blocked by remember(uid) { container.chats.blocked(uid) }.collectAsStateWithLifecycle(emptySet())
     var text by rememberSaveable { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
@@ -208,7 +226,7 @@ fun ChatScreen(nav: NavHostController, chatId: String, sharePostId: String?) {
 
     // Reading the chat clears its unread count and its alert, so the next message alerts again.
     LaunchedEffect(chatId, messages?.size) { container.chats.markRead(chatId, uid) }
-    LaunchedEffect(messages?.size) { if (!messages.isNullOrEmpty()) listState.animateScrollToItem(0) }
+    LaunchedEffect(live?.lastOrNull()?.id) { if (!live.isNullOrEmpty()) listState.animateScrollToItem(0) }
 
     fun send(imageId: String = "") {
         val current = c ?: return
@@ -331,7 +349,14 @@ fun ChatScreen(nav: NavHostController, chatId: String, sharePostId: String?) {
                             Text(dateTime(m.createdAt), Modifier.fillMaxWidth().padding(vertical = 6.dp), style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         }
-                        Bubble(m, mine, onPost = { nav.navigate(Routes.post(it)) }, onMatch = { nav.navigate(Routes.match(it)) }, onDelete = { runner.run { container.chats.deleteMessage(chatId, m) } })
+                        Bubble(m, mine, onPost = { nav.navigate(Routes.post(it)) }, onMatch = { nav.navigate(Routes.match(it)) }, onPhoto = { nav.navigate(Routes.photo(it)) }, onDelete = { runner.run { container.chats.deleteMessage(chatId, m); older = older.filterNot { it.id == m.id } } })
+                    }
+                }
+                // With the list reversed, the last item sits at the top: older messages load above.
+                if (mayHaveOlder) item(contentType = "older") {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        if (loadingOlder) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                        else TextButton(onClick = ::loadOlder) { Text(stringResource(R.string.older_messages)) }
                     }
                 }
             }
@@ -355,7 +380,7 @@ fun ChatScreen(nav: NavHostController, chatId: String, sharePostId: String?) {
 }
 
 @Composable
-private fun Bubble(m: Message, mine: Boolean, onPost: (String) -> Unit, onMatch: (String) -> Unit, onDelete: () -> Unit) {
+private fun Bubble(m: Message, mine: Boolean, onPost: (String) -> Unit, onMatch: (String) -> Unit, onPhoto: (String) -> Unit, onDelete: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
         Box {
@@ -368,7 +393,8 @@ private fun Bubble(m: Message, mine: Boolean, onPost: (String) -> Unit, onMatch:
                     .padding(4.dp),
             ) {
                 if (m.imageId.isNotBlank()) {
-                    RemoteImage(m.imageId, Modifier.size(220.dp).clip(RoundedCornerShape(16.dp)), thumb = false)
+                    // The thumbnail in the bubble; the full photo only when it's opened.
+                    RemoteImage(m.imageId, Modifier.size(220.dp).clip(RoundedCornerShape(16.dp)).clickable { onPhoto(m.imageId) })
                 }
                 if (m.matchId.isNotBlank()) {
                     // A possible match: both photos, opening the side-by-side review (both people can see it).

@@ -1,0 +1,272 @@
+Android strings the web app never uses (generated 20 Oct 2026)
+==============================================================
+
+Each line: string key -> Android file(s) that show it. All of these keys already exist in web/src/i18n/en.json
+but no web code references them. Many are harmless (the web shows the same thing with its own wording, or the
+feature is Android-only, e.g. the APK updater). Some point to real gaps. Codex: go through the list, and for each
+key either confirm the web has an equivalent or add the missing piece. Confirmed gaps are already in WEB_TODO.txt.
+
+about_you                        SittingScreens.kt 
+accuracy_m                       NewSightingScreen.kt 
+activity_6_months                ProfileScreens.kt 
+add_my_location                  PostDetailScreen.kt 
+add_photos_title                 PostEditorScreen.kt 
+add_station                      StationScreens.kt 
+adding_to_profile                NewSightingScreen.kt 
+admin_note                       StationScreens.kt 
+adoption_status                  PostDetailScreen.kt 
+ai_breed_traits                  CatProfileScreen.kt NewSightingScreen.kt 
+ai_disclaimer                    NewSightingScreen.kt 
+ai_match_score                   SightingScreens.kt 
+ai_needs_photo                   NewSightingScreen.kt 
+ai_no_cat                        NewSightingScreen.kt 
+ai_results                       NewSightingScreen.kt 
+ai_similarity_x                  AdminScreens.kt 
+aka                              CatListScreen.kt 
+alerts_disabled_note             PostLists.kt 
+alerts_enabled_note              PostLists.kt 
+alerts_stopped                   PostLists.kt 
+all_matches_rejected             NewSightingScreen.kt 
+allow_installs                   UpdateUi.kt 
+analytics_axis                   AnalyticsPanel.kt 
+analytics_matches                AnalyticsPanel.kt 
+analytics_matches_body           AnalyticsPanel.kt 
+analytics_reunions_body          AnalyticsPanel.kt 
+analyzing_photos                 NewSightingScreen.kt 
+app_updates                      SettingsAndNotifications.kt 
+application_sent                 ProfileScreens.kt 
+apply_again_volunteer            ProfileScreens.kt 
+approximate_location             RescueScreens.kt 
+approximate_location_hint        PostEditorScreen.kt 
+area_x                           AdminScreens.kt 
+auto_time                        NewSightingScreen.kt 
+availability_hint                SittingScreens.kt 
+awaiting_review                  CatProfileScreen.kt 
+badges                           ProfileScreens.kt 
+badges_earned                    ProfileScreens.kt 
+become_sitter                    SittingScreens.kt 
+block_body                       MessagesScreens.kt 
+blocked_done                     MessagesScreens.kt 
+call_x                           PostDetailScreen.kt 
+change_location                  SightingScreens.kt StationScreens.kt 
+change_photo                     PostDetailScreen.kt ProfileScreens.kt 
+checked_in                       StationScreens.kt 
+checkin_by                       StationScreens.kt 
+checking                         SettingsAndNotifications.kt 
+choose_on_map                    PostEditorScreen.kt PostLists.kt SittingScreens.kt 
+clear                            SearchScreen.kt MapScreen.kt 
+clear_all_body                   SettingsAndNotifications.kt 
+community                        CatProfileScreen.kt 
+community_observation_label      CatProfileScreen.kt 
+confirmed_same_cat               NewSightingScreen.kt 
+current_status                   CatProfileScreen.kt 
+current_version_x                SettingsAndNotifications.kt 
+date_range                       SittingScreens.kt 
+dates                            SittingScreens.kt 
+decrease                         StationScreens.kt 
+delete_forever                   SettingsAndNotifications.kt 
+delete_sighting                  SightingScreens.kt 
+delete_sighting_body             SightingScreens.kt 
+delete_station                   StationScreens.kt 
+delete_station_body              StationScreens.kt 
+deleted                          HelpDirectoryScreen.kt PostDetailScreen.kt SightingScreens.kt 
+deleted_member                   SittingScreens.kt 
+demo_switching                   SettingsAndNotifications.kt 
+describe_situation               RescueScreens.kt 
+details_required                 PostEditorScreen.kt 
+directions                       PostDetailScreen.kt RescueScreens.kt 
+distinctive_marks_hint           NewSightingScreen.kt 
+downloading_x                    UpdateUi.kt 
+ear_tip_question                 NewSightingScreen.kt 
+edit_sighting                    SightingScreens.kt 
+edit_sitter_profile              SittingScreens.kt 
+edit_station                     StationScreens.kt 
+email_x                          PostDetailScreen.kt 
+emergency_note                   RescueScreens.kt 
+err_location_required            PostEditorViewModel.kt 
+err_name_required                NewSightingViewModel.kt 
+err_not_signed_in                NewSightingViewModel.kt 
+filters_n                        CatListScreen.kt ExploreScreen.kt MapScreen.kt 
+find_sitter                      SittingScreens.kt 
+first_sighting                   AdminScreens.kt SightingScreens.kt 
+flag_medical                     CatProfileScreen.kt 
+flag_needs_medical               NewSightingScreen.kt SightingScreens.kt 
+food                             StationScreens.kt 
+from_gallery                     RescueScreens.kt NewSightingScreen.kt 
+from_x                           SittingScreens.kt 
+gallery                          PostEditorScreen.kt 
+handled_by                       RescueScreens.kt 
+has_water                        StationScreens.kt 
+health_info                      PostDetailScreen.kt PostEditorScreen.kt 
+help_phone                       HelpDirectoryScreen.kt 
+hidden_by_moderators             CatProfileScreen.kt 
+i_will_handle                    RescueScreens.kt 
+increase                         StationScreens.kt 
+install_permission_hint          UpdateUi.kt 
+install_update                   UpdateUi.kt 
+keep                             AdminScreens.kt 
+km_away                          PostEditorScreen.kt NewSightingScreen.kt 
+known_cats_nearby                StationScreens.kt 
+landmark_hint                    RescueScreens.kt 
+lang_system                      SettingsAndNotifications.kt 
+last_checkin                     StationScreens.kt 
+last_seen_x                      MapScreen.kt 
+last_visit                       StationScreens.kt 
+later                            UpdateUi.kt 
+layer_street_cats                Filtering.kt 
+location_added                   PostDetailScreen.kt 
+location_hint                    NewSightingScreen.kt 
+location_source                  SightingScreens.kt 
+looks_good                       PostEditorScreen.kt 
+make_cover                       PostEditorScreen.kt 
+matches_hint                     NewSightingScreen.kt 
+max_level                        ProfileScreens.kt 
+medical_rescue_tip               NewSightingScreen.kt 
+members_n                        AdminCommunityScreens.kt 
+merge_into_keep                  AdminScreens.kt 
+merge_sent                       CatToolsScreens.kt 
+metadata_always_removed          SettingsAndNotifications.kt 
+metadata_removed_note            NewSightingScreen.kt 
+moderation_note                  CatProfileScreen.kt 
+moderation_queue                 RescueScreens.kt 
+my_reports                       RescueScreens.kt 
+n_sightings                      AdminScreens.kt 
+name_ideas                       NewSightingScreen.kt 
+near_x                           RescueScreens.kt NewSightingScreen.kt 
+needs_review                     AdminScreens.kt 
+new_sighting_of                  NewSightingScreen.kt 
+new_sitter                       SittingScreens.kt 
+no_activity                      StationScreens.kt 
+no_board_reports                 RescueScreens.kt 
+no_bookings_sitter               SittingScreens.kt 
+no_checkins_yet                  StationScreens.kt 
+no_contributed_cats              ProfileScreens.kt 
+no_my_posts                      PostLists.kt 
+no_observations                  CatProfileScreen.kt 
+no_release_notes                 UpdateUi.kt 
+no_results                       SearchScreen.kt MapScreen.kt 
+no_sightings_yet                 CatProfileScreen.kt ProfileScreens.kt 
+not_following_any                ProfileScreens.kt 
+not_neutered                     PostDetailScreen.kt 
+not_taking_bookings              SittingScreens.kt 
+not_this_cat                     NewSightingScreen.kt 
+not_vaccinated                   PostDetailScreen.kt 
+obs_ear_tipped                   CatProfileScreen.kt 
+obs_not_neutered                 CatProfileScreen.kt SightingScreens.kt 
+on_map_n                         MapScreen.kt 
+outside_dubai                    LocationPickerScreen.kt PostEditorScreen.kt NewSightingViewModel.kt 
+outside_dubai_hint               RescueScreens.kt NewSightingScreen.kt 
+pending_sightings_n              AdminScreens.kt 
+pets_cared_for                   SittingScreens.kt 
+photo_not_found                  CatToolsScreens.kt 
+photo_of                         CatProfileScreen.kt CatToolsScreens.kt 
+physical_characteristics         NewSightingScreen.kt 
+pick_on_map                      RescueScreens.kt NewSightingScreen.kt 
+pick_search_area                 LocationPickerScreen.kt 
+pin_and_area                     PostEditorScreen.kt 
+play_video                       PostDetailScreen.kt 
+points_to_next                   ProfileScreens.kt 
+possible_matches                 NewSightingScreen.kt 
+posted_by                        PostDetailScreen.kt 
+posted_x                         PostDetailScreen.kt 
+privacy_public_map               NewSightingScreen.kt 
+problem                          StationScreens.kt 
+problem_reported                 StationScreens.kt 
+rate_ask                         SittingScreens.kt 
+read                             SettingsAndNotifications.kt 
+recent_activity                  StationScreens.kt 
+recognition_ai_top1              RecognitionTestScreen.kt 
+recognition_analysing            RecognitionTestScreen.kt 
+recognition_dataset              RecognitionTestScreen.kt 
+recognition_false_strong         RecognitionTestScreen.kt 
+recognition_false_suggestion     RecognitionTestScreen.kt 
+recognition_test_intro           RecognitionTestScreen.kt 
+recognition_time                 RecognitionTestScreen.kt 
+recognition_top1                 RecognitionTestScreen.kt 
+recognition_top1_best_photo      RecognitionTestScreen.kt 
+recognition_top3                 RecognitionTestScreen.kt 
+registered_by_x_time             AdminScreens.kt 
+registered_on                    CatProfileScreen.kt 
+release_notes_unavailable        UpdateUi.kt 
+reopen                           PostDetailScreen.kt 
+report_user                      MessagesScreens.kt 
+reported                         RescueScreens.kt 
+reported_by                      RescueScreens.kt SightingScreens.kt 
+reported_by_x_time               AdminScreens.kt 
+request_to_adopt_x               PostDetailScreen.kt 
+rescue_for_cat                   RescueScreens.kt 
+rescue_sent                      RescueScreens.kt 
+rescue_visibility_note           RescueScreens.kt 
+review_x                         SittingScreens.kt 
+reviews_n                        SittingScreens.kt 
+reward_optional                  PostEditorScreen.kt 
+same_cat                         NewSightingScreen.kt 
+samples_added                    StationScreens.kt 
+say_hello                        MessagesScreens.kt 
+search_area_none                 LocationPickerScreen.kt 
+see_all                          ProfileScreens.kt 
+seen_at                          PostDetailScreen.kt SightingScreens.kt 
+seen_by_in                       CatProfileScreen.kt 
+send_report                      Components.kt RescueScreens.kt 
+setup_steps                      AuthScreens.kt 
+several_subjects_hint            NewSightingScreen.kt 
+share_cat                        CatProfileScreen.kt Share.kt 
+share_cat_text                   Share.kt 
+share_post_footer                Share.kt 
+sharing_post                     MessagesScreens.kt 
+show_on_map                      SearchScreen.kt PostDetailScreen.kt 
+sighting_thanks                  PostDetailScreen.kt 
+similarity                       NewSightingScreen.kt 
+skip_version                     UpdateUi.kt 
+source_gps                       SightingScreens.kt 
+source_manual                    SightingScreens.kt 
+start_alerts                     PostLists.kt 
+station_name                     StationScreens.kt 
+stations_intro                   StationScreens.kt 
+statistics                       ProfileScreens.kt 
+stop_alerts                      PostLists.kt 
+system_notification_settings     SettingsAndNotifications.kt 
+take_photo                       RescueScreens.kt NewSightingScreen.kt 
+taking_bookings                  SittingScreens.kt 
+tell_us_more                     PostEditorScreen.kt 
+tnr_section                      NewSightingScreen.kt SightingScreens.kt 
+tnr_status                       CatProfileScreen.kt 
+tnr_verified_note                CatProfileScreen.kt 
+to_x                             SittingScreens.kt 
+total_sightings                  CatProfileScreen.kt 
+unblock_body                     MessagesScreens.kt 
+unblocked                        MessagesScreens.kt 
+up_to_date                       SettingsAndNotifications.kt 
+update_added                     PostDetailScreen.kt 
+update_alerts                    PostLists.kt 
+update_available                 UpdateUi.kt 
+update_check_failed              SettingsAndNotifications.kt 
+update_failed                    UpdateUi.kt 
+update_now                       UpdateUi.kt 
+update_safety_note               UpdateUi.kt 
+update_versions                  UpdateUi.kt 
+updates_not_configured           SettingsAndNotifications.kt 
+use_gps                          RescueScreens.kt NewSightingScreen.kt 
+verified_by                      CatProfileScreen.kt 
+verified_record_hint             CatProfileScreen.kt 
+verified_station                 StationScreens.kt 
+video_attached                   PostEditorScreen.kt 
+video_limits                     PostEditorScreen.kt 
+video_needs_setup                PostEditorScreen.kt 
+video_optional                   PostEditorScreen.kt 
+view                             AdminScreens.kt 
+view_adoption_requests           PostDetailScreen.kt 
+view_cat                         RescueScreens.kt 
+view_post                        MessagesScreens.kt 
+view_profile                     MessagesScreens.kt PostDetailScreen.kt SightingScreens.kt 
+what_did_you_see                 PostDetailScreen.kt 
+what_happened                    RescueScreens.kt 
+when_seen                        PostEditorScreen.kt 
+where_is_it                      PostEditorScreen.kt 
+where_last_seen                  PostEditorScreen.kt 
+where_seen                       CatProfileScreen.kt 
+which_animal                     PostEditorScreen.kt 
+which_pets                       SittingScreens.kt 
+will_create_new                  NewSightingScreen.kt 
+you_prefix                       MessagesScreens.kt 
+your_request_x                   PostDetailScreen.kt 

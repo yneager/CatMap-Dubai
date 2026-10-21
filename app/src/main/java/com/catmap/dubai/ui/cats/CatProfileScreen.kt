@@ -232,7 +232,7 @@ fun CatProfileScreen(nav: NavHostController, catId: String) {
         "alias" -> TextInputDialog(
             stringResource(R.string.add_alias), stringResource(R.string.alias), stringResource(R.string.add),
             singleLine = true, required = true,
-            onConfirm = { alias -> runner.run { container.cats.addAlias(c.id, alias.take(40)) } },
+            onConfirm = { alias -> runner.run { container.cats.addAlias(c, alias.take(40)) } },
             onDismiss = { dialog = null },
         )
         "report" -> ReportContentDialog("cat", c.id, c.name) { dialog = null }

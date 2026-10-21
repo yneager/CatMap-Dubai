@@ -51,7 +51,7 @@ val MapLayer.label: Int
 
 val MapLayer.icon: Int get() = CatMapIcons.layer(this)
 
-private val MapLayer.category: PostCategory?
+val MapLayer.category: PostCategory?
     get() = when (this) {
         MapLayer.LOST -> PostCategory.LOST
         MapLayer.FOUND -> PostCategory.FOUND

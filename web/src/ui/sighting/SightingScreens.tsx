@@ -2,12 +2,17 @@ import { ReportButton } from '../components/ReportButton';
 import EditSighting from './EditSighting';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { useApp, useList, useDoc, useAction, useSettings } from '../../state';
+import { useApp, useDoc, useAction, useSettings } from '../../state';
 import { CatRepository, type SightingDraft } from '../../data/CatRepository';
-import { SightingFromDoc, CatFromDoc, type PrivateLocation } from '../../data/model';
+import { SightingFromDoc, type PrivateLocation } from '../../data/model';
 import { enums } from '../../data/model/Enums';
 import { ImageRepository } from '../../data/ImageRepository';
+import { LocationRepository } from '../../data/LocationRepository';
+import { useAsyncList } from '../../data/useAsyncList';
+import { useDebounced } from '../../data/usePager';
+import { BreedTraits } from '../components/BreedTraits';
 import { describe } from '../../ai/CatAnalyzer';
+import { nameIdeas } from '../../ai/NameIdeas';
 import { Similarity } from '../../ai/Similarity';
 import { processPhoto, type ProcessedPhoto } from '../../util/images';
 import { Dubai, distanceKm } from '../../data/Neighborhoods';
@@ -71,13 +76,25 @@ function NewSighting() {
     action = useAction(),
     navigate = useNavigate(),
     params = new URLSearchParams(useLocation().search),
-    preset = params.get('catId'),
-    cats = useList(CatRepository.allCats, CatFromDoc, 'sighting-cats');
-  const [draft, setDraft] = useState<SightingDraft>({ ...draftDefault, seenAt: Date.now() }),
+    preset = params.get('catId');
+  const [draft, setDraft] = useState<SightingDraft>(() => {
+      const fix = LocationRepository.get();
+      return { ...draftDefault, seenAt: Date.now(), ...(fix ? { ...fix, accuracy: fix.accuracy ?? 0, locationSource: 'gps' } : {}) };
+    }),
     [step, setStep] = useState(0),
     [photos, setPhotos] = useState<{ data: ProcessedPhoto; url: string; id?: string }[]>([]),
     [processing, setProcessing] = useState(false),
     [manualCoat, setManualCoat] = useState(false);
+  const positionKey = useDebounced(draft.lat + ',' + draft.lng);
+  const cats = useAsyncList(
+    () =>
+      preset
+        ? CatRepository.byIds([preset])
+        : draft.lat || draft.lng
+          ? CatRepository.near(draft.lat, draft.lng, 3)
+          : CatRepository.newest(300),
+    'sighting-cats-' + preset + '-' + positionKey,
+  );
   const change = (patch: Partial<SightingDraft>) => setDraft((d) => ({ ...d, ...patch }));
   useEffect(() => {
     const cat = cats?.find((c) => c.id === preset);
@@ -109,6 +126,7 @@ function NewSighting() {
     .filter((c) => c.score >= 0.45)
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
+  const visibleCandidates = candidates.filter((c) => !draft.rejectedCatIds.includes(c.cat.id));
   const pick = async (files: FileList | null) => {
     if (!files) return;
     setProcessing(true);
@@ -180,6 +198,9 @@ function NewSighting() {
         {step === 0 && (
           <>
             <p>{t('photos_hint')}</p>
+            <p className="small muted">{t('metadata_removed_note')}</p>
+            <p className="small muted">{t('several_subjects_hint')}</p>
+            <p>{t('auto_time', dateTime(draft.seenAt))}</p>
             <div className="photo-grid">
               {photos.map((p, i) => (
                 <img key={i} src={p.url} alt={t('photo_n', i + 1)} />
@@ -200,14 +221,15 @@ function NewSighting() {
         {step === 1 && (
           <>
             <p>{t('web_analyser')}</p>
+            <BreedTraits hints={draft.breedHints} />
             <p>
               {t('coat_color')}: {t('coat_' + draft.coatColor)} · {t('pattern')}:{' '}
               {t('pattern_' + draft.pattern)}
             </p>
             {draft.existingCat ? (
               <p>{t('will_add_to', draft.existingCat.name)}</p>
-            ) : candidates.length ? (
-              candidates.map((c, i) => (
+            ) : visibleCandidates.length ? (
+              visibleCandidates.map((c, i) => (
                 <article className="card" key={c.cat.id}>
                   <div className="row">
                     <Photo id={c.cat.coverPhotoId} />
@@ -236,7 +258,7 @@ function NewSighting() {
                 </article>
               ))
             ) : (
-              <EmptyState text={t('no_matches')} />
+              <EmptyState text={t(candidates.length ? 'all_matches_rejected' : 'no_matches')} />
             )}
             <button className="text-button" onClick={() => change({ existingCat: null })}>
               {t('new_cat_profile')}
@@ -253,6 +275,19 @@ function NewSighting() {
                   limit={40}
                   onChange={(newCatName) => change({ newCatName })}
                 />
+                <p>{t('name_ideas')}</p>
+                <div className="chips">
+                  {nameIdeas(draft.coatColor).map((name) => (
+                    <button
+                      type="button"
+                      className="chip"
+                      key={name}
+                      onClick={() => change({ newCatName: name })}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
                 <Field
                   label={t('description')}
                   value={draft.description}
@@ -325,6 +360,7 @@ function NewSighting() {
               checked={draft.needsMedical}
               onChange={(needsMedical) => change({ needsMedical })}
             />
+            {draft.needsMedical && <p>{t('medical_rescue_tip')}</p>}
             <Field
               label={t('notes')}
               value={draft.notes}
@@ -339,8 +375,12 @@ function NewSighting() {
             <LocationField
               lat={draft.lat}
               lng={draft.lng}
-              onChange={(lat, lng) => change({ lat, lng })}
+              onChange={(lat, lng) => {
+                const fix = LocationRepository.get(), gps = fix?.lat === lat && fix?.lng === lng;
+                change({ lat, lng, accuracy: gps ? fix.accuracy ?? 0 : 0, locationSource: gps ? 'gps' : 'manual' });
+              }}
             />
+            {draft.accuracy > 0 && <p>{t('accuracy_m', Math.round(draft.accuracy))}</p>}
             <Field
               label={t('last_seen')}
               value={new Date(draft.seenAt + 4 * 3600000).toISOString().slice(0, 16)}
@@ -377,6 +417,7 @@ function NewSighting() {
   );
 }
 function SightingDetail() {
+  const navigate = useNavigate();
   const { id = '' } = useParams(),
     { profile } = useApp(),
     action = useAction();
@@ -407,12 +448,15 @@ function SightingDetail() {
           <h2>{sighting.catName}</h2>
         </Link>
         <StatusPill group="SubmissionStatus" value={sighting.status} />
+        {sighting.newCat && <p>{t('first_sighting')}</p>}
+        {sighting.matchScore > 0 && <p>{t('ai_match_score', Math.round(sighting.matchScore * 100))}</p>}
         <p>
-          @{sighting.username} · {dateTime(sighting.seenAt)} · {Dubai.nameOf(sighting.neighborhood)}
+          <Link to={'/user/' + sighting.userId}>@{sighting.username}</Link> ·{' '}
+          {dateTime(sighting.seenAt)} · {Dubai.nameOf(sighting.neighborhood)}
         </p>
         <div className="photo-grid">
           {sighting.photoIds.map((photoId) => (
-            <Photo id={photoId} key={photoId} />
+            <Photo id={photoId} key={photoId} onClick={() => navigate('/photo/' + photoId)} />
           ))}
         </div>
         <p dir="auto">{sighting.notes}</p>
@@ -421,6 +465,12 @@ function SightingDetail() {
             .map((v) => t(enums.HealthTag.find((x) => x.key === v)?.label ?? 'unknown'))
             .join(' · ')}
         </p>
+        <p>
+          {t('location_source')}:{' '}
+          {t(sighting.locationSource === 'gps' ? 'source_gps' : 'source_manual')}
+        </p>
+        {sighting.needsMedical && <p>{t('flag_needs_medical')}</p>}
+        {sighting.possiblyNotNeutered && <p>{t('obs_not_neutered')}</p>}
         <p className="muted">{t('location_is_approximate')}</p>
         {exact && (
           <div className="card exact-location">

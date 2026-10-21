@@ -307,8 +307,10 @@ private fun CheckinDialog(
     onSave: (Int, List<String>, String, String, String) -> Unit,
 ) {
     val container = LocalContainer.current
-    val cats by remember { container.cats.allCats() }.collectAsStateWithLifecycle(emptyList())
-    val nearby = remember(cats) { cats.filter { distanceKm(it.lat, it.lng, station.lat, station.lng) < 0.8 }.take(12) }
+    val nearby by produceState(emptyList<com.catmap.dubai.data.model.Cat>(), station.id) {
+        value = runCatching { container.cats.near(station.lat, station.lng, 0.8) }.getOrDefault(emptyList())
+            .sortedBy { distanceKm(it.lat, it.lng, station.lat, station.lng) }.take(12)
+    }
     var count by remember { mutableIntStateOf(0) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var food by remember { mutableStateOf(SupplyLevel.UNKNOWN) }

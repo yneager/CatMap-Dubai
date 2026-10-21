@@ -1,5 +1,13 @@
 import { EmailAuthProvider, reauthenticateWithCredential, deleteUser } from 'firebase/auth';
-import { where, getDocs, runTransaction, updateDoc, arrayRemove } from 'firebase/firestore';
+import {
+  where,
+  getDoc,
+  getDocs,
+  deleteDoc,
+  runTransaction,
+  updateDoc,
+  arrayRemove,
+} from 'firebase/firestore';
 import { authentication, database } from '../firebase';
 import { ref, listQuery, deleteDocuments } from './Firestore';
 import { pages } from './UserDataExport';
@@ -9,6 +17,8 @@ import { ImageRepository } from './ImageRepository';
 import { SettingsRepository } from './SettingsRepository';
 import { DemoVault } from './DemoAccounts';
 import { PostDraftStore } from './PostDraftStore';
+import { signOut } from 'firebase/auth';
+import { wipeAndReload } from './LocalWipe';
 export async function deleteAccount(password: string) {
   const user = authentication().currentUser;
   if (!user) return;
@@ -18,6 +28,15 @@ export async function deleteAccount(password: string) {
   );
   const uid = user.uid,
     profile = await UserRepository.profile(uid);
+  const jobRef = ref(`aiJobs/${uid}`),
+    job = await getDoc(jobRef);
+  if (job.exists()) {
+    if (!['done', 'error'].includes(job.data().status)) {
+      const age = Date.now() - (job.data().createdAt?.toMillis?.() ?? Date.now());
+      await new Promise((resolve) => setTimeout(resolve, Math.max(0, 15000 - age)));
+    }
+    await deleteDoc(jobRef);
+  }
   await CommunityAccountCleanup.clean(uid);
   for (const [path, parentPath, field, aggregate] of [
     ['sightings', 'cats', 'catId', 'sightingCount'],
@@ -66,7 +85,12 @@ export async function deleteAccount(password: string) {
   for (const field of ['followers', 'contributors'])
     for (const d of (await getDocs(listQuery('cats', where(field, 'array-contains', uid)))).docs)
       await updateDoc(d.ref, { [field]: arrayRemove(uid) });
-  const refs = [...photos, `volunteerApplications/${uid}`];
+  const refs = [
+    ...photos,
+    `volunteerApplications/${uid}`,
+    `users/${uid}/private/areaFollow`,
+    `areaFollows/${uid}`,
+  ];
   for (const [path, owner] of [
     ['privateLocations', 'ownerId'],
     ['rescues', 'reporterId'],
@@ -86,6 +110,7 @@ export async function deleteAccount(password: string) {
     ...(profile?.username ? [`usernames/${profile.username.toLowerCase()}`] : []),
     `users/${uid}`,
   ]);
+  localStorage.setItem('catmap_pending_wipe', '1');
   await deleteUser(user);
   await Promise.allSettled([
     SettingsRepository.clearDeliveredNotifications(uid),
@@ -93,4 +118,6 @@ export async function deleteAccount(password: string) {
     PostDraftStore.clear(uid),
     ImageRepository.clearCache(),
   ]);
+  await signOut(authentication());
+  await wipeAndReload();
 }

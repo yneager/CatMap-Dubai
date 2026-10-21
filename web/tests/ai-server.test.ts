@@ -57,3 +57,56 @@ it('checks the 390-second heartbeat and returns null on transport failure', asyn
   };
   expect(await new AiServerClient(io).health()).toBeNull();
 });
+it('deletes only the answered request, and never an aborted replacement', async () => {
+  let current: Record<string, unknown> | null = null;
+  let next: ((d: Record<string, unknown>) => void) | undefined;
+  const remove = vi.fn(async () => {});
+  const io: AiTransport = {
+    uid: () => 'uid',
+    get: async () => current,
+    set: async (_path, data) => {
+      current = data;
+    },
+    listen: (_path, callback) => {
+      next = callback;
+      return () => {};
+    },
+    timestamp: () => null,
+    delete: remove,
+  };
+  const run = new AiServerClient(io, 50).run({ kind: 'embed' });
+  await vi.waitFor(() => expect(next).toBeDefined());
+  next!({ status: 'done', answeredRequestId: current!.requestId });
+  await run;
+  await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce());
+  remove.mockClear();
+  next = undefined;
+  current = null;
+  const controller = new AbortController();
+  const aborted = new AiServerClient(io, 50).run({ kind: 'embed' }, controller.signal);
+  await vi.waitFor(() => expect(next).toBeDefined());
+  controller.abort();
+  await aborted;
+  expect(remove).not.toHaveBeenCalled();
+  current = { requestId: 'newer-request' };
+  await new Promise((resolve) => setTimeout(resolve, 65));
+  expect(remove).not.toHaveBeenCalled();
+});
+it('deletes its own request after the timeout and tolerates a refused delete', async () => {
+  let current: Record<string, unknown> | null = null;
+  const remove = vi.fn(async () => {
+    throw new Error('refused');
+  });
+  const io: AiTransport = {
+    uid: () => 'uid',
+    get: async () => current,
+    set: async (_p, d) => {
+      current = d;
+    },
+    listen: () => () => {},
+    timestamp: () => null,
+    delete: remove,
+  };
+  expect(await new AiServerClient(io, 10).run({ kind: 'embed' })).toBeNull();
+  await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce());
+});

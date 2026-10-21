@@ -65,7 +65,15 @@ class AdminRepository(
         )
     }
 
-    fun users(): Flow<List<UserProfile>> = db.collection(Col.USERS).limit(1000).listFlow()
+    /** Members for the admin list: newest first, or by username prefix, or suspended ones only. */
+    fun usersQuery(usernamePrefix: String, suspendedOnly: Boolean): Query {
+        val users = db.collection(Col.USERS)
+        return when {
+            usernamePrefix.isNotEmpty() -> users.orderBy("username").startAt(usernamePrefix).endAt(usernamePrefix + "\uf8ff")
+            suspendedOnly -> users.whereEqualTo("suspended", true)
+            else -> users.orderBy("createdAt", Query.Direction.DESCENDING)
+        }
+    }
 
     suspend fun setSuspended(user: UserProfile, suspended: Boolean, admin: UserProfile, note: String) {
         db.collection(Col.USERS).document(user.uid).update("suspended", suspended).await()

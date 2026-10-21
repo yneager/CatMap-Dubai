@@ -1,0 +1,59 @@
+{
+  "species": "dog",
+  "photos": 2492,
+  "breeds": 25,
+  "duplicate_pairs_removed": 3,
+  "detected_share": 0.9959871589085072,
+  "several_animals_share": 0.09430176565008026,
+  "low_quality_share": 0.0004012841091492777,
+  "detect_crop_ms_per_photo": 58.52183491249182,
+  "crop": {
+    "same_breed_pairs": 122967,
+    "same_breed_mean": 0.3446076214313507,
+    "same_breed_quantiles": {
+      "0.95": 0.6605842709541321,
+      "0.99": 0.7687888145446777,
+      "0.999": 0.8948227763175964
+    },
+    "same_breed_max": 0.992100179195404,
+    "other_breed_mean": 0.05741268768906593,
+    "other_breed_quantiles": {
+      "0.95": 0.18249328434467316,
+      "0.99": 0.26793038845062256,
+      "0.999": 0.39382970333099365
+    },
+    "thresholds": {
+      "strong": 0.8948227763175964,
+      "possible": 0.7687888145446777,
+      "weak": 0.6605842709541321
+    }
+  },
+  "closest_lookalike": {
+    "a": "newfoundland_123",
+    "b": "newfoundland_126",
+    "score": 0.992100179195404,
+    "breed": "newfoundland"
+  },
+  "whole_photo": {
+    "same_breed_pairs": 122967,
+    "same_breed_mean": 0.3305248022079468,
+    "same_breed_quantiles": {
+      "0.95": 0.6451910734176636,
+      "0.99": 0.7534462809562683,
+      "0.999": 0.8828732967376709
+    },
+    "same_breed_max": 0.9804376363754272,
+    "other_breed_mean": 0.05585543066263199,
+    "other_breed_quantiles": {
+      "0.95": 0.1802815943956375,
+      "0.99": 0.2632237672805786,
+      "0.999": 0.38577619194984436
+    },
+    "thresholds": {
+      "strong": 0.8828732967376709,
+      "possible": 0.7534462809562683,
+      "weak": 0.6451910734176636
+    }
+  },
+  "edited_copy_cosine": {}
+}

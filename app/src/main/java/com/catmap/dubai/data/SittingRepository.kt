@@ -7,6 +7,7 @@ import com.catmap.dubai.data.model.Review
 import com.catmap.dubai.data.model.SitterProfile
 import com.catmap.dubai.data.model.UserProfile
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
@@ -23,7 +24,8 @@ class SittingRepository(
     fun activeSitters(): Flow<List<SitterProfile>> =
         sitters.whereEqualTo("active", true).limit(500).listFlow()
 
-    fun allSitters(): Flow<List<SitterProfile>> = sitters.limit(800).listFlow()
+    /** Every sitter profile for moderators, read a page at a time. */
+    fun allSittersQuery(): Query = sitters.orderBy(com.google.firebase.firestore.FieldPath.documentId())
 
     fun sitterFlow(uid: String): Flow<SitterProfile?> = sitters.document(uid).objectFlow()
 
@@ -68,7 +70,6 @@ class SittingRepository(
     fun asSitter(uid: String): Flow<List<Booking>> =
         bookings.whereEqualTo("sitterId", uid).listFlow<Booking>().map { l -> l.sortedByDescending { it.createdAt } }
 
-    fun allBookings(): Flow<List<Booking>> = bookings.limit(500).listFlow<Booking>().map { l -> l.sortedByDescending { it.createdAt } }
 
     fun bookingFlow(id: String): Flow<Booking?> = bookings.document(id).objectFlow()
 

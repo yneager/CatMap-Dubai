@@ -1,3 +1,6 @@
+import { useAsyncList } from '../../data/useAsyncList';
+import { listQuery } from '../../data/Firestore';
+import { where } from 'firebase/firestore';
 import { MonthlyChart } from '../components/MonthlyChart';
 import { ReportButton } from '../components/ReportButton';
 import { useEffect, useState } from 'react';
@@ -54,12 +57,25 @@ function Profile() {
       PostFromDoc,
       'user-posts-' + uid + '-' + own,
     ),
-    cats = useList(CatRepository.allCats, CatFromDoc, 'profile-cats'),
     sightings = useList(
       () => (uid ? CatRepository.sightingsForUser(uid) : null),
       SightingFromDoc,
       'profile-sightings-' + uid,
     );
+  const followedCats = useAsyncList(
+    () => CatRepository.byIds(profile?.followedCats ?? []),
+    'profile-cats-' + uid + '-' + (profile?.followedCats ?? []).join(','),
+  );
+  const contributedCats = useList(
+    () => (uid ? listQuery('cats', where('contributors', 'array-contains', uid)) : null),
+    CatFromDoc,
+    'contributed-' + uid,
+  );
+  const cats = [
+    ...new Map(
+      [...(followedCats ?? []), ...(contributedCats ?? [])].map((c) => [c.id, c]),
+    ).values(),
+  ];
   const [tab, setTab] = useState('posts'),
     [volunteer, setVolunteer] = useState(false),
     [motivation, setMotivation] = useState(''),
@@ -105,6 +121,15 @@ function Profile() {
           <h3>{t('level_' + Levels.of(profile.points))}</h3>
           <p>{t('points_n', profile.points)}</p>
           <progress value={Levels.progress(profile.points)} max="1" />
+          <p>
+            {Levels.of(profile.points) === 6
+              ? t('max_level')
+              : t(
+                  'points_to_next',
+                  Levels.all[Levels.of(profile.points)] - profile.points,
+                  t('level_' + (Levels.of(profile.points) + 1)),
+                )}
+          </p>
           {own && <Link to="/achievements">{t('achievements')}</Link>}
         </div>
         {own && (
@@ -129,7 +154,11 @@ function Profile() {
             {profile.role === 'user' && (
               <button className="outlined" onClick={() => setVolunteer(true)}>
                 {t(
-                  profile.volunteerStatus === 'applied' ? 'volunteer_pending' : 'become_volunteer',
+                  profile.volunteerStatus === 'applied'
+                    ? 'volunteer_pending'
+                    : profile.volunteerStatus === 'rejected'
+                      ? 'apply_again_volunteer'
+                      : 'become_volunteer',
                 )}
               </button>
             )}
@@ -195,6 +224,15 @@ function Profile() {
           ) : (
             <EmptyState text={t('no_posts_profile')} />
           ))}
+        {tab === 'sightings' && sightings?.length === 0 && (
+          <EmptyState text={t('no_sightings_yet')} />
+        )}
+        {tab === 'following' && followedCats?.length === 0 && (
+          <EmptyState text={t('not_following_any')} />
+        )}
+        {tab === 'cats' && contributedCats?.length === 0 && (
+          <EmptyState text={t('no_contributed_cats')} />
+        )}
         {tab === 'sightings' &&
           (sightings
             ?.filter((s) => own || s.status !== 'rejected')

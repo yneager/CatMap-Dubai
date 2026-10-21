@@ -164,6 +164,10 @@ data class Post(
     var resolution: String = "",
     /** The match (matches/{id}) the owner credited for the reunion, "" when none. */
     var resolvedMatchId: String = "",
+    /** Geohashes of [lat]/[lng] at precision 4, 5 and 6 ([com.catmap.dubai.data.Geohash.cells]), for map-area queries. */
+    var geoCells: List<String> = emptyList(),
+    /** [keywords] and their first letters ([com.catmap.dubai.data.SearchTerms]), for searching every post. */
+    var searchTerms: List<String> = emptyList(),
 )
 
 /** How a lost or found report was closed. The owner says so; a moderator can later mark the match as checked. */

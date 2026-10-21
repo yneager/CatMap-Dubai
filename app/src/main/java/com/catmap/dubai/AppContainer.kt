@@ -17,6 +17,10 @@ import com.catmap.dubai.data.VideoRepository
 import com.catmap.dubai.util.Connectivity
 import com.catmap.dubai.data.CatRepository
 import com.catmap.dubai.data.ImageRepository
+import com.catmap.dubai.data.LocalWipe
+import com.catmap.dubai.util.AppRestart
+import androidx.core.app.NotificationManagerCompat
+import kotlinx.coroutines.launch
 import com.catmap.dubai.data.ModerationRepository
 import com.catmap.dubai.data.NotificationRepository
 import com.catmap.dubai.data.RescueRepository
@@ -41,7 +45,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.shareIn
 
 /** Simple manual dependency container, created once by [CatMapApp]. */
 class AppContainer(context: Context) {
@@ -59,13 +62,47 @@ class AppContainer(context: Context) {
     private val auth by lazy {
         FirebaseAuth.getInstance().apply { if (BuildConfig.EMULATOR_HOST.isNotEmpty()) useEmulator(BuildConfig.EMULATOR_HOST, 9099) }
     }
+    private val localWipe = LocalWipe(appContext)
     private val db by lazy {
         FirebaseFirestore.getInstance().apply { if (BuildConfig.EMULATOR_HOST.isNotEmpty()) useEmulator(BuildConfig.EMULATOR_HOST, 8080) }
     }
 
     val notifications by lazy { NotificationRepository(db, auth) }
     val users by lazy { UserRepository(db, notifications) }
-    val authRepo by lazy { AuthRepository(auth, db, users, notifications, images, settings, drafts, dataExport, com.catmap.dubai.data.DemoVault(appContext)) }
+    val authRepo by lazy {
+        AuthRepository(
+            auth, db, users, notifications, images, settings, drafts, dataExport, com.catmap.dubai.data.DemoVault(appContext),
+            clearMapCopies = { map.clearAll() },
+            localWipe = localWipe,
+            afterSignOut = { message ->
+                NotificationManagerCompat.from(appContext).cancelAll()
+                AppRestart.relaunch(appContext, message)
+            },
+        )
+    }
+
+    /**
+     * Finishes a logout in the restarted process ([LocalWipe]): signs out again if the sign-out didn't reach the disk,
+     * clears the offline cache and deletes the photo cache and shared files. [CatMapApp] calls it first, before
+     * anything uses Firestore: the clear is only allowed then, and Firestore queues it ahead of the first query. A
+     * failed clear is retried on the next start.
+     */
+    fun finishPendingWipe() {
+        if (!firebaseReady) return
+        if (localWipe.signOutPending) {
+            auth.signOut()
+            localWipe.signOutDone()
+        }
+        if (localWipe.cachePending) {
+            db.clearPersistence()
+                .addOnSuccessListener { localWipe.cacheDone() }
+                .addOnFailureListener { android.util.Log.w("CatMap", "Offline cache not cleared yet", it) }
+            scope.launch(Dispatchers.IO) {
+                images.clearCache()
+                localWipe.deleteCacheFiles()
+            }
+        }
+    }
     val images by lazy { ImageRepository(appContext, db) }
     val moderation by lazy { ModerationRepository(db, notifications) }
     val cats by lazy { CatRepository(db, users, notifications, moderation) }
@@ -75,8 +112,8 @@ class AppContainer(context: Context) {
     val helpDirectory by lazy { HelpDirectoryRepository(db) }
     val dataExport by lazy { UserDataExportRepository(appContext,db) }
     val analytics by lazy { AdminAnalyticsRepository(db) }
-    /** One listener while any feed consumer is visible; retained briefly across navigation. */
-    val communityFeed by lazy { posts.feed().shareIn(scope, SharingStarted.WhileSubscribed(5_000), replay = 1) }
+    /** The map's posts and cats: the area on screen, changes since the last sync, and a saved copy. */
+    val map by lazy { com.catmap.dubai.data.MapRepository(db, appContext, scope) }
     val adoption by lazy { AdoptionRepository(db, notifications) }
     val sitting by lazy { SittingRepository(db, notifications, moderation) }
     val chats by lazy { ChatRepository(db, users, notifications) }

@@ -4,10 +4,11 @@ import {
   orderBy,
   limit,
   writeBatch,
-  setDoc,
   updateDoc,
   increment,
   deleteDoc,
+  deleteField,
+  getDoc,
 } from 'firebase/firestore';
 import { database } from '../firebase';
 import { col, ref, listQuery, list, read, deleteDocuments } from './Firestore';
@@ -18,8 +19,6 @@ import {
   PostUpdateDefaults,
   PostUpdateToDoc,
   PostUpdateFromDoc,
-  AreaFollowDefaults,
-  AreaFollowToDoc,
   AreaFollowFromDoc,
   type Post,
   type PostUpdate,
@@ -31,6 +30,8 @@ import { NotificationRepository as notifications } from './NotificationRepositor
 import { PostStaleness } from './PostStaleness';
 import { ImageRepository } from './ImageRepository';
 import { ModerationRepository } from './ModerationRepository';
+import { Geohash } from './Geohash';
+import { SearchTerms } from './SearchTerms';
 export function keywords(...parts: string[]) {
   const hood = Dubai.byKey(parts.at(-1));
   const split = (text: string) => text.toLowerCase().split(/[^\p{L}\p{N}]+/u);
@@ -87,6 +88,10 @@ export function toPost(draft: Post, me: UserProfile, time = Date.now()): Post {
   };
   return {
     ...clean,
+    geoCells: Geohash.cells(clean.lat, clean.lng),
+    searchTerms: SearchTerms.of(
+      keywords(clean.name, clean.color, clean.breed, clean.features, clean.description, hood),
+    ),
     keywords: keywords(
       clean.name,
       clean.color,
@@ -98,10 +103,44 @@ export function toPost(draft: Post, me: UserProfile, time = Date.now()): Post {
   };
 }
 export const PostRepository = {
-  feed: () =>
-    listQuery('posts', where('hidden', '==', false), orderBy('createdAt', 'desc'), limit(400)),
-  allPosts: () => listQuery('posts', orderBy('createdAt', 'desc'), limit(600)),
-  feedOnce: (count = 400) =>
+  feedQuery: (categories: string[] = []) =>
+    listQuery(
+      'posts',
+      where('hidden', '==', false),
+      ...(categories.length ? [where('category', 'in', categories)] : []),
+      orderBy('createdAt', 'desc'),
+    ),
+  searchQuery: (word: string) =>
+    listQuery(
+      'posts',
+      where('hidden', '==', false),
+      where('searchTerms', 'array-contains-any', SearchTerms.query(word)),
+      orderBy('createdAt', 'desc'),
+    ),
+  byIds: async (ids: string[]) =>
+    (
+      await Promise.all([...new Set(ids)].map((id) => PostRepository.post(id).catch(() => null)))
+    ).filter((p): p is Post => !!p && !p.hidden),
+  near: async (lat: number, lng: number, radius: number, perCell = 30) => {
+    const pages = await Promise.all(
+      Geohash.around(lat, lng, radius).map((cell) =>
+        list(
+          listQuery(
+            'posts',
+            where('hidden', '==', false),
+            where('geoCells', 'array-contains', cell),
+            orderBy('updatedAt', 'desc'),
+            limit(perCell),
+          ),
+          PostFromDoc,
+        ),
+      ),
+    );
+    return [...new Map(pages.flat().map((p) => [p.id, p])).values()].filter(
+      (p) => distanceKm(lat, lng, p.lat, p.lng) <= radius,
+    );
+  },
+  newest: (count = 300) =>
     list(
       listQuery('posts', where('hidden', '==', false), orderBy('createdAt', 'desc'), limit(count)),
       PostFromDoc,
@@ -183,13 +222,16 @@ export const PostRepository = {
       ...(status === 'open' ? { resolution: '', resolvedMatchId: '' } : {}),
     });
     if (status === 'reunited' && post.status !== 'reunited' && post.ownerId === me.uid)
-      UserRepository.addStats(b, me.uid, { reunited: 1 }, 25);
+      UserRepository.addStats(b, me.uid, { reunited: 1 }, 25, undefined, true);
     await b.commit();
   },
   stillLooking: (p: Post) =>
     updateDoc(ref(`posts/${p.id}`), { lastActivityAt: Date.now(), updatedAt: Date.now() }),
   remindStalePosts: async (uid: string) => {
     const now = Date.now();
+    const key = 'stale_check_' + uid;
+    if (now - Number(localStorage.getItem(key) ?? 0) < 12 * 3600000) return;
+    localStorage.setItem(key, String(now));
     for (const p of await list(PostRepository.postsBy(uid), PostFromDoc))
       if (!p.hidden && PostStaleness.needsReminder(p, now))
         await notifications.send(
@@ -237,7 +279,7 @@ export const PostRepository = {
     });
   },
   updates: (id: string) =>
-    listQuery(`posts/${id}/updates`, orderBy('createdAt', 'desc'), limit(200)),
+    listQuery(`posts/${id}/updates`, orderBy('createdAt', 'desc'), limit(30)),
   addUpdate: async (
     p: Post,
     kind: string,
@@ -284,24 +326,45 @@ export const PostRepository = {
     if (u.photoId) await ImageRepository.delete(u.photoId).catch(() => {});
   },
   areaFollow: (uid: string) => ref(`areaFollows/${uid}`),
+  areaCentre: (uid: string) => ref(`users/${uid}/private/areaFollow`),
+  moveAreaCentreToPrivate: async (uid: string) => {
+    const flag = 'area_follow_private_' + uid;
+    if (localStorage.getItem(flag)) return;
+    const legacy = (await getDoc(ref(`areaFollows/${uid}`))).data();
+    if (typeof legacy?.lat === 'number' && typeof legacy.lng === 'number') {
+      const b = writeBatch(database());
+      b.set(PostRepository.areaCentre(uid), {
+        lat: legacy.lat,
+        lng: legacy.lng,
+        radiusKm: typeof legacy.radiusKm === 'number' ? legacy.radiusKm : 3,
+        updatedAt: Date.now(),
+      });
+      b.update(ref(`areaFollows/${uid}`), {
+        lat: deleteField(),
+        lng: deleteField(),
+        radiusKm: deleteField(),
+      });
+      await b.commit();
+    }
+    localStorage.setItem(flag, '1');
+  },
   followArea: async (uid: string, lat: number, lng: number, radiusKm: number) => {
     let neighborhoods = Dubai.neighborhoods
       .filter((p) => distanceKm(lat, lng, p.lat, p.lng) <= radiusKm)
       .map((p) => p.key);
     if (!neighborhoods.length) neighborhoods = [Dubai.nearest(lat, lng).key];
-    await setDoc(
-      ref(`areaFollows/${uid}`),
-      AreaFollowToDoc({
-        ...AreaFollowDefaults,
-        neighborhoods,
-        lat,
-        lng,
-        radiusKm,
-        updatedAt: Date.now(),
-      }),
-    );
+    const b = writeBatch(database()),
+      updatedAt = Date.now();
+    b.set(ref(`areaFollows/${uid}`), { neighborhoods, updatedAt });
+    b.set(PostRepository.areaCentre(uid), { lat, lng, radiusKm, updatedAt });
+    await b.commit();
   },
-  unfollowArea: (uid: string) => deleteDoc(ref(`areaFollows/${uid}`)),
+  unfollowArea: async (uid: string) => {
+    const b = writeBatch(database());
+    b.delete(ref(`areaFollows/${uid}`));
+    b.delete(PostRepository.areaCentre(uid));
+    await b.commit();
+  },
   keywords,
   likelyDuplicates,
 };

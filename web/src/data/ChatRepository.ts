@@ -29,7 +29,7 @@ export const ChatRepository = {
   chatsFor: (uid: string) => listQuery('chats', where('members', 'array-contains', uid)),
   chatFlow: (id: string) => ref(`chats/${id}`),
   messages: (id: string) =>
-    listQuery(`chats/${id}/messages`, orderBy('createdAt'), limitToLast(300)),
+    listQuery(`chats/${id}/messages`, orderBy('createdAt'), limitToLast(50)),
   open: async (me: UserProfile, otherUid: string) => {
     if (!otherUid || otherUid === me.uid) throw new AppException('err_message_self');
     const id = ChatRepository.chatId(me.uid, otherUid);

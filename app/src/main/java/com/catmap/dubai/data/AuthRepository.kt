@@ -26,6 +26,12 @@ class AuthRepository(
     private val drafts: PostDraftStore,
     private val dataExport: UserDataExportRepository,
     val demoVault: DemoVault,
+    /** Deletes the map's saved copies ([MapRepository.clearAll]). */
+    private val clearMapCopies: () -> Unit = {},
+    /** Marks Firestore's offline cache and the photo cache for clearing at the next start. */
+    private val localWipe: LocalWipe? = null,
+    /** Runs once signed out (with a message to show, or null): removes shown alerts and restarts the app. */
+    private val afterSignOut: (message: Int?) -> Unit = {},
 ) {
     private val _user = MutableStateFlow(auth.currentUser)
     val user: StateFlow<FirebaseUser?> = _user.asStateFlow()
@@ -87,7 +93,13 @@ class AuthRepository(
             db.collection(Col.USERNAMES).document(key).get().await().getString("loginEmail")
                 ?: throw AppException(R.string.err_username_login)
         }
-        val user = auth.signInWithEmailAndPassword(email, password).await().user ?: return
+        // "No account for this email" and "wrong password" get the same answer, so the sign-in screen can't be used to
+        // find out who has an account.
+        val user = try {
+            auth.signInWithEmailAndPassword(email, password).await().user ?: return
+        } catch (e: FirebaseAuthInvalidUserException) {
+            throw AppException(R.string.err_wrong_credentials)
+        }
         ensureProfile(user)
     }
 
@@ -167,16 +179,28 @@ class AuthRepository(
         auth.currentUser?.sendEmailVerification()?.await()
     }
 
+    /** The screen always says "if an account exists, a link is on its way", whether or not one does. */
     suspend fun sendPasswordReset(email: String) {
-        auth.sendPasswordResetEmail(email.trim()).await()
+        try {
+            auth.sendPasswordResetEmail(email.trim()).await()
+        } catch (e: FirebaseAuthInvalidUserException) {
+            // No account (or a disabled one): answer exactly as if the link had been sent.
+        }
     }
 
     fun email(): String = auth.currentUser?.email ?: ""
 
-    /** Signs out; an explicit log out also forgets the stored demo password. */
+    /**
+     * Signs out and leaves nothing of the account readable on the phone: the demo password and the map copies go now,
+     * Firestore's offline cache, the photo cache and shared files when the app restarts ([LocalWipe]). Drafts stay;
+     * they're stored per account and come back on the next sign-in.
+     */
     fun logout() {
+        localWipe?.request()
         demoVault.clear()
+        clearMapCopies()
         auth.signOut()
+        afterSignOut(null)
     }
 
     /**
@@ -260,6 +284,9 @@ class AuthRepository(
             addAll(users.ref(uid).collection(Col.NOTIFICATIONS).get().await().documents.map { it.reference })
         }
         deleteDocuments(refs)
+        // The AI job can hold the last photos sent to the PC. A job still waiting for its answer can't be deleted for
+        // its first seconds (rules); the PC removes answered jobs within the hour.
+        runCatching { db.collection(Col.AI_JOBS).document(uid).delete().await() }
         // Keep the profile until the last batch, so role checks still work throughout cleanup.
         deleteDocuments(buildList {
             add(users.ref(uid).collection(Col.PRIVATE).document("account"))
@@ -274,7 +301,10 @@ class AuthRepository(
             drafts.clear(uid)
             dataExport.clear(uid)
             images.clearCache()
+            clearMapCopies()
+            localWipe?.request()
         }.onFailure { android.util.Log.w("CatMap", "Local cleanup after account deletion failed", it) }
+        afterSignOut(R.string.account_deleted)
     }
 
     private suspend fun deleteDocuments(refs: List<DocumentReference>) {

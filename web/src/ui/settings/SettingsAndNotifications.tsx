@@ -1,4 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useOlder } from '../../data/useOlder';
+import { listQuery } from '../../data/Firestore';
+import { orderBy } from 'firebase/firestore';
+import { AppNotificationFromDoc } from '../../data/model';
 import { updates } from '../../platform/updates';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useApp, useSettings, useAction } from '../../state';
@@ -11,7 +15,7 @@ import { UserRepository } from '../../data/UserRepository';
 import { PostRepository } from '../../data/PostRepository';
 import { UserDataExportRepository } from '../../data/UserDataExport';
 import { deleteAccount } from '../../data/AccountDeletion';
-import { safeRoute } from '../../util/links';
+import { alertRoute } from '../../util/AppRoutes';
 import { getReleaseNotes } from '../../util/whatsNew';
 import { t, dateTime } from '../../i18n';
 import { config } from '../../config';
@@ -30,11 +34,20 @@ export default function SettingsAndNotifications() {
   return useLocation().pathname === '/notifications' ? <Inbox /> : <Settings />;
 }
 function Inbox() {
-  const { inbox, user, profile } = useApp(),
+  const { inbox: liveInbox, user, profile } = useApp(),
     navigate = useNavigate(),
     action = useAction(),
     uid = user?.uid ?? '',
     [clear, setClear] = useState(false);
+  const history = useOlder(
+    () => listQuery(`users/${uid}/notifications`, orderBy('createdAt', 'desc')),
+    AppNotificationFromDoc,
+    'inbox-' + uid,
+    30,
+  );
+  const inbox = [...new Map([...history.items, ...liveInbox].map((n) => [n.id, n])).values()].sort(
+    (a, b) => b.createdAt - a.createdAt,
+  );
   return (
     <>
       <AppTopBar title={t('notifications')}>
@@ -64,7 +77,8 @@ function Inbox() {
                   onClick={() =>
                     void action.run(async () => {
                       await NotificationRepository.markRead(uid, n.id);
-                      if (n.route) navigate(safeRoute(n.route));
+                      const route = alertRoute(n.route);
+                      if (route) navigate(route);
                     })
                   }
                 >
@@ -72,7 +86,7 @@ function Inbox() {
                   <p dir="auto">{body}</p>
                   <small>{dateTime(n.createdAt)}</small>
                 </button>
-                {n.type === 'stale_post' && (
+                {n.type === 'stale_post' && alertRoute(n.route)?.startsWith('/post/') && (
                   <div className="row">
                     <button
                       className="text-button"
@@ -113,6 +127,15 @@ function Inbox() {
         ) : (
           <EmptyState text={t('no_notifications')} />
         )}{' '}
+        {!history.done && liveInbox.length >= 30 && (
+          <button
+            className="text-button"
+            disabled={history.busy}
+            onClick={() => void history.load(`users/${uid}/notifications/${liveInbox.at(-1)!.id}`)}
+          >
+            {t('load_more')}
+          </button>
+        )}
         {inbox.length > 0 && (
           <button className="text-button" onClick={() => setClear(true)}>
             {t('clear_all')}
@@ -248,6 +271,7 @@ function Settings() {
         <LinkRow to="/area-alerts" label={t('area_alerts')} />
         <SectionHeader>{t('privacy')}</SectionHeader>
         <p>{t('public_location_precision')}</p>
+        <p>{t('metadata_always_removed')}</p>
         <div className="chips">
           {['standard', 'high'].map((level) => (
             <button

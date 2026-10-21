@@ -50,17 +50,26 @@ class MatchRepository(
         val post = posts.post(postId) ?: return
         if (!MatchEngine.isLost(post) && !MatchEngine.isSighting(post)) return
         if (ai.health() != null) return
-        matchOnDevice(post, posts.feedOnce(400), me)
+        matchOnDevice(post, candidates(post), me)
+    }
+
+    /**
+     * The other side of a pair: the newest lost reports for a sighting, the newest sightings for a lost report (one
+     * query on the category, instead of the whole feed). Distance and time are judged by [MatchEngine].
+     */
+    private suspend fun candidates(post: Post): List<Post> {
+        val other = if (MatchEngine.isLost(post)) MatchEngine.SIGHTINGS else MatchEngine.LOST
+        return runCatching { posts.feedQuery(other).limit(CANDIDATES).get().await().safeObjects<Post>() }.getOrDefault(emptyList())
     }
 
     /**
      * The owner opened their open lost report (or a reporter their sighting) while the PC is off: pairs it with
      * posts published since, so a sighting that came first is found too. Only missing pairs are written.
      */
-    suspend fun reconcile(post: Post, feed: List<Post>, me: UserProfile) {
+    suspend fun reconcile(post: Post, me: UserProfile) {
         if (post.ownerId != me.uid || post.status != PostStatus.OPEN.key) return
         if (ai.health() != null) return
-        matchOnDevice(post, feed, me)
+        matchOnDevice(post, candidates(post), me)
     }
 
     /** Writes the phone's suggestions (never "strong") and tells the other person about the best few. */
@@ -191,7 +200,7 @@ class MatchRepository(
         }.await()
         if (!changed) return false
         if (post.ownerId == me.uid) {
-            runCatching { db.runBatch { b -> users.addStats(b, me.uid, mapOf(Stats.REUNITED to 1), points = 25) }.await() }
+            runCatching { db.runBatch { b -> users.addStats(b, me.uid, mapOf(Stats.REUNITED to 1), points = 25, rateLimited = true) }.await() }
         }
         if (credited != null) {
             notifications.send(
@@ -205,5 +214,7 @@ class MatchRepository(
     companion object {
         /** The phone writes at most this many suggestions per post (the PC has no such limit). */
         const val MAX_DEVICE_MATCHES = 5
+        /** How many of the newest posts on the other side the phone compares (only while the PC is off). */
+        const val CANDIDATES = 200L
     }
 }

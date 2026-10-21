@@ -1,14 +1,23 @@
-# Builds a signed release APK and publishes it as a GitHub Release whenever a version tag is pushed:
+# Builds a signed release APK and publishes it as a GitHub Release when a version tag is pushed:
 #
-#   git tag v0.0.3 && git push origin v0.0.3
+#   git tag v0.1.0 && git push origin v0.1.0
 #
-# Installed apps check this repo's latest release and offer the APK as an update. Every release must
-# be signed with the same key, so the keystore lives in repository secrets (see SETUP.md, "Releases").
+# Installed apps check this repo's latest release and offer the APK as an update. Every release must be signed with
+# the same key, so the keystore lives in repository secrets (see SETUP.md, "Releases").
 #
-# Required secrets:  CATMAP_KEYSTORE_BASE64, CATMAP_KEYSTORE_PASSWORD, CATMAP_KEY_ALIAS, CATMAP_KEY_PASSWORD
-# Optional secrets:  GOOGLE_SERVICES_JSON (the file's contents; without it the app shows "Firebase setup required"),
-#                    MAPTILER_KEY (satellite layer)
-# Optional variable: CATMAP_BLAZE = true (only once the Firebase project is on the Blaze plan)
+# Required secrets:  CATMAP_KEYSTORE_BASE64, CATMAP_KEYSTORE_PASSWORD, CATMAP_KEY_ALIAS, CATMAP_KEY_PASSWORD,
+#                    GOOGLE_SERVICES_JSON (the file's contents)
+# Optional secret:   MAPTILER_KEY (satellite layer)
+# Optional variables: CATMAP_BLAZE = true (only once the Firebase project is on the Blaze plan);
+#                    CATMAP_RELEASE_CERT_SHA256 (only if the signing key is ever replaced on purpose)
+#
+# Three jobs, so no single step holds both the signing key and a token that can publish:
+#   check   - no secrets, read-only: the tag is a version on main, no release exists for it yet, tests and lint pass.
+#   build   - signing secrets, read-only token, only GitHub's and Gradle's own actions: builds, checks the package
+#             name, version and signing certificate, deletes the key, hands the APK on.
+#   publish - no signing secrets: SBOM, build attestation, then creates the release (never replaces one).
+# docs/security/GITHUB_SETTINGS.md has the settings that go with this (the "release" environment's reviewer, tag
+# protection, immutable releases).
 
 name: Release APK
 
@@ -17,62 +26,106 @@ on:
     tags: ['v*.*.*']
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-jobs:
-  release:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
+env:
+  # SHA-256 of the certificate every CatMap release is signed with (public: it's inside every APK). An APK signed
+  # with anything else could never update installed apps, so the build stops instead of publishing it.
+  EXPECTED_CERT_SHA256: ${{ vars.CATMAP_RELEASE_CERT_SHA256 || '256df9056b4a600c0539ce37033e475e5d6fbac40fe8f9b5beaceb98cdf42887' }}
+  BUILD_TOOLS: '36.0.0'
 
-      - name: Read version from tag
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Version tag on main, not released yet
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if ! [[ "$VERSION" =~ ^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$ ]]; then
             echo "::error::Tag must look like v1.2.3 (got $GITHUB_REF_NAME)"; exit 1
           fi
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME points at a commit that isn't on main."; exit 1
+          fi
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release $GITHUB_REF_NAME already exists. Releases are never replaced; tag a new version."; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '25'
+      - name: Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.0" "build-tools;$BUILD_TOOLS" > /dev/null
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Tests and lint
+        run: ./gradlew --no-daemon --no-parallel --max-workers=1 :app:testDebugUnitTest :app:lintRelease
 
-      - uses: android-actions/setup-android@v4
+  build:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Add a required reviewer to this environment (GITHUB_SETTINGS.md), so a stolen login alone can't ship an update.
+    environment: release
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          packages: 'platforms;android-37.0 build-tools;36.0.0'
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '25'
+      # Google's own sdkmanager from the runner image, instead of a third-party setup action, in the job that holds
+      # the signing key.
+      - name: Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.0" "build-tools;$BUILD_TOOLS" > /dev/null
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          # Nothing built with the signing key is written back to the shared cache.
+          cache-read-only: true
 
-      - uses: gradle/actions/setup-gradle@v6
-
-      - name: Restore signing key
+      - name: Restore signing key and Firebase config
         env:
           KEYSTORE_BASE64: ${{ secrets.CATMAP_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.CATMAP_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.CATMAP_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.CATMAP_KEY_PASSWORD }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
             echo "::error::Signing secrets are missing. An unsigned or differently signed APK can't update installed apps."; exit 1
           fi
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "::error::GOOGLE_SERVICES_JSON is missing; the APK would only show the Firebase setup screen."; exit 1
+          fi
+          umask 077
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
           echo "CATMAP_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
-      - name: Add Firebase config
-        env:
-          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-        run: |
-          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
-            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
-          else
-            echo "::warning::GOOGLE_SERVICES_JSON is not set; this APK will show the Firebase setup screen."
-          fi
-
-      - name: Test and build
+      - name: Build
         env:
           CATMAP_KEYSTORE_PASSWORD: ${{ secrets.CATMAP_KEYSTORE_PASSWORD }}
           CATMAP_KEY_ALIAS: ${{ secrets.CATMAP_KEY_ALIAS }}
@@ -80,30 +133,91 @@ jobs:
           MAPTILER_KEY: ${{ secrets.MAPTILER_KEY }}
           BLAZE: ${{ vars.CATMAP_BLAZE }}
         run: |
-          ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleRelease \
+          ./gradlew --no-daemon :app:assembleRelease \
             -Pcatmap.versionName="$VERSION" \
             -Pcatmap.githubRepo="$GITHUB_REPOSITORY" \
             -Pcatmap.maptilerKey="$MAPTILER_KEY" \
             -Pcatmap.blaze="${BLAZE:-false}"
 
-      - name: Verify signature
+      - name: Remove the signing key and Firebase config
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" app/google-services.json
+
+      - name: Check package, version and signing certificate
         run: |
           APK=app/build/outputs/apk/release/app-release.apk
+          TOOLS="$ANDROID_HOME/build-tools/$BUILD_TOOLS"
           test -f "$APK" || { echo "::error::No signed APK was produced"; exit 1; }
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" | grep -E "Signer #1 certificate (DN|SHA-256)"
-          cp "$APK" "CatMap-$VERSION.apk"
-          sha256sum "CatMap-$VERSION.apk" > "CatMap-$VERSION.apk.sha256"
+          BADGING=$("$TOOLS/aapt2" dump badging "$APK" | head -1)
+          echo "$BADGING"
+          IFS=. read -r A B C <<< "$VERSION"
+          CODE=$((10#$A * 10000 + 10#$B * 100 + 10#$C))
+          [[ "$BADGING" == *"name='com.catmap.dubai'"* ]] || { echo "::error::Wrong package name"; exit 1; }
+          [[ "$BADGING" == *"versionName='$VERSION'"* ]] || { echo "::error::versionName isn't $VERSION"; exit 1; }
+          [[ "$BADGING" == *"versionCode='$CODE'"* ]] || { echo "::error::versionCode isn't $CODE"; exit 1; }
+          CERTS=$("$TOOLS/apksigner" verify --print-certs "$APK")
+          echo "$CERTS" | grep -E "Signer #[0-9]+ certificate (DN|SHA-256)"
+          SIGNERS=$(echo "$CERTS" | grep -c "certificate SHA-256 digest" || true)
+          ACTUAL=$(echo "$CERTS" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          [ "$SIGNERS" = "1" ] || { echo "::error::Expected exactly one signer, found $SIGNERS"; exit 1; }
+          [ "$ACTUAL" = "$EXPECTED_CERT_SHA256" ] || { echo "::error::Signed with an unexpected certificate ($ACTUAL); installed apps would refuse it."; exit 1; }
+          mkdir dist
+          cp "$APK" "dist/CatMap-$VERSION.apk"
+          (cd dist && sha256sum "CatMap-$VERSION.apk" > "CatMap-$VERSION.apk.sha256")
 
-      - name: Publish release
+      - name: Dependency list
+        run: ./gradlew --no-daemon -q :app:dependencies --configuration releaseRuntimeClasspath > "dist/CatMap-$VERSION-dependencies.txt"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
+
+  publish:
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: dist
+      - name: Check the handed-over APK
+        run: cd dist && sha256sum -c "CatMap-$VERSION.apk.sha256"
+
+      - name: SBOM (source dependencies)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/CatMap-${{ env.VERSION }}.sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Build attestation
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/CatMap-${{ env.VERSION }}.apk
+
+      - name: Publish release (never replaces one)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "CatMap-$VERSION.apk" "CatMap-$VERSION.apk.sha256" --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" "CatMap-$VERSION.apk" "CatMap-$VERSION.apk.sha256" --title "CatMap $VERSION" --generate-notes
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release $GITHUB_REF_NAME appeared meanwhile; not touching it."; exit 1
           fi
-
-      - name: Remove secrets from the runner
-        if: always()
-        run: rm -f "$RUNNER_TEMP/release.jks" app/google-services.json
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "CatMap $VERSION" --generate-notes \
+            "dist/CatMap-$VERSION.apk" "dist/CatMap-$VERSION.apk.sha256" \
+            "dist/CatMap-$VERSION-dependencies.txt" "dist/CatMap-$VERSION.sbom.spdx.json"

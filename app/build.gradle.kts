@@ -137,6 +137,8 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (hasSigning) signingConfig = signingConfigs.getByName("release")
+            // Never the local emulators: release doesn't call useEmulators(), and its network config refuses plain HTTP.
+            buildConfigField("String", "EMULATOR_HOST", "\"\"")
             // Phones are ARM; the x86 builds of the map engine only serve PC emulators and would add ~50 MB.
             ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         }
@@ -222,6 +224,10 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-messaging")
+    // App Check, monitoring only (docs/security/APP_CHECK.md): Play Integrity in release, the debug provider elsewhere.
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
+    debugImplementation("com.google.firebase:firebase-appcheck-debug")
+    "stagingImplementation"("com.google.firebase:firebase-appcheck-debug")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.11.0")
 
     implementation("com.google.android.gms:play-services-location:21.4.0")

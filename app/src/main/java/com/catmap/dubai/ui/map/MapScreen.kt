@@ -88,6 +88,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import com.catmap.dubai.data.Dubai
 import com.catmap.dubai.data.FeedFilters
 import com.catmap.dubai.data.MapLayer
+import com.catmap.dubai.data.MapArea
 import com.catmap.dubai.data.MapMode
 import com.catmap.dubai.data.model.Cat
 import com.catmap.dubai.data.model.CoatColor
@@ -145,8 +146,10 @@ fun MapScreen(nav: NavHostController) {
     val filters = settings.filters
     val uid = container.session.uid
 
-    val posts by remember { container.communityFeed }.collectAsStateWithLifecycle(emptyList())
-    val cats by remember { container.cats.allCats() }.collectAsStateWithLifecycle(emptyList())
+    // Only the area on screen, the changes since the last sync and the copy saved on the phone (MapRepository).
+    val area by remember(uid) { if (uid == null) flowOf(MapArea()) else container.map.area(uid) }.collectAsStateWithLifecycle(MapArea())
+    val posts = remember(area) { area.visiblePosts }
+    val cats = remember(area) { area.visibleCats }
     val stations by remember { container.stations.stations() }.collectAsStateWithLifecycle(emptyList())
     val sitters by remember(filters.showsSitters()) {
         if (filters.showsSitters()) container.sitting.activeSitters() else flowOf(emptyList())
@@ -170,16 +173,15 @@ fun MapScreen(nav: NavHostController) {
 
     // Another screen asked to show something here: wait for the map, fly there and open its card.
     val focus by MapFocus.request.collectAsStateWithLifecycle()
-    LaunchedEffect(focus, posts) {
+    LaunchedEffect(focus) {
         val f = focus ?: return@LaunchedEffect
         listMode = false
         while (controller.map == null) delay(50)
         controller.flyTo(f.lat, f.lng, f.zoom)
         val id = f.postId
         if (id != null) {
-            val match = posts.firstOrNull { it.id == id }
-            if (match == null && posts.isEmpty()) return@LaunchedEffect // the feed hasn't arrived yet
-            match?.let { selection = Selection.OfPost(it) }
+            // Posts outside the loaded area are fetched on their own.
+            (posts.firstOrNull { it.id == id } ?: container.map.include(id))?.let { selection = Selection.OfPost(it) }
         }
         MapFocus.request.value = null
     }
@@ -274,6 +276,7 @@ fun MapScreen(nav: NavHostController) {
                 }
             },
             onMapClick = { selection = null; searching = false },
+            onViewport = { south, west, north, east -> container.map.show(south, west, north, east) },
         )
         }
 

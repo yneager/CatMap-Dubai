@@ -10,7 +10,7 @@ export const notificationId = {
 };
 const inbox = (uid: string) => `users/${uid}/notifications`;
 export const NotificationRepository = {
-  notifications: (uid: string) => listQuery(inbox(uid), orderBy('createdAt', 'desc'), limit(100)),
+  notifications: (uid: string) => listQuery(inbox(uid), orderBy('createdAt', 'desc'), limit(30)),
   latest: (uid: string) => list(NotificationRepository.notifications(uid), AppNotificationFromDoc),
   markRead: (uid: string, id: string) => updateDoc(ref(`${inbox(uid)}/${id}`), { read: true }),
   markAllRead: async (uid: string, ids: string[]) => {
@@ -58,14 +58,6 @@ export const NotificationRepository = {
       );
       return;
     }
-    try {
-      for (let i = 0; i < targets.length; i += 400) {
-        const b = writeBatch(database());
-        targets.slice(i, i + 400).forEach((uid) => b.set(doc(col(inbox(uid))), value));
-        await b.commit();
-      }
-    } catch {
-      /* Inbox failures are intentionally non-fatal, matching Android. */
-    }
+    await Promise.allSettled(targets.map((uid) => setDoc(doc(col(inbox(uid))), value)));
   },
 };

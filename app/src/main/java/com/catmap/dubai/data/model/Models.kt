@@ -86,6 +86,10 @@ data class Cat(
     var hidden: Boolean = false,
     var createdAt: Long = 0,
     var updatedAt: Long = 0,
+    /** Geohashes of [lat]/[lng] at precision 4, 5 and 6 ([com.catmap.dubai.data.Geohash.cells]), for map-area queries. */
+    var geoCells: List<String> = emptyList(),
+    /** Name and alias words and their first letters ([com.catmap.dubai.data.SearchTerms]), for search. */
+    var searchTerms: List<String> = emptyList(),
 )
 
 data class Sighting(
