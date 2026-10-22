@@ -1,6 +1,6 @@
 // The lost-to-reunited workflow on the web (same documents and wording as Android's ui/matches):
 // possible matches on a report, the side-by-side review, linking a sighting, the reunion and the report's history.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   PostFromDoc,
@@ -138,8 +138,12 @@ function MatchCard({ m, viewerIsOwner }: { m: PostMatch; viewerIsOwner: boolean 
   );
 }
 
-/** "Possible matches" on a lost report or sighting, for the two people involved. */
-export function PostMatchesSection({ post }: { post: Post }) {
+/**
+ * The person's matches on a post whose other post still exists (Android's MatchRepository.forPost). Deleting a post
+ * removes its matches, but not always (a moderator's delete, an older app), so each other post is checked once and a
+ * pair whose post is gone is dropped and deleted.
+ */
+export function usePostMatches(postId: string) {
   const { profile } = useApp();
   const uid = profile?.uid ?? '';
   const all = useList(
@@ -147,6 +151,34 @@ export function PostMatchesSection({ post }: { post: Post }) {
     PostMatchFromDoc,
     'matches-' + uid,
   );
+  const [gone, setGone] = useState<Record<string, boolean>>({});
+  const asked = useRef(new Set<string>());
+  const here = all?.filter((m) => m.lostPostId === postId || m.sightingPostId === postId);
+  const other = (m: PostMatch) => (m.lostPostId === postId ? m.sightingPostId : m.lostPostId);
+  useEffect(() => {
+    for (const m of here ?? []) {
+      const id = other(m);
+      if (asked.current.has(id)) continue;
+      asked.current.add(id);
+      void PostRepository.exists(id).then((exists) => setGone((g) => ({ ...g, [id]: !exists })));
+    }
+    for (const m of here ?? [])
+      if (gone[other(m)] && !asked.current.has(m.id)) {
+        asked.current.add(m.id);
+        MatchRepository.drop(m);
+      }
+  });
+  if (!here) return undefined;
+  // Until the first answers arrive, nothing (rather than a list that loses a card a moment later).
+  if (here.length && !here.some((m) => other(m) in gone)) return undefined;
+  return here.filter((m) => gone[other(m)] === false);
+}
+
+/** "Possible matches" on a lost report or sighting, for the two people involved. */
+export function PostMatchesSection({ post }: { post: Post }) {
+  const { profile } = useApp();
+  const uid = profile?.uid ?? '';
+  const all = usePostMatches(post.id);
   const [pcOnline, setPcOnline] = useState<boolean | null>(null),
     [showWeak, setShowWeak] = useState(false);
   const isLost = post.category === 'lost',
@@ -163,7 +195,6 @@ export function PostMatchesSection({ post }: { post: Post }) {
   }, [pcOnline, isOwner, profile, post]);
   if (!all) return null;
   const visible = all
-    .filter((m) => m.lostPostId === post.id || m.sightingPostId === post.id)
     .filter(
       (m) =>
         visibleMatch(m) &&
@@ -418,8 +449,15 @@ export default function MatchReviewScreen() {
   const m = useDoc(() => MatchRepository.matchFlow(id), PostMatchFromDoc, 'match-' + id);
   const lost = usePost(m?.lostPostId ?? ''),
     sighting = usePost(m?.sightingPostId ?? '');
-  if (m === undefined) return <Loading />;
-  if (!m)
+  // Opened from an old alert after one of the two posts was deleted: the pair is gone too.
+  const [orphaned, setOrphaned] = useState<boolean | null>(null);
+  const matchId = m?.id;
+  useEffect(() => {
+    if (m) void MatchRepository.orphaned(m).then(setOrphaned);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per match
+  }, [matchId]);
+  if (m === undefined || (m && orphaned === null)) return <Loading />;
+  if (!m || orphaned)
     return (
       <>
         <AppTopBar title="" />

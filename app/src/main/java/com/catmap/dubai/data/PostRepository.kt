@@ -13,6 +13,7 @@ import com.catmap.dubai.data.model.labeledFrom
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -107,6 +108,9 @@ class PostRepository(
     fun postFlow(id: String): Flow<Post?> = ref(id).objectFlow()
 
     suspend fun post(id: String): Post? = runCatching { ref(id).get().await().toObject(Post::class.java) }.getOrNull()
+
+    /** False only when the server says the post is gone; offline or refused counts as "still there". */
+    suspend fun exists(id: String): Boolean = runCatching { ref(id).get(Source.SERVER).await().exists() }.getOrDefault(true)
 
     /** Someone else's visible posts (their profile's activity). */
     fun publicPostsBy(uid: String): Flow<List<Post>> =
@@ -218,6 +222,13 @@ class PostRepository(
         ref(post.id).delete().await()
         (post.photoIds + updates.mapNotNull { it.getString("photoId") }.filter { it.isNotBlank() })
             .forEach { runCatching { images.delete(it) } }
+        // Its match suggestions too (allowed once the post is gone). A moderator can't delete them; the two people's
+        // apps drop them when they next see them (MatchRepository.forPost).
+        runCatching {
+            db.collection(Col.MATCHES).whereArrayContains("members", post.ownerId).get().await().documents
+                .filter { it.getString("lostPostId") == post.id || it.getString("sightingPostId") == post.id }
+                .forEach { runCatching { it.reference.delete().await() } }
+        }
     }
 
     suspend fun setHidden(post: Post, hidden: Boolean, moderator: UserProfile, note: String) {

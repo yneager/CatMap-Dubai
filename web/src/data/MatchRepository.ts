@@ -9,6 +9,7 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
   writeBatch,
   increment,
   runTransaction,
@@ -92,6 +93,17 @@ function matchDoc(p: Engine.Pairing, me: UserProfile, extra: Record<string, unkn
 export const MatchRepository = {
   mine: (uid: string) => listQuery('matches', where('members', 'array-contains', uid)),
   matchFlow: (id: string) => ref(`matches/${id}`),
+  /** The rules let either person delete a match once one of its posts is gone; not awaited, so it waits offline. */
+  drop: (m: PostMatch) => void deleteDoc(ref(`matches/${m.id}`)).catch(() => undefined),
+  /** True (and the match is deleted) when either of its posts is gone. */
+  orphaned: async (m: PostMatch) => {
+    const [lost, sighting] = await Promise.all([
+      PostRepository.exists(m.lostPostId),
+      PostRepository.exists(m.sightingPostId),
+    ]);
+    if (!lost || !sighting) MatchRepository.drop(m);
+    return !lost || !sighting;
+  },
   /** After publishing a lost report or a sighting: the PC does it when online, otherwise this device. */
   candidates: (post: Post) =>
     list(

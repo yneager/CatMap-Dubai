@@ -9,6 +9,8 @@ import com.catmap.dubai.data.model.Stats
 import com.catmap.dubai.data.model.UserProfile
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 
@@ -35,10 +37,33 @@ class MatchRepository(
     fun mine(uid: String): Flow<List<PostMatch>> =
         col.whereArrayContains("members", uid).listFlow<PostMatch>().map { l -> l.sortedByDescending { it.score } }
 
-    fun forPost(uid: String, postId: String): Flow<List<PostMatch>> =
-        mine(uid).map { l -> l.filter { it.lostPostId == postId || it.sightingPostId == postId } }
+    /**
+     * The person's matches on [postId] whose other post still exists. Deleting a post removes its matches, but not
+     * always (a moderator's delete, an older app), so each other post is checked once while the screen is open and a
+     * pair whose post is gone is dropped and deleted.
+     */
+    fun forPost(uid: String, postId: String): Flow<List<PostMatch>> = flow {
+        val checked = HashMap<String, Boolean>()
+        emitAll(
+            mine(uid).map { l ->
+                l.filter { it.lostPostId == postId || it.sightingPostId == postId }.filterNot { m ->
+                    val other = if (m.lostPostId == postId) m.sightingPostId else m.lostPostId
+                    checked.getOrPut(other) { !posts.exists(other) }.also { gone -> if (gone) drop(m) }
+                }
+            },
+        )
+    }
 
     fun matchFlow(id: String): Flow<PostMatch?> = col.document(id).objectFlow()
+
+    /** True (and the match is deleted) when either of its posts is gone. */
+    suspend fun orphaned(match: PostMatch): Boolean =
+        (!posts.exists(match.lostPostId) || !posts.exists(match.sightingPostId)).also { if (it) drop(match) }
+
+    /** The rules let either person delete a match once one of its posts is gone; not awaited, so it waits offline. */
+    private fun drop(match: PostMatch) {
+        col.document(match.id).delete().addOnFailureListener { android.util.Log.i("CatMap", "Match ${match.id} not removed: ${it.message}") }
+    }
 
     // ---------- suggesting ----------
 

@@ -9,12 +9,14 @@ import {
   deleteDoc,
   deleteField,
   getDoc,
+  getDocFromServer,
 } from 'firebase/firestore';
 import { database } from '../firebase';
 import { col, ref, listQuery, list, read, deleteDocuments } from './Firestore';
 import {
   PostDefaults,
   PostFromDoc,
+  PostMatchFromDoc,
   PostToDoc,
   PostUpdateDefaults,
   PostUpdateToDoc,
@@ -147,6 +149,14 @@ export const PostRepository = {
     ),
   postFlow: (id: string) => ref(`posts/${id}`),
   post: (id: string) => read(`posts/${id}`, PostFromDoc),
+  /** False only when the server says the post is gone; offline or refused counts as "still there". */
+  exists: async (id: string) => {
+    try {
+      return (await getDocFromServer(ref(`posts/${id}`))).exists();
+    } catch {
+      return true;
+    }
+  },
   postsBy: (uid: string) => listQuery('posts', where('ownerId', '==', uid)),
   publicPostsBy: (uid: string) =>
     listQuery('posts', where('ownerId', '==', uid), where('hidden', '==', false)),
@@ -250,6 +260,17 @@ export const PostRepository = {
     await deleteDoc(ref(`posts/${p.id}`));
     await Promise.allSettled(
       [...p.photoIds, ...updates.map((u) => u.photoId).filter(Boolean)].map(ImageRepository.delete),
+    );
+    // Its match suggestions too (allowed once the post is gone). A moderator can't delete them; the two people's
+    // apps drop them when they next see them (usePostMatches).
+    const matches = await list(
+      listQuery('matches', where('members', 'array-contains', p.ownerId)),
+      PostMatchFromDoc,
+    ).catch(() => []);
+    await Promise.allSettled(
+      matches
+        .filter((m) => m.lostPostId === p.id || m.sightingPostId === p.id)
+        .map((m) => deleteDoc(ref(`matches/${m.id}`))),
     );
   },
   setHidden: async (p: Post, hidden: boolean, me: UserProfile, note = '') => {

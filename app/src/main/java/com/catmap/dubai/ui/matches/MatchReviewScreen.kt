@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,9 +75,11 @@ fun MatchReviewScreen(nav: NavHostController, matchId: String) {
     val container = LocalContainer.current
     val loaded by remember(matchId) { container.matches.matchFlow(matchId).loaded() }.collectAsStateWithLifecycle(null)
     val match = loaded?.value
+    // Opened from an old alert after one of the two posts was deleted: the pair is gone too.
+    val orphaned by produceState(false, match?.id) { value = match != null && container.matches.orphaned(match) }
     when {
         loaded == null -> LoadingBox()
-        match == null -> Scaffold(topBar = { AppTopBar("", onBack = { nav.popBackStack() }) }) { padding ->
+        match == null || orphaned -> Scaffold(topBar = { AppTopBar("", onBack = { nav.popBackStack() }) }) { padding ->
             EmptyState(Icons.Outlined.SearchOff, stringResource(R.string.match_unavailable), Modifier.padding(padding))
         }
         else -> MatchReview(nav, match)

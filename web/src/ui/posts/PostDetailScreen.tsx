@@ -6,10 +6,9 @@ import {
   PostFromDoc,
   PostUpdateFromDoc,
   AdoptionRequestFromDoc,
-  PostMatchFromDoc,
 } from '../../data/model';
-import { MatchRepository } from '../../data/MatchRepository';
 import {
+  usePostMatches,
   PostMatchesSection,
   ReunionBanner,
   ReuniteDialog,
@@ -54,11 +53,7 @@ export default function PostDetailScreen() {
     action = useAction();
   const post = useDoc(() => PostRepository.postFlow(id), PostFromDoc, 'post-' + id),
     liveUpdates = useList(() => PostRepository.updates(id), PostUpdateFromDoc, 'updates-' + id),
-    myMatches = useList(
-      () => (profile ? MatchRepository.mine(profile.uid) : null),
-      PostMatchFromDoc,
-      'matches-' + profile?.uid,
-    );
+    postMatches = usePostMatches(id) ?? [];
   const history = useOlder(
     () => listQuery(`posts/${id}/updates`, orderBy('createdAt', 'desc')),
     PostUpdateFromDoc,
@@ -96,7 +91,6 @@ export default function PostDetailScreen() {
     );
   const own = post.ownerId === profile?.uid,
     mod = profile && ['admin', 'moderator'].includes(profile.role),
-    postMatches = (myMatches ?? []).filter((m) => m.lostPostId === id || m.sightingPostId === id),
     searchPost = MatchEngine.isLost(post) || MatchEngine.isSighting(post);
   const open = (value: string) => {
     setText('');
