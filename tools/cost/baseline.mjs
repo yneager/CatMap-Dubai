@@ -1,3 +1,4 @@
+// Historical Phase 1 replay. Current operation ledger: tools/cost/cost_model.py.
 // Firestore read baseline (Phase 1 of docs/done/MAJOR_UPDATE_PLAN.md).
 //
 // Fills a throw-away emulator database with synthetic CatMap data at two sizes, then runs the exact queries the

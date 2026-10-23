@@ -184,11 +184,15 @@ test('B8: deleting latest text/photo restores the preceding preview and removes 
     await chats.deleteMessage(id, messages.at(-1)!, me.uid);
     const preview = (await read('chats/' + id, ChatFromDoc))!.lastText;
     const jpeg = new Uint8Array([255, 216, 255, 217]);
-    const image = await ImageRepository.upload(me.uid, {
-      full: jpeg,
-      thumb: jpeg,
-      analysis: document.createElement('canvas'),
-    });
+    const image = await ImageRepository.upload(
+      me.uid,
+      {
+        full: jpeg,
+        thumb: jpeg,
+        analysis: document.createElement('canvas'),
+      },
+      id,
+    );
     chat = (await read('chats/' + id, ChatFromDoc))!;
     await chats.send(chat, me, '', image);
     messages = await list(chats.messages(id), MessageFromDoc);

@@ -1,5 +1,38 @@
 # CatMap Dubai – handoff
 
+## 23 October 2026 - approved extras R01-R26 (Codex, local only)
+
+* User approved all 26 audit items with “implement all.” Local implementation is present across Android, web,
+  rules, worker, migration planning, CI and cost documentation. Review the entire range after `6512fc1`, not only
+  the last documentation commit. The coordinated schema commit is `668d2bd`, UI/performance is `375e381`, and
+  worker source/recovery is `28e9e88`. No push, tag, release, deploy, production access or billing/settings change.
+* Security/data contracts cover private chat media, child visibility/schema, private capacity slots, source-bound
+  alerts/receipts and counters, canonical identities, workflow bounds, deletion manifests/tombstones and retryable
+  retention/fanout jobs. Private chat view/upload paths use authenticated no-store REST to avoid SDK photo
+  persistence; prior downloads cannot be remotely erased. Owner exports/cleanup still read owned image documents.
+* Maps use bounded visible-cell listeners with server visibility filters and authoritative removal windows.
+  Histories page in windows of 50, unread totals are separate, availability checks are shared/bounded, restored
+  content retries on foreground, and rare admin/poster chunks load/cache on first visit. Arabic fonts/core shell stay.
+* Credential-free worker source is now reviewable in `tools/worker/`; selected external source/test files were
+  backed up and hash-verified before every overwrite. Conditional inference/completion, old-job deletion and
+  geo/search backfill protect newer revisions. Queue overflow refills from listener state without database resync;
+  vector cache/warm-up, candidate search, retries and idle maintenance are bounded. Model revisions/hashes are pinned.
+* Local checks: Android 117 passed, 0 failed, 1 existing skipped; lint/build/Roborazzi passed. Web 125 tests passed,
+  lint/typecheck/strings/build passed. Worker portable suite: 36 unittest tests plus 23 existing direct checks passed
+  in both canonical/external source contexts. No real-model inference or production/billing benchmark was run.
+* Integration remains a release gate: Firebase CLI install was refused with npm EACCES, local emulator ports are
+  closed, ADB launch was denied, and the named security-review runner is unavailable. New Firestore/Storage cases,
+  complete rule expression/access budgets, private REST browser flow, worker synthetic emulator recovery, native
+  interruption/foreground/offline behavior and CI execution are NOT certified by local unit tests.
+* Read `docs/SCHEMA_TRANSITION.md` before any rollout. The migration planner is synthetic/offline/dry-run only;
+  legacy data, username conflicts, capacity/unread backfill and cat visibility defaults require a reviewed transition.
+  Maintenance is off by default and requires a separately provisioned broader role that can read private chat media.
+  No production Storage cleanup adapter or small-embedder pin is supplied; those paths fail closed. Spark/videos/
+  push defaults, D1 gallery semantics and D2 Arabic translation review remain unchanged.
+* Exact per-ID scope, test commands/counts, measurements, blocked checks, local commits and external backup evidence
+  are appended under “Extras requested by user” in the user-owned, untracked `work done.txt`. Private audit artifacts
+  remain ignored under `test-results/audit-2026-10-23/`. Do not publish them or describe pending acceptance as passed.
+
 ## 23 October 2026 - bugs.txt cleanup fixes (Codex, local only)
 
 * Implemented B1-B11 in Android and web, plus B3 worker cleanup (external recovery.py and its E2E test, originals backed up as .bak). D1/D2 unchanged; no production access, push, release, deployment or Blaze activation.
@@ -11,7 +44,7 @@
 
 
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 23 Oct 2026 (local bug fixes; emulator/manual validation blocked; see the top section).**
+and what's left. **Last updated: 23 Oct 2026 (approved extras implemented locally; emulator/manual acceptance gates pending; see the top section).**
 
 ## 21 October 2026 - Web round 3 reviewed and verified (Claude)
 

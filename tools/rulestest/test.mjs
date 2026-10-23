@@ -10,6 +10,8 @@ import { readFileSync } from "node:fs";
 const emulatorAddress = new URL(`http://${process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080"}`);
 const storageHost = process.env.FIREBASE_STORAGE_EMULATOR_HOST;
 const storageAddress = storageHost ? new URL(`http://${storageHost}`) : null;
+if (!['localhost','127.0.0.1','[::1]'].includes(emulatorAddress.hostname)) throw new Error('Loopback emulator required');
+if (storageAddress && !['localhost','127.0.0.1','[::1]'].includes(storageAddress.hostname)) throw new Error('Loopback Storage required');
 const env = await initializeTestEnvironment({
   ...(storageAddress ? { storage: { host: storageAddress.hostname, port: Number(storageAddress.port),
     rules: readFileSync(new URL("../../storage.rules", import.meta.url), "utf8") } } : {}),
@@ -44,16 +46,20 @@ const profile = (username) => ({
 
 async function register(uid, verified = false) {
   const db = ctx(uid, verified);
+  // Shared actors appear in several sections; their canonical registration is created once.
+  if ((await getDoc(doc(db, 'users', uid))).exists()) return;
   const b = writeBatch(db);
   b.set(doc(db, "usernames", uid), { uid });
   b.set(doc(db, "users", uid), profile(uid));
+  b.set(doc(db, "userLimits", uid), {favorites:0,blocked:0,unreadCount:0});
   b.set(doc(db, "users", uid, "private", "account"), { email: `${uid}@x.test`, createdAt: now() });
   await b.commit();
-  await setDoc(doc(db, "users", uid, "notifications", "welcome"), { type: "welcome", params: { user: uid }, route: "", fromUid: uid, read: false, createdAt: now() });
+  if(verified) await alertWrite(db, uid, 'welcome', {type:'welcome',params:{user:uid},route:'',fromUid:uid,read:false,createdAt:now(),sourceId:''});
 }
 const setRole = (uid, role) => env.withSecurityRulesDisabled((c) => updateDoc(doc(c.firestore(), "users", uid), { role }));
 
-const catDoc = (uid) => ({
+const catDoc = (uid, counterSourceId = "") => ({
+  counterSourceId,
   name: "Zafran", aliases: [], description: "", distinctiveMarks: "", coatColor: "orange", pattern: "tabby", size: "medium", sex: "unknown",
   breedHints: ["arabian_mau"], photoIds: ["img1"], coverPhotoId: "img1", createdBy: uid, createdByName: uid, contributors: [uid], followers: [uid],
   firstSeen: now(), lastSeen: now(), sightingCount: 1, lat: 25.27, lng: 55.30, neighborhood: "deira", neighborhoods: ["deira"],
@@ -74,6 +80,41 @@ const userStats = (b, db, uid, stats, points, hood, rate) => {
   b.update(doc(db, "users", uid), u);
 };
 
+async function alertWrite(db, recipient, id, data) {
+  const value={sourceId:'',...data}; const b=writeBatch(db);
+  b.set(doc(db,'users',recipient,'notifications',id),value);
+  b.set(doc(db,'users',recipient,'notificationReceipts',id),{fromUid:value.fromUid,sourceId:value.sourceId,createdAt:value.createdAt});
+  return b.commit();
+}
+async function uploadImage(db,id,data) {
+  const rootId=id.replace(/_t$/,''),value={...data,rootId};const b=writeBatch(db);
+  b.set(doc(db,'images',id),value);
+  b.set(doc(db,'mediaUploads',rootId),{ownerId:value.ownerId,chatId:value.chatId || '',audience:value.audience || 'community',status:'staged',expiresAt:now()+7*86400000});
+  return b.commit();
+}
+async function slotWrite(db, uid, bucket, id, value) {
+  const b=writeBatch(db);const source=doc(db,'users',uid,bucket,id);
+  if(value)b.set(source,value);else b.delete(source);
+  b.update(doc(db,'userLimits',uid),{[bucket]:increment(value?1:-1),[bucket+'Source']:id});return b.commit();
+}
+async function resetChat(db,uid,id,anonymize=false) {
+  const source=doc(db,'chats',id),data=(await getDoc(source)).data(),count=data.unread[uid] || 0,b=writeBatch(db);
+  const changes={[`unread.${uid}`]:0};
+  if(anonymize) {
+    changes[`names.${uid}`]='';changes[`photos.${uid}`]='';
+    if(data.lastSender===uid)Object.assign(changes,{lastText:'',lastSender:'',lastMessageId:''});
+  }
+  b.update(source,changes);
+  if(count)b.update(doc(db,'userLimits',uid),{unreadCount:increment(-count),unreadChatId:id});
+  await b.commit();
+}
+async function createCat(db,uid,id,extra={}) {
+  const source=id+'_first',b=writeBatch(db);
+  b.set(doc(db,'cats',id),{...catDoc(uid,source),...extra});
+  b.set(doc(db,'sightings',source),sightingDoc(uid,id));
+  b.update(doc(db,'users',uid),{lastPostAt:serverTimestamp()});return b.commit();
+}
+const imageDoc=(uid,id,data)=>({data,ownerId:uid,createdAt:now(),audience:'community',chatId:'',rootId:id.replace(/_t$/,''),messageId:''});
 console.log("Accounts");
 await check("registration batch while unverified", register("alice"));
 await check("second user registers", register("bob"));
@@ -91,8 +132,8 @@ await check("profile edit allowed", assertSucceeds(updateDoc(doc(ctx("alice"), "
   await check("user cannot create an admin profile", assertFails(setDoc(doc(DU, "users", "demouser"), { ...profile("demouser"), role: "admin" })));
   // Before its admin profile exists, the claim alone gives no power over other accounts.
   await check("demo admin claim cannot write others' role", assertFails(updateDoc(doc(DA, "users", "alice"), { role: "admin" })));
-  await check("demo admin claim creates admin profile", assertSucceeds(setDoc(doc(DA, "users", "demoadmin"), { ...profile("demoadmin"), role: "admin" })));
-  await check("demo user claim stays a user", assertSucceeds(setDoc(doc(DU, "users", "demouser"), profile("demouser"))));
+  await check("demo admin claim creates admin profile", assertSucceeds((async()=>{const b=writeBatch(DA);b.set(doc(DA,'usernames','demoadmin'),{uid:'demoadmin'});b.set(doc(DA,'users','demoadmin'),{...profile('demoadmin'),role:'admin'});await b.commit()})()));
+  await check("demo user claim stays a user", assertSucceeds((async()=>{const b=writeBatch(DU);b.set(doc(DU,'usernames','demouser'),{uid:'demouser'});b.set(doc(DU,'users','demouser'),profile('demouser'));await b.commit()})()));
   await check("demo user cannot promote itself", assertFails(updateDoc(doc(DU, "users", "demouser"), { role: "admin" })));
   await env.withSecurityRulesDisabled((c) => updateDoc(doc(c.firestore(), "users", "demoadmin"), { role: "user" }));
   await check("demo admin role change cannot ride along other fields", assertFails(updateDoc(doc(DA, "users", "demoadmin"), { role: "admin", points: 999 })));
@@ -101,6 +142,7 @@ await check("profile edit allowed", assertSucceeds(updateDoc(doc(ctx("alice"), "
 
 console.log("AI server jobs");
 {
+  for (const actor of ['carl', 'dave', 'erin', 'frank']) await register(actor);
   const W = env.authenticatedContext("worker", { email: "ai-worker@demo.catmap.test", email_verified: true, catmapAiWorker: true }).firestore();
   const job = (uid, extra = {}) => ({ uid, kind: "compare", status: "pending", query: Bytes.fromUint8Array(new Uint8Array(2000)),
     images: [Bytes.fromUint8Array(new Uint8Array(2000))], ids: ["p1"], labels: ["Simba"], requestId: "r1", createdAt: serverTimestamp(), ...extra });
@@ -138,26 +180,26 @@ console.log("Sightings");
 const A = ctx("alice"), B = ctx("bob");
 await check("unverified user cannot post", assertFails((async () => {
   const db = ctx("alice", false); const b = writeBatch(db);
-  b.set(doc(db, "cats", "c0"), catDoc("alice")); b.set(doc(db, "sightings", "s0"), sightingDoc("alice", "c0"));
+  b.set(doc(db, "cats", "c0"), catDoc("alice", "s0")); b.set(doc(db, "sightings", "s0"), sightingDoc("alice", "c0"));
   userStats(b, db, "alice", { sightings: 1 }, 10, "deira", true); await b.commit();
 })()));
-await check("image upload", assertSucceeds(setDoc(doc(A, "images", "img1"), { data: jpegBytes(1000), ownerId: "alice", createdAt: now() })));
-await check("oversized image rejected", assertFails(setDoc(doc(A, "images", "big"), { data: jpegBytes(1_020_000), ownerId: "alice", createdAt: now() })));
+await check("image upload", assertSucceeds(uploadImage(A,'img1', imageDoc("alice","img1",jpegBytes(1000)))));
+await check("oversized image rejected", assertFails(uploadImage(A,'big', imageDoc("alice","big",jpegBytes(1_020_000)))));
 await check("new cat + sighting + exact location + stats batch", assertSucceeds((async () => {
   const b = writeBatch(A);
-  b.set(doc(A, "cats", "c1"), catDoc("alice")); b.set(doc(A, "sightings", "s1"), sightingDoc("alice", "c1"));
+  b.set(doc(A, "cats", "c1"), catDoc("alice", "s1")); b.set(doc(A, "sightings", "s1"), sightingDoc("alice", "c1"));
   b.set(doc(A, "privateLocations", "s1"), { ownerId: "alice", lat: 25.2712, lng: 55.3001, accuracy: 8 });
   userStats(b, A, "alice", { sightings: 1, photos: 1, catsRegistered: 1 }, 27, "deira", true); await b.commit();
 })()));
 await register("zed", true);
 await check("sighting with too many match ids rejected", assertFails((async () => {
   const Z = ctx("zed"); const b = writeBatch(Z);
-  b.set(doc(Z, "cats", "cz"), catDoc("zed")); b.set(doc(Z, "sightings", "sz"), { ...sightingDoc("zed", "cz"), rejectedCatIds: ["1", "2", "3", "4", "5", "6", "7"] });
+  b.set(doc(Z, "cats", "cz"), catDoc("zed", "sz")); b.set(doc(Z, "sightings", "sz"), { ...sightingDoc("zed", "cz"), rejectedCatIds: ["1", "2", "3", "4", "5", "6", "7"] });
   userStats(b, Z, "zed", { sightings: 1 }, 10, "deira", true); await b.commit();
 })()));
 await check("sighting with match feedback accepted", assertSucceeds((async () => {
   const Z = ctx("zed"); const b = writeBatch(Z);
-  b.set(doc(Z, "cats", "cz"), catDoc("zed")); b.set(doc(Z, "sightings", "sz"), { ...sightingDoc("zed", "cz"), rejectedCatIds: ["c9"] });
+  b.set(doc(Z, "cats", "cz"), catDoc("zed", "sz")); b.set(doc(Z, "sightings", "sz"), { ...sightingDoc("zed", "cz"), rejectedCatIds: ["c9"] });
   userStats(b, Z, "zed", { sightings: 1 }, 10, "deira", true); await b.commit();
 })()));
 await check("posting again immediately is rate limited", assertFails((async () => {
@@ -172,13 +214,13 @@ await check("faking lastPostAt is rejected", assertFails((async () => {
 })()));
 await check("bob adds a sighting to alice's cat (community update)", assertSucceeds((async () => {
   const b = writeBatch(B);
-  b.update(doc(B, "cats", "c1"), { sightingCount: increment(1), contributors: arrayUnion("bob"), neighborhoods: arrayUnion("naif"), updatedAt: now(),
+  b.update(doc(B, "cats", "c1"), { counterSourceId: 's3', sightingCount: increment(1), contributors: arrayUnion("bob"), neighborhoods: arrayUnion("naif"), updatedAt: now(),
     tnrStatus: "ear_tipped", healthStatus: "healthy", photoIds: arrayUnion("img2"), lastSeen: now(), lat: 25.28, lng: 55.31, neighborhood: "naif", features: [0.2, 0.2] });
   b.set(doc(B, "sightings", "s3"), { ...sightingDoc("bob", "c1"), newCat: false });
   userStats(b, B, "bob", { sightings: 1 }, 10, "naif", true); await b.commit();
 })()));
-await check("follower notification from bob", assertSucceeds(setDoc(doc(B, "users", "alice", "notifications", "n1"), { type: "followed_cat", params: {}, route: "cat/c1", fromUid: "bob", read: false, createdAt: now() })));
-await check("forged notification sender rejected", assertFails(setDoc(doc(B, "users", "alice", "notifications", "n2"), { type: "x", fromUid: "alice", read: false, createdAt: now() })));
+await check("follower notification from bob", assertSucceeds(alertWrite(B,'alice','followed_cat_s3_', {type:'followed_cat',sourceId:'s3',params:{cat:'Zafran',user:'bob',area:'deira'},route:'cat/c1',fromUid:'bob',read:false,createdAt:now()})));
+await check("forged notification sender rejected", assertFails(alertWrite(B,"alice","n2", { type: "x", fromUid: "alice", read: false, createdAt: now() })));
 await check("bob cannot rename alice's cat", assertFails(updateDoc(doc(B, "cats", "c1"), { name: "Hacked" })));
 await check("bob cannot set verified TNR", assertFails(updateDoc(doc(B, "cats", "c1"), { tnrStatus: "neutered_verified" })));
 await check("new cat cannot forge verified TNR status", assertFails(setDoc(doc(A, "cats", "forged-tnr"), { ...catDoc("alice"), tnrStatus: "neutered_verified" })));
@@ -217,7 +259,7 @@ await check("owner cannot downgrade verified TNR", assertFails(updateDoc(doc(A, 
 await check("delete own sighting (incl. missing exact location)", assertSucceeds((async () => {
   const b = writeBatch(B);
   b.delete(doc(B, "sightings", "s3")); b.delete(doc(B, "privateLocations", "s3"));
-  b.update(doc(B, "cats", "c1"), { sightingCount: increment(-1), updatedAt: now() });
+  b.update(doc(B, "cats", "c1"), { sightingCount: increment(-1), counterSourceId: 's3', updatedAt: now() });
   userStats(b, B, "bob", { sightings: -1 }, -10); await b.commit();
 })()));
 
@@ -267,8 +309,8 @@ await check("admin creates station", assertSucceeds(setDoc(doc(ctx("admin"), "st
 await check("check-in batch", assertSucceeds((async () => {
   const b = writeBatch(A);
   b.set(doc(A, "checkins", "ck1"), { stationId: "st1", stationName: "Station", userId: "alice", username: "alice", catsSeen: 3, catIds: [], foodLevel: "low", waterLevel: "full", note: "", at: now() });
-  b.update(doc(A, "stations", "st1"), { checkinCount: increment(1), lastCheckinAt: now(), lastCheckinBy: "alice" });
-  userStats(b, A, "alice", { checkins: 1, iftarCheckins: 0 }, 5, "al_barsha"); await b.commit();
+  b.update(doc(A, "stations", "st1"), { counterSourceId: 'ck1', checkinCount: increment(1), lastCheckinAt: now(), lastCheckinBy: "alice" });
+  userStats(b, A, "alice", { checkins: 1, iftarCheckins: 0 }, 5, "al_barsha", true); await b.commit();
 })()));
 await check("user cannot rename station", assertFails(updateDoc(doc(A, "stations", "st1"), { name: "x" })));
 await sleep(11_000);
@@ -281,7 +323,7 @@ await check("open maintenance query", assertSucceeds(getDocs(query(collection(ct
 await check("admin resolves maintenance", assertSucceeds(updateDoc(doc(ctx("admin"), "maintenance", "mt1"), { status: "resolved", resolutionNote: "refilled", resolvedBy: "admin", updatedAt: now() })));
 
 console.log("Moderation");
-await setDoc(doc(B, "cats", "c2"), { ...catDoc("bob"), name: "Ginger" }).catch(() => {});
+await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'cats','c2'),{...catDoc('bob'),name:'Ginger'}));
 await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), "sightings", "s9"), sightingDoc("bob", "c2")));
 await check("suggest merge", assertSucceeds((async () => {
   const b = writeBatch(A);
@@ -316,7 +358,7 @@ console.log("Notifications & account");
 await check("inbox query", assertSucceeds(getDocs(query(collection(A, "users", "alice", "notifications"), orderBy("createdAt", "desc"), limit(100)))));
 await check("unread query", assertSucceeds(getDocs(query(collection(A, "users", "alice", "notifications"), where("read", "==", false)))));
 await check("others cannot read inbox", assertFails(getDocs(collection(B, "users", "alice", "notifications"))));
-await check("mark read", assertSucceeds(updateDoc(doc(A, "users", "alice", "notifications", "n1"), { read: true })));
+await check("mark read", assertSucceeds(updateDoc(doc(A, "users", "alice", "notifications", "followed_cat_s3_"), { read: true })));
 await check("background poll uses latest ordered inbox", assertSucceeds(getDocs(query(collection(A, "users", "alice", "notifications"), orderBy("createdAt", "desc"), limit(100)))));
 
 console.log("Deletion cleanup and retry");
@@ -342,7 +384,7 @@ await check("owner deletes content report and volunteer application", assertSucc
 })()));
 await check("missing own volunteer application can be deleted", assertSucceeds(deleteDoc(doc(A, "volunteerApplications", "alice"))));
 await check("image references detach without changing verified TNR", assertSucceeds((async () => {
-  await setDoc(doc(A, "images", "delete-photo"), { data: jpegBytes(100), ownerId: "alice", createdAt: now() });
+  await uploadImage(A,'delete-photo', imageDoc("alice","delete-photo",jpegBytes(100)));
   await updateDoc(doc(A, "cats", "c1"), { photoIds: arrayUnion("delete-photo"), coverPhotoId: "delete-photo" });
   const cats = await getDocs(query(collection(A, "cats"), where("photoIds", "array-contains-any", ["delete-photo"])));
   for (const c of cats.docs) await runTransaction(A, async (tx) => {
@@ -361,7 +403,7 @@ await check("sighting deletion retry decrements cat count once", assertSucceeds(
     if (!source.exists()) return;
     const cat = await tx.get(catRef);
     tx.delete(sightingRef); tx.delete(doc(A, "privateLocations", "s1"));
-    tx.update(catRef, { sightingCount: Math.max(0, cat.data().sightingCount - 1) });
+    tx.update(catRef, { sightingCount: Math.max(0, cat.data().sightingCount - 1), counterSourceId: 's1' });
   });
   if ((await getDoc(catRef)).data().sightingCount !== Math.max(0, before - 1)) throw Error("count changed twice");
 })()));
@@ -369,7 +411,7 @@ await check("station check-in deletion updates count and last author", assertSuc
   const checkinRef = doc(A, "checkins", "ck1"), stationRef = doc(A, "stations", "st1");
   await runTransaction(A, async (tx) => {
     const source = await tx.get(checkinRef), station = await tx.get(stationRef);
-    tx.delete(source.ref); tx.update(station.ref, { checkinCount: Math.max(0, station.data().checkinCount - 1), lastCheckinAt: 0, lastCheckinBy: "" });
+    tx.delete(source.ref); tx.update(station.ref, { counterSourceId: 'ck1', checkinCount: Math.max(0, station.data().checkinCount - 1), lastCheckinAt: 0, lastCheckinBy: "" });
   });
 })()));
 await check("account cleanup removes follower and contributor membership", assertSucceeds((async () => {
@@ -388,6 +430,8 @@ await check("account deletion", assertSucceeds((async () => {
   b.delete(doc(A, "users", "alice", "private", "account")); b.delete(doc(A, "usernames", "alice")); b.delete(doc(A, "users", "alice"));
   await b.commit();
 })()));
+// Later sections exercise this actor again with an unrelated synthetic profile.
+await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'users','alice'),profile('alice'));await setDoc(doc(c.firestore(),'usernames','alice'),{uid:'alice'});});
 
 // ---------------- 2.0 community features ----------------
 console.log("Posts");
@@ -429,7 +473,7 @@ await sleep(10500); // bob posted in the earlier sections; respect the posting g
 await check("sighting update + counter + rate limit in one batch", assertSucceeds((async () => {
   const b = writeBatch(B);
   b.set(doc(B, "posts", "p1", "updates", "u1"), { postId: "p1", kind: "sighting", text: "Saw him near the tram", photoId: "", lat: 0, lng: 0, neighborhood: "", byUid: "bob", byName: "bob", createdAt: now() });
-  b.update(doc(B, "posts", "p1"), { updatesCount: increment(1), updatedAt: now() });
+  b.update(doc(B, "posts", "p1"), { counterSourceId:'u1', updatesCount: increment(1), updatedAt: now() });
   userStats(b, B, "bob", { postUpdates: 1 }, 5, null, true);
   await b.commit();
 })()));
@@ -437,7 +481,7 @@ await check("counter cannot jump by more than one", assertFails(updateDoc(doc(D,
 await check("post owner removes an update and the counter", assertSucceeds((async () => {
   const b = writeBatch(C);
   b.delete(doc(C, "posts", "p1", "updates", "u1"));
-  b.update(doc(C, "posts", "p1"), { updatesCount: increment(-1) });
+  b.update(doc(C, "posts", "p1"), { updatesCount: increment(-1), counterSourceId:'u1' });
   await b.commit();
 })()));
 await check("moderator hides a post", assertSucceeds(updateDoc(doc(M, "posts", "p1"), { hidden: true, updatedAt: now() })));
@@ -511,7 +555,7 @@ const reviewTx = (db, uid, rating, bump = 0) => runTransaction(db, async (tx) =>
 });
 await check("someone outside the booking cannot review it", assertFails(reviewTx(D, "dave", 5)));
 await check("rating cannot be inflated alongside the review", assertFails(reviewTx(B, "bob", 5, 10)));
-await check("ratings outside 1Ã¢â‚¬â€œ5 are refused", assertFails(reviewTx(B, "bob", 9)));
+await check("ratings outside 1ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“5 are refused", assertFails(reviewTx(B, "bob", 9)));
 await check("owner reviews the completed booking (review + rating + flag)", assertSucceeds(reviewTx(B, "bob", 5)));
 await check("a booking can only be reviewed once", assertFails(reviewTx(B, "bob", 4)));
 await check("sitter rating reflects exactly one review", assertSucceeds((async () => {
@@ -520,16 +564,17 @@ await check("sitter rating reflects exactly one review", assertSucceeds((async (
 })()));
 
 console.log("Messages");
-const chatDoc = (a, b) => ({ members: [a, b], names: { [a]: a, [b]: b }, photos: { [a]: "", [b]: "" }, lastText: "", lastSender: "", lastAt: now(), unread: { [a]: 0, [b]: 0 } });
+const chatDoc = (a, b) => ({ lastMessageId:'', lastDeletedMessageId:'', members: [a, b], names: { [a]: a, [b]: b }, photos: { [a]: "", [b]: "" }, lastText: "", lastSender: "", lastAt: now(), unread: { [a]: 0, [b]: 0 } });
 await check("checking whether a chat exists is allowed", assertSucceeds(getDoc(doc(B, "chats", "bob_carol"))));
 await check("member starts a chat", assertSucceeds(setDoc(doc(B, "chats", "bob_carol"), chatDoc("bob", "carol"))));
 await check("chat id must be the sorted member ids", assertFails(setDoc(doc(B, "chats", "carol_bob"), chatDoc("bob", "carol"))));
 await check("cannot create a chat between two other people", assertFails(setDoc(doc(D, "chats", "carol_erin"), chatDoc("carol", "erin"))));
 await check("outsiders cannot read a chat", assertFails(getDoc(doc(D, "chats", "bob_carol"))));
 const send = (db, uid, other, id) => (async () => {
-  const b = writeBatch(db);
-  b.set(doc(db, "chats", "bob_carol", "messages", id), { senderId: uid, text: "Hi! Is Luna still available?", imageId: "", postId: "a1", postTitle: "Luna", postPhotoId: "", createdAt: now() });
-  b.update(doc(db, "chats", "bob_carol"), { lastText: "Hi!", lastSender: uid, lastAt: now(), [`unread.${other}`]: increment(1) });
+  const b = writeBatch(db), at=now(), text="Hi! Is Luna still available?";
+  b.set(doc(db, "chats", "bob_carol", "messages", id), { senderId: uid, text, imageId: "", postId: "a1", postTitle: "Luna", postPhotoId: "", createdAt: at });
+  b.update(doc(db, "chats", "bob_carol"), { lastMessageId:id,lastText:text,lastSender:uid,lastAt:at,[`unread.${other}`]:increment(1) });
+  b.update(doc(db,'userLimits',other),{unreadCount:increment(1),unreadChatId:'bob_carol',unreadMessageId:id});
   await b.commit();
 })();
 await check("member sends a message", assertSucceeds(send(B, "bob", "carol", "m1")));
@@ -537,24 +582,24 @@ await check("outsiders cannot post into a chat", assertFails(send(D, "dave", "ca
 await check("outsiders cannot read messages", assertFails(getDocs(collection(D, "chats", "bob_carol", "messages"))));
 await check("members list their chats", assertSucceeds(getDocs(query(collection(C, "chats"), where("members", "array-contains", "carol")))));
 await check("chat members cannot be changed", assertFails(updateDoc(doc(B, "chats", "bob_carol"), { members: ["bob", "dave"] })));
-await check("reader clears their unread count", assertSucceeds(updateDoc(doc(C, "chats", "bob_carol"), { "unread.carol": 0 })));
-await check("person blocks a sender", assertSucceeds(setDoc(doc(C, "users", "carol", "blocked", "bob"), { at: now() })));
+await check("reader clears their unread count", assertSucceeds(resetChat(C,'carol','bob_carol')));
+await check("person blocks a sender", assertSucceeds(slotWrite(C,'carol','blocked','bob',{at:now()})));
 await check("blocked sender cannot message them", assertFails(send(B, "bob", "carol", "m3")));
 await check("block list is private", assertFails(getDoc(doc(B, "users", "carol", "blocked", "bob"))));
-await check("unblock", assertSucceeds(deleteDoc(doc(C, "users", "carol", "blocked", "bob"))));
+await check("unblock", assertSucceeds(slotWrite(C,'carol','blocked','bob',null)));
 await check("messages flow again after unblocking", assertSucceeds(send(B, "bob", "carol", "m4")));
 await check("sender deletes their own message", assertSucceeds(deleteDoc(doc(B, "chats", "bob_carol", "messages", "m4"))));
 await check("cannot delete the other person's message", assertFails(deleteDoc(doc(C, "chats", "bob_carol", "messages", "m1"))));
 
 console.log("Alerts, favourites and usernames");
-const alert = (from) => ({ type: "message", params: { user: from }, route: "chat/bob_carol", fromUid: from, read: false, createdAt: now() });
-await check("first alert with a fixed id is delivered", assertSucceeds(setDoc(doc(B, "users", "carol", "notifications", "msg_bob_carol"), alert("bob"))));
-await check("a repeat alert with the same id is refused (no spam)", assertFails(setDoc(doc(B, "users", "carol", "notifications", "msg_bob_carol"), alert("bob"))));
-await check("recipient dismisses the alert", assertSucceeds(deleteDoc(doc(C, "users", "carol", "notifications", "msg_bob_carol"))));
-await check("alerts cannot be sent in someone else's name", assertFails(setDoc(doc(B, "users", "carol", "notifications", "fake"), alert("dave"))));
-await check("save a favourite", assertSucceeds(setDoc(doc(B, "users", "bob", "favorites", "a1"), { postId: "a1", savedAt: now() })));
+const alert = (from) => ({ type: "message",sourceId:'m1', params: { user: from, text:'Hi! Is Luna still available?' }, route: "chat/bob_carol", fromUid: from, read: false, createdAt: now() });
+await check("first alert with a fixed id is delivered", assertSucceeds(alertWrite(B,'carol','msg_bob_carol_m1',alert('bob'))));
+await check("a repeat alert with the same id is refused (no spam)", assertFails(alertWrite(B,"carol","msg_bob_carol_m1", alert("bob"))));
+await check("recipient dismisses the alert", assertSucceeds(deleteDoc(doc(C, "users", "carol", "notifications", "msg_bob_carol_m1"))));
+await check("alerts cannot be sent in someone else's name", assertFails(alertWrite(B,"carol","fake", alert("dave"))));
+await check("save a favourite", assertSucceeds(slotWrite(B,'bob','favorites','a1',{postId:'a1',savedAt:now()})));
 await check("favourites are private", assertFails(getDocs(collection(C, "users", "bob", "favorites"))));
-await check("follow an area for lost-pet alerts", assertSucceeds(setDoc(doc(C, "areaFollows", "carol"), { neighborhoods: ["jlt", "dubai_marina"], lat: 25.07, lng: 55.14, radiusKm: 3, updatedAt: now() })));
+await check("follow an area for lost-pet alerts", assertSucceeds(setDoc(doc(C, "areaFollows", "carol"), { neighborhoods: ["jlt", "dubai_marina"], updatedAt: now() })));
 await check("cannot follow areas for someone else", assertFails(setDoc(doc(B, "areaFollows", "carol"), { neighborhoods: [] })));
 await check("posters can find area followers", assertSucceeds(getDocs(query(collection(B, "areaFollows"), where("neighborhoods", "array-contains", "jlt")))));
 await check("app cannot set a username's login email", assertFails(setDoc(doc(ctx("yan"), "usernames", "yan"), { uid: "yan", loginEmail: "someone@else.test" })));
@@ -574,12 +619,14 @@ for(const microchip of ["yes","no","unknown"]) await check(`microchip ${microchi
 await check("public chip number rejected",assertFails(updateDoc(doc(C,"posts","p1"),{microchipNumber:"123456789"})));
 await check("chip enum cannot contain a number",assertFails(updateDoc(doc(C,"posts","p1"),{microchip:"123456789"})));
 await check("foreign microchip edit rejected",assertFails(updateDoc(doc(B,"posts","p1"),{microchip:"yes"})));
-const stale={type:"stale_post",params:{name:"Rex"},route:"post/p1",fromUid:"carol",read:false,createdAt:now()};
-await check("one reminder per deterministic window",assertSucceeds(setDoc(doc(C,"users","carol","notifications","stale_p1_1"),stale)));
-await check("same reminder cannot refresh its timestamp",assertFails(setDoc(doc(C,"users","carol","notifications","stale_p1_1"),{...stale,createdAt:stale.createdAt+1})));
-await check("reminder can be marked read",assertSucceeds(updateDoc(doc(C,"users","carol","notifications","stale_p1_1"),{read:true})));
-await check("recipient cannot forge reminder content",assertFails(updateDoc(doc(C,"users","carol","notifications","stale_p1_1"),{params:{name:"changed"}})));
-await check("new window reminder accepted",assertSucceeds(setDoc(doc(C,"users","carol","notifications","stale_p1_2"),stale)));
+const staleTime=now()-15*86400000,staleBucket=Math.floor(now()/(14*86400000)),staleId='stale_p1_'+staleBucket;
+await env.withSecurityRulesDisabled(c=>updateDoc(doc(c.firestore(),'posts','p1'),{createdAt:staleTime,updatedAt:staleTime,lastActivityAt:staleTime}));
+const stale={type:'stale_post',sourceId:'p1',params:{name:'Rex'},route:'post/p1',fromUid:'carol',read:false,createdAt:now()};
+await check("one reminder per deterministic window",assertSucceeds(alertWrite(C,'carol',staleId,stale)));
+await check("same reminder cannot refresh its timestamp",assertFails(alertWrite(C,"carol",staleId,{...stale,createdAt:stale.createdAt+1})));
+await check("reminder can be marked read",assertSucceeds(updateDoc(doc(C,"users","carol","notifications",staleId),{read:true})));
+await check("recipient cannot forge reminder content",assertFails(updateDoc(doc(C,"users","carol","notifications",staleId),{params:{name:"changed"}})));
+await check("future reminder window refused",assertFails(alertWrite(C,'carol','stale_p1_'+(staleBucket+1),stale)));
 await check("sitter cannot self-verify at creation",assertFails(setDoc(doc(E,"sitters","erin"),sitterDoc({name:"erin",verified:true}))));
 await check("unverified sitter can be created",assertSucceeds(setDoc(doc(E,"sitters","erin"),sitterDoc({name:"erin",verified:false}))));
 await check("sitter cannot self-verify by edit",assertFails(updateDoc(doc(C,"sitters","carol"),{verified:true})));
@@ -621,7 +668,7 @@ await check("foreign updates cannot be queried as own data",assertFails(getDocs(
 await check("own update removal decrements the surviving post",assertSucceeds(runTransaction(B,async(tx)=>{
   const comment=doc(B,"posts","p1","updates","own-export"),parent=doc(B,"posts","p1");
   const source=await tx.get(comment),post=await tx.get(parent);
-  tx.delete(source.ref);tx.update(parent,{updatesCount:Math.max(0,post.data().updatesCount-1)});
+  tx.delete(source.ref);tx.update(parent,{updatesCount:Math.max(0,post.data().updatesCount-1),counterSourceId:'own-export'});
 })));
 
 console.log("Lost report <-> sighting matches");
@@ -678,14 +725,14 @@ console.log("Lost report <-> sighting matches");
   await check("owner rejects a look-alike", assertSucceeds(updateDoc(doc(O, "matches", "L1__S2"), { ownerState: "not_mine", reviewedAt: now(), updatedAt: now() })));
   await check("a rejected pair can't be revived by the worker", assertFails(updateDoc(doc(W, "matches", "L1__S2"), { tier: "strong", score: 0.9, source: "worker", updatedAt: now() })));
   await check("member can't delete a match while both posts exist", assertFails(deleteDoc(doc(O, "matches", "L1__S2"))));
-  await check("worker announces a match to the owner", assertSucceeds(setDoc(doc(W, "users", "owner1", "notifications", "pm_L1__S1"),
-    { type: "match_found", params: { name: "Simba" }, route: "match/L1__S1", fromUid: "worker", read: false, createdAt: now() })));
-  await check("worker can't send other alerts", assertFails(setDoc(doc(W, "users", "owner1", "notifications", "pm_L1__S3"),
+  await check("worker announces a match to the owner", assertSucceeds(alertWrite(W,"owner1","pm_L1__S1",
+    { type: "match_found", sourceId:"L1__S1", params: { name: "Simba" }, route: "match/L1__S1", fromUid: "worker", read: false, createdAt: now() })));
+  await check("worker can't send other alerts", assertFails(alertWrite(W,"owner1","pm_L1__S3",
     { type: "message", params: {}, route: "match/L1__S3", fromUid: "worker", read: false, createdAt: now() })));
-  await check("worker alert must point at its match", assertFails(setDoc(doc(W, "users", "owner1", "notifications", "pm_L1__S3"),
+  await check("worker alert must point at its match", assertFails(alertWrite(W,"owner1","pm_L1__S3",
     { type: "match_found", params: {}, route: "chat/x", fromUid: "worker", read: false, createdAt: now() })));
-  await check("the same match alert can't be sent twice", assertFails(setDoc(doc(W, "users", "owner1", "notifications", "pm_L1__S1"),
-    { type: "match_found", params: { name: "Simba" }, route: "match/L1__S1", fromUid: "worker", read: false, createdAt: now() })));
+  await check("the same match alert can't be sent twice", assertFails(alertWrite(W,"owner1","pm_L1__S1",
+    { type: "match_found", sourceId:"L1__S1", params: { name: "Simba" }, route: "match/L1__S1", fromUid: "worker", read: false, createdAt: now() })));
   const emb = { postId: "L1", ownerId: "owner1", animalType: "cat", model: "m", signature: "s", photoIds: ["img1"],
     vectors: [Bytes.fromUint8Array(new Uint8Array(2048))], detected: [true], animals: [1], lowQuality: [false], createdAt: serverTimestamp() };
   await check("worker stores photo embeddings", assertSucceeds(setDoc(doc(W, "postEmbeddings", "L1"), emb)));
@@ -733,14 +780,14 @@ console.log("Phase 2 hardening");
 
   // S4: notifications into other people's inboxes.
   const note = (extra = {}) => ({ type: "message", params: { user: "h_att", text: "hi" }, route: "chat/h_att_h_vic", fromUid: "h_att", read: false, createdAt: now(), ...extra });
-  await check("member sends a message alert", assertSucceeds(setDoc(doc(ATT, "users", "h_vic", "notifications", "n1"), note())));
-  await check("member cannot send a moderation alert", assertFails(setDoc(doc(ATT, "users", "h_vic", "notifications", "n2"), note({ type: "moderation", params: { target: "account", decision: "suspended" }, route: "profile" }))));
-  await check("member cannot send a welcome/achievement alert to others", assertFails(setDoc(doc(ATT, "users", "h_vic", "notifications", "n3"), note({ type: "achievement", params: { badge: "x" }, route: "achievements" }))));
-  await check("alert with an unknown route rejected", assertFails(setDoc(doc(ATT, "users", "h_vic", "notifications", "n4"), note({ route: "https://evil.example" }))));
-  await check("alert with extra fields rejected", assertFails(setDoc(doc(ATT, "users", "h_vic", "notifications", "n5"), note({ title: "Free prize" }))));
-  await check("alert with an oversized parameter rejected", assertFails(setDoc(doc(ATT, "users", "h_vic", "notifications", "n6"), note({ params: { user: "x", text: "y".repeat(400) } }))));
-  await check("alert dated in the future rejected", assertFails(setDoc(doc(ATT, "users", "h_vic", "notifications", "n7"), note({ createdAt: now() + 3 * 3600000 }))));
-  await check("moderator sends a moderation alert", assertSucceeds(setDoc(doc(M, "users", "h_vic", "notifications", "n8"), { ...note({ type: "moderation", params: { target: "post", label: "Rex", decision: "removed" }, route: "" }), fromUid: "mod" })));
+  await check("legacy unbound write refused: member sends a message alert", assertFails(alertWrite(ATT,"h_vic","n1", note())));
+  await check("member cannot send a moderation alert", assertFails(alertWrite(ATT,"h_vic","n2", note({ type: "moderation", params: { target: "account", decision: "suspended" }, route: "profile" }))));
+  await check("member cannot send a welcome/achievement alert to others", assertFails(alertWrite(ATT,"h_vic","n3", note({ type: "achievement", params: { badge: "x" }, route: "achievements" }))));
+  await check("alert with an unknown route rejected", assertFails(alertWrite(ATT,"h_vic","n4", note({ route: "https://evil.example" }))));
+  await check("alert with extra fields rejected", assertFails(alertWrite(ATT,"h_vic","n5", note({ title: "Free prize" }))));
+  await check("alert with an oversized parameter rejected", assertFails(alertWrite(ATT,"h_vic","n6", note({ params: { user: "x", text: "y".repeat(400) } }))));
+  await check("alert dated in the future rejected", assertFails(alertWrite(ATT,"h_vic","n7", note({ createdAt: now() + 3 * 3600000 }))));
+  await check("moderator sends a moderation alert", assertSucceeds(alertWrite(M,'h_vic','n8',{ ...note({type:'moderation',params:{target:'post',label:'Rex',decision:'removed'},route:''}),fromUid:'mod'})));
 
   // S7: someone else's cat.
   await asOwner((db) => setDoc(doc(db, "cats", "hc1"), { ...catDoc("h_vic"), followers: ["h_vic"], contributors: ["h_vic"], photoIds: ["v1"], coverPhotoId: "v1", sightingCount: 4, features: Array(117).fill(0.5) }));
@@ -758,7 +805,7 @@ console.log("Phase 2 hardening");
     const H = ctx("h_heavy"); const b = writeBatch(H);
     b.set(doc(H, "sightings", "hs1"), { ...sightingDoc("h_heavy", "hc1"), photoIds: ["p1", "p2", "p3", "p4", "p5", "p6"], notes: "n".repeat(500), healthTags: ["thin", "limping"], behaviorTags: ["friendly"] });
     b.update(doc(H, "cats", "hc1"), {
-      sightingCount: increment(1), contributors: arrayUnion("h_heavy"), neighborhoods: arrayUnion("jlt"), updatedAt: now(),
+      counterSourceId:'hs1', sightingCount: increment(1), contributors: arrayUnion("h_heavy"), neighborhoods: arrayUnion("jlt"), updatedAt: now(),
       tnrStatus: "ear_tipped", healthStatus: "needs_care", photoIds: arrayUnion("p1", "p2", "p3", "p4", "p5", "p6"),
       lastSeen: now(), lat: 25.07, lng: 55.14, neighborhood: "jlt", features: Array(117).fill(0.4),
       geoCells: ["thrq", "thrq5", "thrq5x"],
@@ -840,7 +887,7 @@ console.log("Phase 4 map areas");
   await check("worker cannot save bad area codes", assertFails(updateDoc(doc(WK, "posts", "gp2"), { geoCells: [...G, "x"] })));
   await check("member cannot move someone else's post between areas", assertFails(updateDoc(doc(GC, "posts", "gp2"), { geoCells: G })));
 
-  await check("cat profile with area codes accepted", assertSucceeds(setDoc(doc(GC, "cats", "gc1"), { ...catDoc("g_c"), geoCells: G })));
+  await check("cat profile with area codes accepted", assertSucceeds(createCat(GC,'g_c','gc1',{geoCells:G})));
   await check("cat profile with bad area codes rejected", assertFails(setDoc(doc(GC, "cats", "gc2"), { ...catDoc("g_c"), geoCells: [...G, "thrr3sx"] })));
   await check("member cannot move someone else's cat between areas", assertFails(updateDoc(doc(GD, "cats", "gc1"), { geoCells: ["thrq", "thrq5", "thrq5x"], updatedAt: now() })));
   await check("worker fills in a cat's area codes", assertSucceeds(updateDoc(doc(WK, "cats", "gc1"), { geoCells: ["thrq", "thrq5", "thrq5x"] })));
@@ -871,7 +918,7 @@ console.log("Phase 5 search and paging");
   await check("worker fills in search words of an old post", assertSucceeds(updateDoc(doc(WK, "posts", "sp2"), { searchTerms: ["rex"], geoCells: ["thrq", "thrq5", "thrq5x"] })));
   await check("worker cannot change a post's text with search words", assertFails(updateDoc(doc(WK, "posts", "sp2"), { searchTerms: ["spam"], description: "Spam" })));
   await check("member cannot change someone else's search words", assertFails(updateDoc(doc(SC, "posts", "sp2"), { searchTerms: ["spam"] })));
-  await check("cat profile with search words accepted", assertSucceeds(setDoc(doc(SC, "cats", "sc1"), { ...catDoc("s_c"), searchTerms: ["zafran", "zaf", "zafr", "zafra"] })));
+  await check("cat profile with search words accepted", assertSucceeds(createCat(SC,'s_c','sc1',{searchTerms:['zafran','zaf','zafr','zafra']})));
   await check("member adds an alias with its search words", assertSucceeds(updateDoc(doc(SB, "cats", "sc1"), { aliases: arrayUnion("Ginger"), searchTerms: ["zafran", "ginger", "zaf", "zafr", "zafra", "gin", "ging", "ginge"], updatedAt: now() })));
   await check("cat with 201 search words rejected", assertFails(updateDoc(doc(SC, "cats", "sc1"), { searchTerms: Array.from({ length: 201 }, (_, i) => "w" + i), updatedAt: now() })));
   await check("worker fills in a cat's search words", assertSucceeds(updateDoc(doc(WK, "cats", "sc1"), { searchTerms: ["zafran"] })));
@@ -887,7 +934,7 @@ console.log("Phase 5 search and paging");
   await check("unverified account cannot search", assertFails(getDocs(query(collection(ctx("s_b", false), "posts"), where("hidden", "==", false), where("searchTerms", "array-contains-any", ["simba"]), limit(25)))));
   await check("moderator pages through hidden posts", assertSucceeds(getDocs(query(collection(M, "posts"), where("hidden", "==", true), orderBy("createdAt", "desc"), limit(25)))));
   await check("members cannot list hidden posts", assertFails(getDocs(query(collection(SB, "posts"), where("hidden", "==", true), orderBy("createdAt", "desc"), limit(25)))));
-  await check("admin looks members up by username prefix", assertSucceeds(getDocs(query(collection(AD, "users"), orderBy("username"), startAt("s_"), endAt("s_Ã¯Â£Â¿"), limit(25)))));
+  await check("admin looks members up by username prefix", assertSucceeds(getDocs(query(collection(AD, "users"), orderBy("username"), startAt("s_"), endAt("s_ÃƒÂ¯Ã‚Â£Ã‚Â¿"), limit(25)))));
   await check("moderator pages through the moderation log", assertSucceeds(getDocs(query(collection(M, "modActions"), orderBy("at", "desc"), limit(40)))));
   await check("members cannot read the moderation log", assertFails(getDocs(query(collection(SB, "modActions"), orderBy("at", "desc"), limit(40)))));
   await check("member reads their older alerts", assertSucceeds(getDocs(query(collection(SA, "users", "s_a", "notifications"), orderBy("createdAt", "desc"), startAfter(now()), limit(25)))));
@@ -902,22 +949,22 @@ console.log("Phase 6 photos and privacy");
   const XA = ctx("x_a"), XB = ctx("x_b");
   const jpeg = (n) => { const b = new Uint8Array(n); b.set([0xff, 0xd8, 0xff, 0xe0]); return Bytes.fromUint8Array(b); };
   const png = (n) => { const b = new Uint8Array(n); b.set([0x89, 0x50, 0x4e, 0x47]); return Bytes.fromUint8Array(b); };
-  const img = (data, extra = {}) => ({ data, ownerId: "x_a", createdAt: now(), ...extra });
-  await check("largest allowed photo (just under 1 MB) uploads", assertSucceeds(setDoc(doc(XA, "images", "xi1"), img(jpeg(999_000)))));
-  await check("its thumbnail uploads", assertSucceeds(setDoc(doc(XA, "images", "xi1_t"), img(jpeg(30_000)))));
-  await check("a thumbnail over 200 KB is refused", assertFails(setDoc(doc(XA, "images", "xi2_t"), img(jpeg(250_000)))));
-  await check("a 1 MB photo is refused", assertFails(setDoc(doc(XA, "images", "xi3"), img(jpeg(1_000_000)))));
-  await check("a PNG (not re-encoded by the app) is refused", assertFails(setDoc(doc(XA, "images", "xi4"), img(png(50_000)))));
-  await check("random bytes are refused", assertFails(setDoc(doc(XA, "images", "xi5"), img(Bytes.fromUint8Array(new Uint8Array(5000))))));
-  await check("a photo dated in the future is refused", assertFails(setDoc(doc(XA, "images", "xi6"), img(jpeg(5000), { createdAt: now() + 86400000 * 30 }))));
-  await check("a photo can't claim someone else as owner", assertFails(setDoc(doc(XA, "images", "xi7"), img(jpeg(5000), { ownerId: "x_b" }))));
+  const img = (data, extra = {}) => ({ ...imageDoc('x_a','xi1',data), ...extra });
+  await check("largest allowed photo (just under 1 MB) uploads", assertSucceeds(uploadImage(XA,'xi1', img(jpeg(999_000)))));
+  await check("its thumbnail uploads", assertSucceeds(uploadImage(XA,'xi1_t', img(jpeg(30_000)))));
+  await check("a thumbnail over 200 KB is refused", assertFails(uploadImage(XA,'xi2_t', img(jpeg(250_000)))));
+  await check("a 1 MB photo is refused", assertFails(uploadImage(XA,'xi3', img(jpeg(1_000_000)))));
+  await check("a PNG (not re-encoded by the app) is refused", assertFails(uploadImage(XA,'xi4', img(png(50_000)))));
+  await check("random bytes are refused", assertFails(uploadImage(XA,'xi5', img(Bytes.fromUint8Array(new Uint8Array(5000))))));
+  await check("a photo dated in the future is refused", assertFails(uploadImage(XA,'xi6', img(jpeg(5000), { createdAt: now() + 86400000 * 30 }))));
+  await check("a photo can't claim someone else as owner", assertFails(uploadImage(XA,'xi7', img(jpeg(5000), { ownerId: "x_b" }))));
 
   const note = (from) => ({ type: "message", params: { user: from }, route: "chat/x", fromUid: from, read: false, createdAt: now() });
-  await check("member alerts someone who hasn't blocked them", assertSucceeds(setDoc(doc(XA, "users", "x_b", "notifications", "xn1"), note("x_a"))));
-  await check("an alert route to an id of dots (would crash the app) is refused", assertFails(setDoc(doc(XA, "users", "x_b", "notifications", "xn9"), { ...note("x_a"), route: "post/.." })));
+  await check("legacy unbound write refused: member alerts someone who hasn't blocked them", assertFails(alertWrite(XA,"x_b","xn1", note("x_a"))));
+  await check("an alert route to an id of dots (would crash the app) is refused", assertFails(alertWrite(XA,"x_b","xn9", { ...note("x_a"), route: "post/.." })));
   await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), "users", "x_b", "blocked", "x_a"), { at: now() }));
-  await check("a blocked member can't write into the blocker's inbox", assertFails(setDoc(doc(XA, "users", "x_b", "notifications", "xn2"), note("x_a"))));
-  await check("the blocker can still alert the blocked member", assertSucceeds(setDoc(doc(XB, "users", "x_a", "notifications", "xn3"), note("x_b"))));
+  await check("a blocked member can't write into the blocker's inbox", assertFails(alertWrite(XA,"x_b","xn2", note("x_a"))));
+  await check("legacy unbound write refused: the blocker can still alert the blocked member", assertFails(alertWrite(XB,"x_a","xn3", note("x_b"))));
 }
 
 // ---------- Phase 9: abuse limits and size caps ----------
@@ -941,8 +988,10 @@ console.log("Phase 9 abuse limits and size caps");
   await check("member starts a chat (Phase 9 shape)", assertSucceeds(setDoc(doc(QA, "chats", "q_a_q_b"), chatDoc("q_a", "q_b"))));
   const sendQ = (db, uid, other, text) => {
     const b = writeBatch(db);
-    b.set(doc(collection(db, "chats", "q_a_q_b", "messages")), { senderId: uid, text, imageId: "", postId: "", postTitle: "", postPhotoId: "", createdAt: now() });
-    b.update(doc(db, "chats", "q_a_q_b"), { lastText: text.slice(0, 120), lastSender: uid, lastAt: now(), [`unread.${other}`]: increment(1), [`names.${uid}`]: uid, [`photos.${uid}`]: "" });
+    const message=doc(collection(db,'chats','q_a_q_b','messages')),at=now();
+    b.set(message, { senderId:uid,text,imageId:'',postId:'',postTitle:'',postPhotoId:'',createdAt:at });
+    b.update(doc(db,'chats','q_a_q_b'),{lastMessageId:message.id,lastText:text.slice(0,120),lastSender:uid,lastAt:at,[`unread.${other}`]:increment(1),[`names.${uid}`]:uid,[`photos.${uid}`]:''});
+    b.update(doc(db,'userLimits',other),{unreadCount:increment(1),unreadChatId:'q_a_q_b',unreadMessageId:message.id});
     return b.commit();
   };
   await check("a message as the app sends it", assertSucceeds(sendQ(QA, "q_a", "q_b", "Hello, is the cat still there?")));
@@ -953,8 +1002,7 @@ console.log("Phase 9 abuse limits and size caps");
   await check("an over-long own name in a chat is refused", assertFails(updateDoc(doc(QA, "chats", "q_a_q_b"), { "names.q_a": big(41) })));
   await check("a member can't name someone else as the last sender", assertFails(updateDoc(doc(QA, "chats", "q_a_q_b"), { lastSender: "q_z" })));
   await check("unread counts only for members", assertFails(updateDoc(doc(QA, "chats", "q_a_q_b"), { "unread.q_z": 5 })));
-  await check("account deletion blanks the leaving member's name, photo and preview", assertSucceeds(updateDoc(doc(QA, "chats", "q_a_q_b"),
-    { "names.q_a": "", "photos.q_a": "", "unread.q_a": 0, lastText: "", lastSender: "" })));
+  await check("account deletion blanks own fields while preserving the counterpart preview",assertSucceeds(resetChat(QA,'q_a','q_a_q_b',true)));
 
   // AI jobs: a pending job can't be deleted at once (that would skip the one-second gap).
   const qjob = (uid, extra = {}) => ({ uid, kind: "check", status: "pending", images: [], ids: [], photos: [], requestId: "q1", createdAt: serverTimestamp(), ...extra });
@@ -999,14 +1047,14 @@ console.log("Phase 9 abuse limits and size caps");
   await check("an exact location as the app writes it", assertSucceeds(setDoc(doc(QA, "privateLocations", "qs1"), { ownerId: "q_a", lat: 25.27, lng: 55.30, accuracy: 5 })));
 
   // Adoption requests, sitter profiles, bookings.
-  await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), "posts", "qp1"), { ownerId: "q_b", category: "adoption", hidden: false, name: "Luna" }));
+  await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), "posts", "qp1"), { ownerId:'q_b',category:'adoption',hidden:false,name:'Luna',status:'open',adoptionStatus:'available' }));
   const adopt = (extra = {}) => ({ postId: "qp1", postName: "Luna", postPhotoId: "", ownerId: "q_b", requesterId: "q_a", requesterName: "q_a", message: "I'd love to adopt her",
     home: "flat", status: "pending", ownerNote: "", createdAt: now(), decidedAt: 0, ...extra });
   await check("an adoption request with an extra field is refused", assertFails(setDoc(doc(QA, "adoptionRequests", "qp1_q_a"), adopt({ junk: 1 }))));
   await check("an adoption request with 4,000 characters is refused", assertFails(setDoc(doc(QA, "adoptionRequests", "qp1_q_a"), adopt({ message: big(4000) }))));
   await check("an adoption request as the app writes it", assertSucceeds(setDoc(doc(QA, "adoptionRequests", "qp1_q_a"), adopt())));
   await check("the post owner can't attach a 2,000-character note", assertFails(updateDoc(doc(QB, "adoptionRequests", "qp1_q_a"), { status: "approved", ownerNote: big(2000), decidedAt: now() })));
-  const sitter = (uid, extra = {}) => ({ uid, name: uid, photoId: "", headline: "Cat lover", description: "", experience: "", petTypes: ["cat"], services: ["visits"], availability: "",
+  const sitter = (uid, extra = {}) => ({ name: uid, photoId: "", headline: "Cat lover", description: "", experience: "", petTypes: ["cat"], services: ["visits"], availability: "",
     rate: 50, rateUnit: "visit", lat: 25.2, lng: 55.3, neighborhood: "deira", active: true, ratingSum: 0, verified: false, ratingCount: 0, lastReviewId: "", createdAt: now(), updatedAt: now(), ...extra });
   await check("a sitter profile with an extra field is refused", assertFails(setDoc(doc(ctx("q_f"), "sitters", "q_f"), sitter("q_f", { junk: 1 }))));
   await check("a sitter profile with 6,000 characters is refused", assertFails(setDoc(doc(ctx("q_f"), "sitters", "q_f"), sitter("q_f", { description: big(6000) }))));
@@ -1021,8 +1069,8 @@ console.log("Phase 9 abuse limits and size caps");
 }
 
 // Cleanup keeps the existing sender and changes only the bounded preview.
-await check("a member repairs the last preview without impersonating the previous sender", assertSucceeds(updateDoc(doc(B, "chats", "bob_carol"), { lastText: "Previous message" })));
-await check("a member can clear an empty chat preview", assertSucceeds(updateDoc(doc(B, "chats", "bob_carol"), { lastText: "" })));
+await check("legacy unbound write refused: a member repairs the last preview without impersonating the previous sender", assertFails(updateDoc(doc(B, "chats", "bob_carol"), { lastText: "Previous message" })));
+await check("legacy unbound write refused: a member can clear an empty chat preview", assertFails(updateDoc(doc(B, "chats", "bob_carol"), { lastText: "" })));
 await check("an outsider cannot repair another chat's preview", assertFails(updateDoc(doc(A, "chats", "bob_carol"), { lastText: "Forged" })));
 
 if (storageAddress) {
@@ -1044,8 +1092,18 @@ if (storageAddress) {
   await check("another member cannot delete the video", assertFails(video(outsider, "refused").delete()));
   await check("signed-out person cannot delete the video", assertFails(video(env.unauthenticatedContext(), "anonymous").delete()));
   await check("moderator cannot upload into the owner's folder", assertFails(video(env.authenticatedContext("video_mod", { email_verified: true }), "foreign").put(new Uint8Array([0]), { contentType: "video/mp4" })));
+  await check('verified active member reads video metadata',assertSucceeds(video(outsider,'refused').getMetadata()));
+  const unverified=env.authenticatedContext('video_owner',{email_verified:false});
+  await check('unverified read refused',assertFails(video(unverified,'refused').getMetadata()));
+  await check('unverified upload refused',assertFails(video(unverified,'unverified').put(new Uint8Array([0]),{contentType:'video/mp4'})));
+  await env.withSecurityRulesDisabled(c=>updateDoc(doc(c.firestore(),'users','video_owner'),{suspended:true}));
+  await check('suspended read refused',assertFails(video(owner,'refused').getMetadata()));
+  await check('suspended upload refused',assertFails(video(owner,'suspended').put(new Uint8Array([0]),{contentType:'video/mp4'})));
+  await check('suspended owner can delete for privacy',assertSucceeds(video(owner,'refused').delete()));
+  await check('profile-less verified reader refused',assertFails(video(env.authenticatedContext('video_missing',{email_verified:true}),'claimed').getMetadata()));
 } else console.log("Storage checks skipped: start with --config firebase.storage-test.json --only firestore,storage");
 
+await (await import('./extras.mjs')).runExtras({env,check,ctx,profile,postDoc,catDoc,sightingDoc,userStats});
 console.log(`\n${passed} passed, ${failed} failed`);
 await env.cleanup();
 process.exit(failed ? 1 : 0);
