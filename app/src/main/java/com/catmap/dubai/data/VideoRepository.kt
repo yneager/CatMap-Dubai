@@ -43,6 +43,7 @@ class VideoRepository(private val context: Context) {
 
     suspend fun delete(path: String) {
         if (enabled && path.isNotBlank()) runCatching { storage.reference.child(path).delete().await() }
+            .onFailure { android.util.Log.i("CatMap", "Video cleanup failed", it) }
     }
 
     companion object {

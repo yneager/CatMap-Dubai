@@ -8,7 +8,11 @@ import {
 import { readFileSync } from "node:fs";
 
 const emulatorAddress = new URL(`http://${process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080"}`);
+const storageHost = process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+const storageAddress = storageHost ? new URL(`http://${storageHost}`) : null;
 const env = await initializeTestEnvironment({
+  ...(storageAddress ? { storage: { host: storageAddress.hostname, port: Number(storageAddress.port),
+    rules: readFileSync(new URL("../../storage.rules", import.meta.url), "utf8") } } : {}),
   // This suite clears its database. Never use the app's saved demo-catmap project.
   projectId: "demo-catmap-rules-test",
   firestore: {
@@ -507,7 +511,7 @@ const reviewTx = (db, uid, rating, bump = 0) => runTransaction(db, async (tx) =>
 });
 await check("someone outside the booking cannot review it", assertFails(reviewTx(D, "dave", 5)));
 await check("rating cannot be inflated alongside the review", assertFails(reviewTx(B, "bob", 5, 10)));
-await check("ratings outside 1–5 are refused", assertFails(reviewTx(B, "bob", 9)));
+await check("ratings outside 1Ã¢â‚¬â€œ5 are refused", assertFails(reviewTx(B, "bob", 9)));
 await check("owner reviews the completed booking (review + rating + flag)", assertSucceeds(reviewTx(B, "bob", 5)));
 await check("a booking can only be reviewed once", assertFails(reviewTx(B, "bob", 4)));
 await check("sitter rating reflects exactly one review", assertSucceeds((async () => {
@@ -883,7 +887,7 @@ console.log("Phase 5 search and paging");
   await check("unverified account cannot search", assertFails(getDocs(query(collection(ctx("s_b", false), "posts"), where("hidden", "==", false), where("searchTerms", "array-contains-any", ["simba"]), limit(25)))));
   await check("moderator pages through hidden posts", assertSucceeds(getDocs(query(collection(M, "posts"), where("hidden", "==", true), orderBy("createdAt", "desc"), limit(25)))));
   await check("members cannot list hidden posts", assertFails(getDocs(query(collection(SB, "posts"), where("hidden", "==", true), orderBy("createdAt", "desc"), limit(25)))));
-  await check("admin looks members up by username prefix", assertSucceeds(getDocs(query(collection(AD, "users"), orderBy("username"), startAt("s_"), endAt("s_"), limit(25)))));
+  await check("admin looks members up by username prefix", assertSucceeds(getDocs(query(collection(AD, "users"), orderBy("username"), startAt("s_"), endAt("s_Ã¯Â£Â¿"), limit(25)))));
   await check("moderator pages through the moderation log", assertSucceeds(getDocs(query(collection(M, "modActions"), orderBy("at", "desc"), limit(40)))));
   await check("members cannot read the moderation log", assertFails(getDocs(query(collection(SB, "modActions"), orderBy("at", "desc"), limit(40)))));
   await check("member reads their older alerts", assertSucceeds(getDocs(query(collection(SA, "users", "s_a", "notifications"), orderBy("createdAt", "desc"), startAfter(now()), limit(25)))));
@@ -1015,6 +1019,32 @@ console.log("Phase 9 abuse limits and size caps");
   await check("a booking as the app writes it", assertSucceeds(stamped(ctx("q_g"), "q_g", ["bookings", "qb1"], booking())));
   await check("the sitter can't attach a 2,000-character note", assertFails(updateDoc(doc(ctx("q_f"), "bookings", "qb1"), { status: "accepted", sitterNote: big(2000), updatedAt: now() })));
 }
+
+// Cleanup keeps the existing sender and changes only the bounded preview.
+await check("a member repairs the last preview without impersonating the previous sender", assertSucceeds(updateDoc(doc(B, "chats", "bob_carol"), { lastText: "Previous message" })));
+await check("a member can clear an empty chat preview", assertSucceeds(updateDoc(doc(B, "chats", "bob_carol"), { lastText: "" })));
+await check("an outsider cannot repair another chat's preview", assertFails(updateDoc(doc(A, "chats", "bob_carol"), { lastText: "Forged" })));
+
+if (storageAddress) {
+  console.log("Video deletion permissions");
+  for (const [id, role] of [["video_owner", "user"], ["video_other", "user"], ["video_mod", "moderator"], ["video_admin", "admin"]]) {
+    await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), "users", id), profile(id)));
+    if (role !== "user") await setRole(id, role);
+  }
+  const video = (context, id) => context.storage("gs://demo-catmap-rules-test.appspot.com").ref(`videos/video_owner/${id}`);
+  const owner = env.authenticatedContext("video_owner", { email_verified: true });
+  const outsider = env.authenticatedContext("video_other", { email_verified: true });
+  for (const id of ["own", "mod", "admin", "claimed", "refused", "anonymous"]) {
+    await check(`owner uploads video ${id}`, assertSucceeds(video(owner, id).put(new Uint8Array([0, 1]), { contentType: "video/mp4" })));
+  }
+  await check("owner deletes their video", assertSucceeds(video(owner, "own").delete()));
+  await check("moderator deletes a post video", assertSucceeds(video(env.authenticatedContext("video_mod"), "mod").delete()));
+  await check("admin deletes a post video", assertSucceeds(video(env.authenticatedContext("video_admin"), "admin").delete()));
+  await check("admin claim alone cannot delete a post video", assertFails(video(env.authenticatedContext("video_claim", { catmapAdmin: true }), "claimed").delete()));
+  await check("another member cannot delete the video", assertFails(video(outsider, "refused").delete()));
+  await check("signed-out person cannot delete the video", assertFails(video(env.unauthenticatedContext(), "anonymous").delete()));
+  await check("moderator cannot upload into the owner's folder", assertFails(video(env.authenticatedContext("video_mod", { email_verified: true }), "foreign").put(new Uint8Array([0]), { contentType: "video/mp4" })));
+} else console.log("Storage checks skipped: start with --config firebase.storage-test.json --only firestore,storage");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 await env.cleanup();

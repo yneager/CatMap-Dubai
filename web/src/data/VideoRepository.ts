@@ -20,7 +20,7 @@ export const VideoRepository = {
   delete: async (path: string) => {
     if (config.blaze && path) {
       const { ref, deleteObject } = await import('firebase/storage');
-      await deleteObject(ref(await videoStorage(), path)).catch(() => {});
+      await deleteObject(ref(await videoStorage(), path)).catch((error) => console.info('Video cleanup failed', error));
     }
   },
 };

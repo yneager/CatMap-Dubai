@@ -4,6 +4,10 @@ rules_version = '2';
 // Storage needs the Blaze plan on real Firebase; the app only uses it when built with catmap.blaze=true.
 service firebase.storage {
   match /b/{bucket}/o {
+    function isModerator() {
+      return request.auth != null
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['admin', 'moderator'];
+    }
     match /videos/{ownerId}/{fileId} {
       allow read: if request.auth != null;
       // Each person writes only into their own folder: verified email, video files, at most 30 MB.
@@ -12,7 +16,7 @@ service firebase.storage {
         && request.auth.token.email_verified == true
         && request.resource.size < 30 * 1024 * 1024
         && request.resource.contentType.matches('video/.*');
-      allow delete: if request.auth != null && request.auth.uid == ownerId;
+      allow delete: if request.auth != null && (request.auth.uid == ownerId || isModerator());
     }
     match /{allPaths=**} {
       allow read, write: if false;
