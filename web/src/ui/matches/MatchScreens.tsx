@@ -9,7 +9,7 @@ import {
   type PostMatch,
   type PostUpdate,
 } from '../../data/model';
-import { PostRepository } from '../../data/PostRepository';
+import { PostRepository, type PostAvailability } from '../../data/PostRepository';
 import { MatchRepository, visibleMatch } from '../../data/MatchRepository';
 import { AiServer } from '../../data/AiServer';
 import { Dubai } from '../../data/Neighborhoods';
@@ -73,7 +73,7 @@ export function answerLine(m: PostMatch, viewerIsOwner: boolean) {
 }
 
 function usePost(id: string) {
-  return useDoc(() => (id ? PostRepository.postFlow(id) : null), PostFromDoc, 'match-post-' + id);
+  return useDoc(() => (id ? PostRepository.postFlow(id) : null), PostFromDoc, 'match-post-' + id, true);
 }
 
 function SideBySide({
@@ -151,7 +151,7 @@ export function usePostMatches(postId: string) {
     PostMatchFromDoc,
     'matches-' + uid,
   );
-  const [gone, setGone] = useState<Record<string, boolean>>({});
+  const [gone, setGone] = useState<Record<string, PostAvailability>>({});
   const asked = useRef(new Set<string>());
   const here = all?.filter((m) => m.lostPostId === postId || m.sightingPostId === postId);
   const other = (m: PostMatch) => (m.lostPostId === postId ? m.sightingPostId : m.lostPostId);
@@ -160,10 +160,10 @@ export function usePostMatches(postId: string) {
       const id = other(m);
       if (asked.current.has(id)) continue;
       asked.current.add(id);
-      void PostRepository.exists(id).then((exists) => setGone((g) => ({ ...g, [id]: !exists })));
+      void PostRepository.availability(id).then((state) => setGone((g) => ({ ...g, [id]: state })));
     }
     for (const m of here ?? [])
-      if (gone[other(m)] && !asked.current.has(m.id)) {
+      if (gone[other(m)] === 'gone' && !asked.current.has(m.id)) {
         asked.current.add(m.id);
         MatchRepository.drop(m);
       }
@@ -171,7 +171,7 @@ export function usePostMatches(postId: string) {
   if (!here) return undefined;
   // Until the first answers arrive, nothing (rather than a list that loses a card a moment later).
   if (here.length && !here.some((m) => other(m) in gone)) return undefined;
-  return here.filter((m) => gone[other(m)] === false);
+  return here.filter((m) => gone[other(m)] === 'there');
 }
 
 /** "Possible matches" on a lost report or sighting, for the two people involved. */

@@ -13,10 +13,13 @@ import com.catmap.dubai.data.model.labeledFrom
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Source
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -51,6 +54,8 @@ data class PostDraft(
     val fingerprint: List<Double> = emptyList(),
     val microchip: String = "unknown",
 )
+
+enum class PostAvailability { GONE, HIDDEN, THERE }
 
 class PostRepository(
     private val db: FirebaseFirestore,
@@ -105,12 +110,20 @@ class PostRepository(
         return q.orderBy("createdAt", Query.Direction.DESCENDING)
     }
 
-    fun postFlow(id: String): Flow<Post?> = ref(id).objectFlow()
+    fun postFlow(id: String): Flow<Post?> = ref(id).snapshotFlow().map { it.safeObject<Post>() }
+        .catch { error ->
+            if (error is FirebaseFirestoreException && error.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) emit(null)
+            else throw error
+        }.retryWhen { error, _ -> AppErrors.awaitListenerRetry(error) }
 
     suspend fun post(id: String): Post? = runCatching { ref(id).get().await().toObject(Post::class.java) }.getOrNull()
 
-    /** False only when the server says the post is gone; offline or refused counts as "still there". */
-    suspend fun exists(id: String): Boolean = runCatching { ref(id).get(Source.SERVER).await().exists() }.getOrDefault(true)
+    /** Only a confirmed server miss is gone; refused posts may be restored, and offline is unknown. */
+    suspend fun availability(id: String): PostAvailability = try {
+        if (ref(id).get(Source.SERVER).await().exists()) PostAvailability.THERE else PostAvailability.GONE
+    } catch (error: FirebaseFirestoreException) {
+        if (error.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) PostAvailability.HIDDEN else PostAvailability.THERE
+    }
 
     /** Someone else's visible posts (their profile's activity). */
     fun publicPostsBy(uid: String): Flow<List<Post>> =

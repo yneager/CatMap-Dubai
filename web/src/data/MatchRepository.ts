@@ -98,11 +98,11 @@ export const MatchRepository = {
   /** True (and the match is deleted) when either of its posts is gone. */
   orphaned: async (m: PostMatch) => {
     const [lost, sighting] = await Promise.all([
-      PostRepository.exists(m.lostPostId),
-      PostRepository.exists(m.sightingPostId),
+      PostRepository.availability(m.lostPostId),
+      PostRepository.availability(m.sightingPostId),
     ]);
-    if (!lost || !sighting) MatchRepository.drop(m);
-    return !lost || !sighting;
+    if (lost === 'gone' || sighting === 'gone') MatchRepository.drop(m);
+    return lost !== 'there' || sighting !== 'there';
   },
   /** After publishing a lost report or a sighting: the PC does it when online, otherwise this device. */
   candidates: (post: Post) =>

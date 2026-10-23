@@ -104,6 +104,8 @@ export function toPost(draft: Post, me: UserProfile, time = Date.now()): Post {
     ),
   };
 }
+export type PostAvailability = 'gone' | 'hidden' | 'there';
+
 export const PostRepository = {
   feedQuery: (categories: string[] = []) =>
     listQuery(
@@ -149,12 +151,12 @@ export const PostRepository = {
     ),
   postFlow: (id: string) => ref(`posts/${id}`),
   post: (id: string) => read(`posts/${id}`, PostFromDoc),
-  /** False only when the server says the post is gone; offline or refused counts as "still there". */
-  exists: async (id: string) => {
+  /** Delete leftovers only after a confirmed server miss; hidden posts may return. */
+  availability: async (id: string): Promise<PostAvailability> => {
     try {
-      return (await getDocFromServer(ref(`posts/${id}`))).exists();
-    } catch {
-      return true;
+      return (await getDocFromServer(ref(`posts/${id}`))).exists() ? 'there' : 'gone';
+    } catch (error) {
+      return (error as { code?: string }).code === 'permission-denied' ? 'hidden' : 'there';
     }
   },
   postsBy: (uid: string) => listQuery('posts', where('ownerId', '==', uid)),

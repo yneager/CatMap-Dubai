@@ -43,12 +43,12 @@ class MatchRepository(
      * pair whose post is gone is dropped and deleted.
      */
     fun forPost(uid: String, postId: String): Flow<List<PostMatch>> = flow {
-        val checked = HashMap<String, Boolean>()
+        val checked = HashMap<String, PostAvailability>()
         emitAll(
             mine(uid).map { l ->
                 l.filter { it.lostPostId == postId || it.sightingPostId == postId }.filterNot { m ->
                     val other = if (m.lostPostId == postId) m.sightingPostId else m.lostPostId
-                    checked.getOrPut(other) { !posts.exists(other) }.also { gone -> if (gone) drop(m) }
+                    checked.getOrPut(other) { posts.availability(other) }.also { if (it == PostAvailability.GONE) drop(m) } != PostAvailability.THERE
                 }
             },
         )
@@ -57,8 +57,11 @@ class MatchRepository(
     fun matchFlow(id: String): Flow<PostMatch?> = col.document(id).objectFlow()
 
     /** True (and the match is deleted) when either of its posts is gone. */
-    suspend fun orphaned(match: PostMatch): Boolean =
-        (!posts.exists(match.lostPostId) || !posts.exists(match.sightingPostId)).also { if (it) drop(match) }
+    suspend fun orphaned(match: PostMatch): Boolean {
+        val states = listOf(posts.availability(match.lostPostId), posts.availability(match.sightingPostId))
+        if (PostAvailability.GONE in states) drop(match)
+        return states.any { it != PostAvailability.THERE }
+    }
 
     /** The rules let either person delete a match once one of its posts is gone; not awaited, so it waits offline. */
     private fun drop(match: PostMatch) {

@@ -51,7 +51,7 @@ export default function PostDetailScreen() {
     navigate = useNavigate(),
     { profile, toast } = useApp(),
     action = useAction();
-  const post = useDoc(() => PostRepository.postFlow(id), PostFromDoc, 'post-' + id),
+  const post = useDoc(() => PostRepository.postFlow(id), PostFromDoc, 'post-' + id, true),
     liveUpdates = useList(() => PostRepository.updates(id), PostUpdateFromDoc, 'updates-' + id),
     postMatches = usePostMatches(id) ?? [];
   const history = useOlder(

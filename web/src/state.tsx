@@ -45,6 +45,7 @@ export function useLive<T>(
   factory: () => Query | DocumentReference | null,
   mapper: (id: string, data: DocumentData) => T,
   key: string,
+  unavailableOnDenied = false,
 ) {
   const latest = useRef({ factory, mapper });
   latest.current = { factory, mapper };
@@ -70,10 +71,11 @@ export function useLive<T>(
         setResult({ key, value });
       },
       (error) => {
-        if (auth?.currentUser?.uid === subscribedUid) AppErrors.report(error);
+        if (unavailableOnDenied && error.code === 'permission-denied') setResult({ key, value: null });
+        else if (auth?.currentUser?.uid === subscribedUid) AppErrors.report(error);
       },
     );
-  }, [key, retry]);
+  }, [key, retry, unavailableOnDenied]);
   return result.key === key ? result.value : undefined;
 }
 export function useList<T>(
@@ -87,8 +89,9 @@ export function useDoc<T>(
   factory: () => DocumentReference | null,
   mapper: (id: string, data: DocumentData) => T,
   key: string,
+  unavailableOnDenied = false,
 ): T | null | undefined {
-  return useLive(factory, mapper, key) as T | null | undefined;
+  return useLive(factory, mapper, key, unavailableOnDenied) as T | null | undefined;
 }
 interface State {
   user: User | null;
