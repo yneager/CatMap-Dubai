@@ -94,8 +94,11 @@ export const MatchRepository = {
   mine: (uid: string) => listQuery('matches', where('members', 'array-contains', uid)),
   matchFlow: (id: string) => ref(`matches/${id}`),
   /** The rules let either person delete a match once one of its posts is gone; not awaited, so it waits offline. */
-  drop: (m: PostMatch) => void deleteDoc(ref(`matches/${m.id}`)).catch(() => undefined),
-  /** True (and the match is deleted) when either of its posts is gone. */
+  drop: (m: PostMatch) =>
+    void deleteDoc(ref(`matches/${m.id}`)).catch((error) =>
+      console.info('Match cleanup failed', error),
+    ),
+  /** Unavailable when either post is gone or hidden; only a confirmed deletion removes the match. */
   orphaned: async (m: PostMatch) => {
     const [lost, sighting] = await Promise.all([
       PostRepository.availability(m.lostPostId),

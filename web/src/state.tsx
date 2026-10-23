@@ -71,7 +71,8 @@ export function useLive<T>(
         setResult({ key, value });
       },
       (error) => {
-        if (unavailableOnDenied && error.code === 'permission-denied') setResult({ key, value: null });
+        if (unavailableOnDenied && error.code === 'permission-denied')
+          setResult({ key, value: null });
         else if (auth?.currentUser?.uid === subscribedUid) AppErrors.report(error);
       },
     );

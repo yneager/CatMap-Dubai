@@ -386,7 +386,11 @@ function BookingEditor() {
   );
 }
 function RemovedSitterNote({ uid }: { uid: string }) {
-  const sitter = useDoc(() => SittingRepository.sitterFlow(uid), SitterProfileFromDoc, 'booked-sitter-' + uid);
+  const sitter = useDoc(
+    () => SittingRepository.sitterFlow(uid),
+    SitterProfileFromDoc,
+    'booked-sitter-' + uid,
+  );
   return sitter === null ? <p>{t('sitter_no_longer_listed')}</p> : null;
 }
 

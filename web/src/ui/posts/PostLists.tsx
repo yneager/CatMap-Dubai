@@ -32,9 +32,11 @@ export default function PostLists() {
       const key = uid + '/' + id;
       if (checked.current.has(key)) continue;
       checked.current.add(key);
-      void PostRepository.availability(id).then(async (state) => {
-        if (state === 'gone') await FavoritesRepository.set(uid, id, false);
-      }).catch((error) => console.info('Favorite cleanup failed', error));
+      void PostRepository.availability(id)
+        .then(async (state) => {
+          if (state === 'gone') await FavoritesRepository.set(uid, id, false);
+        })
+        .catch((error) => console.info('Favorite cleanup failed', error));
     }
   }, [path, saved, favoriteIds, uid]);
   const centre = useDoc(

@@ -210,7 +210,9 @@ export default function MessagesScreens() {
             {m.senderId === uid && (
               <button
                 className="text-button small"
-                onClick={() => void action.run(() => ChatRepository.deleteMessage(id, m, profile!.uid))}
+                onClick={() =>
+                  void action.run(() => ChatRepository.deleteMessage(id, m, profile!.uid))
+                }
               >
                 {t('delete_message')}
               </button>

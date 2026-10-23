@@ -56,7 +56,7 @@ class MatchRepository(
 
     fun matchFlow(id: String): Flow<PostMatch?> = col.document(id).objectFlow()
 
-    /** True (and the match is deleted) when either of its posts is gone. */
+    /** Unavailable when either post is gone or hidden; only a confirmed deletion removes the match. */
     suspend fun orphaned(match: PostMatch): Boolean {
         val states = listOf(posts.availability(match.lostPostId), posts.availability(match.sightingPostId))
         if (PostAvailability.GONE in states) drop(match)

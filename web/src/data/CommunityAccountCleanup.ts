@@ -42,12 +42,24 @@ export const CommunityAccountCleanup = {
     }
     // Matches may be deleted only after their posts are gone.
     await getDocs(listQuery('matches', where('members', 'array-contains', uid)))
-      .then((snap) => Promise.allSettled(snap.docs.map((d) => deleteDoc(d.ref))))
+      .then((snap) =>
+        Promise.allSettled(
+          snap.docs.map((d) =>
+            deleteDoc(d.ref).catch((error) => console.info('Account match cleanup failed', error)),
+          ),
+        ),
+      )
       .catch((error) => console.info('Account match cleanup failed', error));
-    await Promise.allSettled(posts.docs.map(async (post) => {
-      await deleteDocuments([`postEmbeddings/${post.id}`]).catch((error) => console.info('Embedding cleanup failed', error));
-      await VideoRepository.delete(post.data().videoPath ?? '');
-    }));
+    await Promise.allSettled(
+      posts.docs.map(async (post) => {
+        await deleteDocuments([`postEmbeddings/${post.id}`]).catch((error) =>
+          console.info('Embedding cleanup failed', error),
+        );
+        await VideoRepository.delete(post.data().videoPath ?? '').catch((error) =>
+          console.info('Account video cleanup failed', error),
+        );
+      }),
+    );
     for (const field of ['requesterId', 'ownerId'])
       await deleteDocuments(await matchingPaths('adoptionRequests', field, uid));
     for (const field of ['ownerId', 'sitterId'])

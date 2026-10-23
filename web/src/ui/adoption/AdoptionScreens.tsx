@@ -43,17 +43,22 @@ export default function AdoptionScreens() {
   useEffect(() => {
     let active = true;
     for (const r of requests ?? []) {
-      if (!availability.current.has(r.postId)) availability.current.set(r.postId, PostRepository.availability(r.postId));
+      if (!availability.current.has(r.postId))
+        availability.current.set(r.postId, PostRepository.availability(r.postId));
       void availability.current.get(r.postId)!.then((state) => {
         if (!active || state !== 'gone') return;
-        setRemoved((before) => before[r.postId] ? before : { ...before, [r.postId]: true });
+        setRemoved((before) => (before[r.postId] ? before : { ...before, [r.postId]: true }));
         if (!cleaned.current.has(r.id)) {
           cleaned.current.add(r.id);
-          void AdoptionRepository.delete(r).catch((error) => console.info('Old request cleanup failed', error));
+          void AdoptionRepository.delete(r).catch((error) =>
+            console.info('Old request cleanup failed', error),
+          );
         }
       });
     }
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [requests]);
   const page = usePager(
     () => (path === '/adoption' ? PostRepository.feedQuery(['adoption']) : null),

@@ -263,10 +263,22 @@ export const PostRepository = {
     const updates = await list(listQuery(`posts/${p.id}/updates`), PostUpdateFromDoc);
     await deleteDocuments(updates.map((u) => `posts/${p.id}/updates/${u.id}`));
     await deleteDoc(ref(`posts/${p.id}`));
-    await VideoRepository.delete(p.videoPath).catch((error) => console.info('Post video cleanup failed', error));
-    await deleteDoc(ref(`postEmbeddings/${p.id}`)).catch((error) => console.info('Embedding cleanup failed', error));
-    await getDocs(listQuery('adoptionRequests', where('ownerId', '==', p.ownerId), where('postId', '==', p.id)))
-      .then((snap) => Promise.allSettled(snap.docs.map((d) => deleteDoc(d.ref))))
+    await VideoRepository.delete(p.videoPath).catch((error) =>
+      console.info('Post video cleanup failed', error),
+    );
+    await deleteDoc(ref(`postEmbeddings/${p.id}`)).catch((error) =>
+      console.info('Embedding cleanup failed', error),
+    );
+    await getDocs(
+      listQuery('adoptionRequests', where('ownerId', '==', p.ownerId), where('postId', '==', p.id)),
+    )
+      .then((snap) =>
+        Promise.allSettled(
+          snap.docs.map((d) =>
+            deleteDoc(d.ref).catch((error) => console.info('Adoption cleanup failed', error)),
+          ),
+        ),
+      )
       .catch((error) => console.info('Adoption cleanup failed', error));
     await Promise.allSettled(
       [...p.photoIds, ...updates.map((u) => u.photoId).filter(Boolean)].map(ImageRepository.delete),
@@ -302,12 +314,25 @@ export const PostRepository = {
   },
   moderatorDelete: async (p: Post, me: UserProfile, note = '') => {
     await PostRepository.delete(p);
-    const reports = await list(listQuery('contentReports', where('targetType', '==', 'post'),
-      where('targetId', '==', p.id), where('status', '==', 'open')), ContentReportFromDoc)
-      .catch((error) => { console.info('Post report lookup failed', error); return []; });
-    await Promise.allSettled(reports.map((report) =>
-      ModerationRepository.closeReport(report, 'resolved', note || 'post deleted', me)
-        .catch((error) => console.info('Post report cleanup failed', error))));
+    const reports = await list(
+      listQuery(
+        'contentReports',
+        where('targetType', '==', 'post'),
+        where('targetId', '==', p.id),
+        where('status', '==', 'open'),
+      ),
+      ContentReportFromDoc,
+    ).catch((error) => {
+      console.info('Post report lookup failed', error);
+      return [];
+    });
+    await Promise.allSettled(
+      reports.map((report) =>
+        ModerationRepository.closeReport(report, 'resolved', note || 'post deleted', me).catch(
+          (error) => console.info('Post report cleanup failed', error),
+        ),
+      ),
+    );
     await ModerationRepository.log(me, 'post_deleted', 'post', p.id, p.name || p.category, note);
     await notifications.send([p.ownerId], 'moderation', {
       target: 'post',

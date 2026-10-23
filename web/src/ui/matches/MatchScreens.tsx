@@ -73,7 +73,12 @@ export function answerLine(m: PostMatch, viewerIsOwner: boolean) {
 }
 
 function usePost(id: string) {
-  return useDoc(() => (id ? PostRepository.postFlow(id) : null), PostFromDoc, 'match-post-' + id, true);
+  return useDoc(
+    () => (id ? PostRepository.postFlow(id) : null),
+    PostFromDoc,
+    'match-post-' + id,
+    true,
+  );
 }
 
 function SideBySide({
@@ -123,7 +128,11 @@ function MatchCard({ m, viewerIsOwner }: { m: PostMatch; viewerIsOwner: boolean 
     <Link className="card match-card" to={'/match/' + m.id}>
       <SideBySide lost={lost} sighting={sighting} />
       <div className="row">
-        {found ? <span>{t('match_owner_found_animal')}</span> : <StatusPill group="MatchTier" value={m.tier} />}
+        {found ? (
+          <span>{t('match_owner_found_animal')}</span>
+        ) : (
+          <StatusPill group="MatchTier" value={m.tier} />
+        )}
         <strong>{headline}</strong>
       </div>
       <p className="small muted">
@@ -157,13 +166,16 @@ export function usePostMatches(postId: string) {
   const asked = useRef(new Set<string>());
   const here = all?.filter((m) => m.lostPostId === postId || m.sightingPostId === postId);
   const scope = uid + '/' + postId + '/';
-  const other = (m: PostMatch) => scope + (m.lostPostId === postId ? m.sightingPostId : m.lostPostId);
+  const other = (m: PostMatch) =>
+    scope + (m.lostPostId === postId ? m.sightingPostId : m.lostPostId);
   useEffect(() => {
     for (const m of here ?? []) {
       const id = other(m);
       if (asked.current.has(id)) continue;
       asked.current.add(id);
-      void PostRepository.availability(id.slice(scope.length)).then((state) => setGone((g) => ({ ...g, [id]: state })));
+      void PostRepository.availability(id.slice(scope.length)).then((state) =>
+        setGone((g) => ({ ...g, [id]: state })),
+      );
     }
     for (const m of here ?? [])
       if (gone[other(m)] === 'gone' && !asked.current.has(scope + 'drop/' + m.id)) {
@@ -457,13 +469,20 @@ export default function MatchReviewScreen() {
   const matchId = m?.id;
   useEffect(() => {
     let active = true;
-    if (m) void MatchRepository.orphaned(m).then((unavailable) => {
-      if (active) setOrphaned({ id: m.id, unavailable });
-    });
-    return () => { active = false; };
+    if (m)
+      void MatchRepository.orphaned(m).then((unavailable) => {
+        if (active) setOrphaned({ id: m.id, unavailable });
+      });
+    return () => {
+      active = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per match
   }, [matchId]);
-  if (m === undefined || (m && (orphaned?.id !== m.id || lost === undefined || sighting === undefined))) return <Loading />;
+  if (
+    m === undefined ||
+    (m && (orphaned?.id !== m.id || lost === undefined || sighting === undefined))
+  )
+    return <Loading />;
   if (!m || orphaned?.unavailable || lost === null || sighting === null)
     return (
       <>
@@ -512,7 +531,11 @@ export default function MatchReviewScreen() {
       <AppTopBar title={t('match_review_title')} />
       <div className="screen match-review">
         <div className="row">
-          {found ? <span>{t('match_owner_found_animal')}</span> : <StatusPill group="MatchTier" value={m.tier} />}
+          {found ? (
+            <span>{t('match_owner_found_animal')}</span>
+          ) : (
+            <StatusPill group="MatchTier" value={m.tier} />
+          )}
           <h2>{t('match_found_headline', animalName(lost))}</h2>
         </div>
         <SideBySide lost={lost} sighting={sighting} onOpen={openPhoto} />

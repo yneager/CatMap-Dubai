@@ -2,11 +2,7 @@ import { PostDetailHeader, postTitle } from '../components/PostDetailHeader';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { lazy, Suspense, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import {
-  PostFromDoc,
-  PostUpdateFromDoc,
-  AdoptionRequestFromDoc,
-} from '../../data/model';
+import { PostFromDoc, PostUpdateFromDoc, AdoptionRequestFromDoc } from '../../data/model';
 import {
   usePostMatches,
   PostMatchesSection,

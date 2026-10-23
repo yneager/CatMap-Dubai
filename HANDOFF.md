@@ -1,7 +1,17 @@
 # CatMap Dubai – handoff
 
+## 23 October 2026 - bugs.txt cleanup fixes (Codex, local only)
+
+* Implemented B1-B11 in Android and web, plus B3 worker cleanup (external recovery.py and its E2E test, originals backed up as .bak). D1/D2 unchanged; no production access, push, release, deployment or Blaze activation.
+* Posts distinguish gone/hidden/offline; cleanup removes orphan requests, vectors, matches, videos and favourites. Message deletion repairs previews/photos, station deletion resolves maintenance, and booking/match screens explain removed sitters/reunions.
+* Local Storage rules now allow admin/moderator video deletion using the protected user role; Firestore rules unchanged. Allowed/refused regression cases added. Storage rule lookup permissions and video runtime behavior remain unverified; nothing was enabled or deployed.
+* Web: 102 tests passed, lint/typecheck/strings passed, emulator-mode build passed. Android unit suite: 115 passed, 1 existing skipped; build/lint/Roborazzi verification passed (see final results in `work done.txt`). No screenshot baselines re-recorded.
+* Integration remains unverified: Firebase CLI registry access failed with npm EACCES; bounded full browser attempt failed against unavailable local Auth (6 failed, 64 not run); ADB launch denied, so B1-B11 manual Android checks were not performed. No workaround attempted for those blockers.
+* Exact per-bug files, commands, counts, errors and local commits: `work done.txt`. Evidence: ignored `test-results/bug-fixes/`. Review before release; do not count blocked tests as passing.
+
+
 Read this first in a new chat. It covers the current state, how to build and test, the decisions already made,
-and what's left. **Last updated: 21 Oct 2026 (major update done; **v0.1.0 released**; see the top section).**
+and what's left. **Last updated: 23 Oct 2026 (local bug fixes; emulator/manual validation blocked; see the top section).**
 
 ## 21 October 2026 - Web round 3 reviewed and verified (Claude)
 
