@@ -62,6 +62,7 @@ object Col {
     const val FAVORITES = "favorites"
     const val AREA_FOLLOWS = "areaFollows"
     const val MATCHES = "matches"
+    const val POST_EMBEDDINGS = "postEmbeddings"
 }
 
 fun now() = System.currentTimeMillis()

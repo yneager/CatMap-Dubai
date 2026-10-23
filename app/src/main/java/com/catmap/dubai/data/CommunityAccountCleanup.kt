@@ -29,6 +29,10 @@ class CommunityAccountCleanup(private val db:FirebaseFirestore) {
             post.reference.collection(Col.UPDATES).get().await().documents.chunked(200).forEach { docs -> db.runBatch {batch ->docs.forEach {batch.delete(it.reference)}}.await() }
             post.reference.delete().await()
         }
+        for (post in posts) {
+            runCatching { db.collection(Col.POST_EMBEDDINGS).document(post.id).delete().await() }
+                .onFailure { android.util.Log.i("CatMap", "Embedding cleanup failed", it) }
+        }
         delete(Col.ADOPTION_REQUESTS,uid,"requesterId")
         delete(Col.ADOPTION_REQUESTS,uid,"ownerId")
         for((field,name,note) in listOf(Triple("ownerId","ownerName","notes"),Triple("sitterId","sitterName","sitterNote"))) {

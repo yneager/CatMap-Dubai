@@ -35,6 +35,8 @@ export const CommunityAccountCleanup = {
         (await getDocs(listQuery(path + '/updates'))).docs.map((d) => d.ref.path),
       );
       await deleteDocuments([path]);
+      await deleteDocuments([path.replace('posts/', 'postEmbeddings/')])
+        .catch((error) => console.info('Embedding cleanup failed', error));
     }
     for (const field of ['requesterId', 'ownerId'])
       await deleteDocuments(await matchingPaths('adoptionRequests', field, uid));

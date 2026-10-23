@@ -261,6 +261,7 @@ export const PostRepository = {
     const updates = await list(listQuery(`posts/${p.id}/updates`), PostUpdateFromDoc);
     await deleteDocuments(updates.map((u) => `posts/${p.id}/updates/${u.id}`));
     await deleteDoc(ref(`posts/${p.id}`));
+    await deleteDoc(ref(`postEmbeddings/${p.id}`)).catch((error) => console.info('Embedding cleanup failed', error));
     await getDocs(listQuery('adoptionRequests', where('ownerId', '==', p.ownerId), where('postId', '==', p.id)))
       .then((snap) => Promise.allSettled(snap.docs.map((d) => deleteDoc(d.ref))))
       .catch((error) => console.info('Adoption cleanup failed', error));

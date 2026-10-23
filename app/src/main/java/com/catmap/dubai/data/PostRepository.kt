@@ -233,6 +233,8 @@ class PostRepository(
         val updates = ref(post.id).collection(Col.UPDATES).get().await().documents
         updates.chunked(400).forEach { chunk -> db.runBatch { b -> chunk.forEach { b.delete(it.reference) } }.await() }
         ref(post.id).delete().await()
+        runCatching { db.collection(Col.POST_EMBEDDINGS).document(post.id).delete().await() }
+            .onFailure { android.util.Log.i("CatMap", "Embedding cleanup failed", it) }
         runCatching {
             db.collection(Col.ADOPTION_REQUESTS).whereEqualTo("ownerId", post.ownerId).whereEqualTo("postId", post.id)
                 .get().await().documents.forEach { it.reference.delete().await() }
