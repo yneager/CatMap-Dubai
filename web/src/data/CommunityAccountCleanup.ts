@@ -6,7 +6,9 @@ import {
   runTransaction,
   updateDoc,
   writeBatch,
+  deleteDoc,
 } from 'firebase/firestore';
+import { VideoRepository } from './VideoRepository';
 import { database } from '../firebase';
 import { ref, listQuery, deleteDocuments } from './Firestore';
 async function matchingPaths(path: string, field: string, uid: string) {
@@ -30,14 +32,22 @@ export const CommunityAccountCleanup = {
         }
       });
     }
-    for (const path of await matchingPaths('posts', 'ownerId', uid)) {
+    const posts = await getDocs(listQuery('posts', where('ownerId', '==', uid)));
+    for (const post of posts.docs) {
+      const path = post.ref.path;
       await deleteDocuments(
         (await getDocs(listQuery(path + '/updates'))).docs.map((d) => d.ref.path),
       );
       await deleteDocuments([path]);
-      await deleteDocuments([path.replace('posts/', 'postEmbeddings/')])
-        .catch((error) => console.info('Embedding cleanup failed', error));
     }
+    // Matches may be deleted only after their posts are gone.
+    await getDocs(listQuery('matches', where('members', 'array-contains', uid)))
+      .then((snap) => Promise.allSettled(snap.docs.map((d) => deleteDoc(d.ref))))
+      .catch((error) => console.info('Account match cleanup failed', error));
+    await Promise.allSettled(posts.docs.map(async (post) => {
+      await deleteDocuments([`postEmbeddings/${post.id}`]).catch((error) => console.info('Embedding cleanup failed', error));
+      await VideoRepository.delete(post.data().videoPath ?? '');
+    }));
     for (const field of ['requesterId', 'ownerId'])
       await deleteDocuments(await matchingPaths('adoptionRequests', field, uid));
     for (const field of ['ownerId', 'sitterId'])

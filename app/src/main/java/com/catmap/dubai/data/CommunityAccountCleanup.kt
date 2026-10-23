@@ -4,7 +4,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
 /** Remove authored community data; preserve the counterpart's booking/review history without names. */
-class CommunityAccountCleanup(private val db:FirebaseFirestore) {
+class CommunityAccountCleanup(private val db:FirebaseFirestore, private val videos: VideoRepository) {
     private suspend fun delete(collection:String,uid:String,field:String) {
         db.collection(collection).whereEqualTo(field,uid).get().await().documents.chunked(200).forEach { docs ->
             db.runBatch {batch -> docs.forEach {batch.delete(it.reference)}}.await()
@@ -29,7 +29,14 @@ class CommunityAccountCleanup(private val db:FirebaseFirestore) {
             post.reference.collection(Col.UPDATES).get().await().documents.chunked(200).forEach { docs -> db.runBatch {batch ->docs.forEach {batch.delete(it.reference)}}.await() }
             post.reference.delete().await()
         }
+        runCatching {
+            db.collection(Col.MATCHES).whereArrayContains("members", uid).get().await().documents.forEach {
+                runCatching { it.reference.delete().await() }.onFailure { error -> android.util.Log.i("CatMap", "Account match cleanup failed", error) }
+            }
+        }.onFailure { android.util.Log.i("CatMap", "Account match lookup failed", it) }
         for (post in posts) {
+            runCatching { videos.delete(post.getString("videoPath").orEmpty()) }
+                .onFailure { android.util.Log.i("CatMap", "Account video cleanup failed", it) }
             runCatching { db.collection(Col.POST_EMBEDDINGS).document(post.id).delete().await() }
                 .onFailure { android.util.Log.i("CatMap", "Embedding cleanup failed", it) }
         }

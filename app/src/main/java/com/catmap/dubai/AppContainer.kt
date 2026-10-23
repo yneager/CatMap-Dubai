@@ -71,7 +71,7 @@ class AppContainer(context: Context) {
     val users by lazy { UserRepository(db, notifications) }
     val authRepo by lazy {
         AuthRepository(
-            auth, db, users, notifications, images, settings, drafts, dataExport, com.catmap.dubai.data.DemoVault(appContext),
+            auth, db, users, notifications, images, videos, settings, drafts, dataExport, com.catmap.dubai.data.DemoVault(appContext),
             clearMapCopies = { map.clearAll() },
             localWipe = localWipe,
             afterSignOut = { message ->

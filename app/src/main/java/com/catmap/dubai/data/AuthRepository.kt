@@ -22,6 +22,7 @@ class AuthRepository(
     private val users: UserRepository,
     private val notifications: NotificationRepository,
     private val images: ImageRepository,
+    private val videos: VideoRepository,
     private val settings: SettingsRepository,
     private val drafts: PostDraftStore,
     private val dataExport: UserDataExportRepository,
@@ -214,7 +215,7 @@ class AuthRepository(
         user.reauthenticate(credential).await()
         val uid = user.uid
         val savedProfile = users.ref(uid).get().await().toObject(UserProfile::class.java) ?: profile
-        CommunityAccountCleanup(db).clean(uid)
+        CommunityAccountCleanup(db, videos).clean(uid)
 
         // Each transaction includes the source deletion and its aggregate change. A retry after
         // partial cleanup sees a missing source and cannot decrement the count a second time.
