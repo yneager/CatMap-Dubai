@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useApp, useList, useDoc, useAction, useDeviceLocation } from '../../state';
+import { useHistory, HistoryMore } from '../../data/useHistory';
 import { SittingRepository } from '../../data/SittingRepository';
+import { useSharedSitter } from '../../data/useSharedSitter';
 import {
   SitterProfileDefaults,
   SitterProfileFromDoc,
@@ -123,11 +125,17 @@ function SitterDetail() {
   const { uid = '' } = useParams(),
     { profile } = useApp();
   const sitter = useDoc(
-      () => SittingRepository.sitterFlow(uid),
-      SitterProfileFromDoc,
-      'sitter-' + uid,
-    ),
-    reviews = useList(() => SittingRepository.reviewsFor(uid), ReviewFromDoc, 'reviews-' + uid);
+    () => SittingRepository.sitterFlow(uid),
+    SitterProfileFromDoc,
+    'sitter-' + uid,
+  );
+  const reviewHistory = useHistory(
+    () => SittingRepository.reviewsQuery(uid),
+    ReviewFromDoc,
+    'reviews-' + uid,
+    'reviews',
+  );
+  const reviews = reviewHistory.items;
   if (sitter === undefined) return <Loading />;
   if (!sitter) return <EmptyState text={t('sitter_removed')} />;
   return (
@@ -189,6 +197,7 @@ function SitterDetail() {
         ) : (
           <EmptyState text={t('no_reviews')} />
         )}
+        <HistoryMore history={reviewHistory} />
       </div>
     </>
   );
@@ -386,11 +395,7 @@ function BookingEditor() {
   );
 }
 function RemovedSitterNote({ uid }: { uid: string }) {
-  const sitter = useDoc(
-    () => SittingRepository.sitterFlow(uid),
-    SitterProfileFromDoc,
-    'booked-sitter-' + uid,
-  );
+  const sitter = useSharedSitter(uid);
   return sitter === null ? <p>{t('sitter_no_longer_listed')}</p> : null;
 }
 
@@ -403,12 +408,22 @@ function Bookings() {
     [review, setReview] = useState<Booking | null>(null),
     [rating, setRating] = useState('5'),
     [text, setText] = useState('');
-  const bookings = useList(
-    () =>
-      uid ? (sitter ? SittingRepository.asSitter(uid) : SittingRepository.asOwner(uid)) : null,
+  const bookingHistory = useHistory(
+    () => (uid ? SittingRepository.bookingsQuery(uid, sitter) : null),
     BookingFromDoc,
     'bookings-' + uid + '-' + sitter,
+    'bookings',
   );
+  const bookings = bookingHistory.items;
+  const changeStatus = async (
+    booking: Booking,
+    status: string,
+    me: import('../../data/model').UserProfile,
+    note = '',
+  ) => {
+    await SittingRepository.setStatus(booking, status, me, note);
+    bookingHistory.patch(booking.id, { status, ...(note ? { sitterNote: note } : {}) });
+  };
   return (
     <>
       <AppTopBar title={t('bookings')} />
@@ -442,22 +457,14 @@ function Bookings() {
                       <button
                         className="primary"
                         disabled={action.busy}
-                        onClick={() =>
-                          void action.run(() =>
-                            SittingRepository.setStatus(b, 'accepted', profile!),
-                          )
-                        }
+                        onClick={() => void action.run(() => changeStatus(b, 'accepted', profile!))}
                       >
                         {t('accept')}
                       </button>
                       <button
                         className="outlined"
                         disabled={action.busy}
-                        onClick={() =>
-                          void action.run(() =>
-                            SittingRepository.setStatus(b, 'declined', profile!),
-                          )
-                        }
+                        onClick={() => void action.run(() => changeStatus(b, 'declined', profile!))}
                       >
                         {t('decline')}
                       </button>
@@ -467,9 +474,7 @@ function Bookings() {
                     <button
                       className="primary"
                       disabled={action.busy}
-                      onClick={() =>
-                        void action.run(() => SittingRepository.setStatus(b, 'completed', profile!))
-                      }
+                      onClick={() => void action.run(() => changeStatus(b, 'completed', profile!))}
                     >
                       {t('mark_completed')}
                     </button>
@@ -480,9 +485,7 @@ function Bookings() {
                         className="text-button"
                         disabled={action.busy}
                         onClick={() =>
-                          void action.run(() =>
-                            SittingRepository.setStatus(b, 'cancelled', profile!),
-                          )
+                          void action.run(() => changeStatus(b, 'cancelled', profile!))
                         }
                       >
                         {t('cancel_booking')}
@@ -506,6 +509,7 @@ function Bookings() {
         ) : (
           <EmptyState text={t('no_bookings_owner')} />
         )}
+        <HistoryMore history={bookingHistory} />
       </div>
       {review && (
         <Dialog title={t('leave_review')} onClose={() => setReview(null)}>
@@ -525,6 +529,7 @@ function Bookings() {
             onClick={() =>
               void action.run(async () => {
                 await SittingRepository.review(review, Number(rating), text, profile!);
+                bookingHistory.patch(review.id, { reviewed: true });
                 setReview(null);
               }, t('review_thanks'))
             }

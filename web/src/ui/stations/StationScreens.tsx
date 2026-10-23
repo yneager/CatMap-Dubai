@@ -1,3 +1,4 @@
+import { useHistory, HistoryMore } from '../../data/useHistory';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useApp, useList, useDoc, useAction } from '../../state';
@@ -95,16 +96,20 @@ function StationDetail() {
     { profile } = useApp(),
     action = useAction(),
     station = useDoc(() => StationRepository.station(id), FeedingStationFromDoc, 'station-' + id),
-    checkins = useList(
-      () => StationRepository.checkins(id),
+    checkinHistory = useHistory(
+      () => StationRepository.checkinsQuery(id),
       StationCheckinFromDoc,
       'checkins-' + id,
+      'checkins',
     ),
-    maintenance = useList(
-      () => StationRepository.maintenanceFor(id),
+    checkins = checkinHistory.items,
+    maintenanceHistory = useHistory(
+      () => StationRepository.maintenanceQuery(id),
       MaintenanceReportFromDoc,
       'maintenance-' + id,
+      'maintenance',
     ),
+    maintenance = maintenanceHistory.items,
     [modal, setModal] = useState(''),
     [cats, setCats] = useState('0'),
     [food, setFood] = useState('unknown'),
@@ -173,7 +178,6 @@ function StationDetail() {
         {checkins?.length === 0 && <p>{t('no_checkins_yet')}</p>}
         {checkins
           ?.sort((a, b) => b.at - a.at)
-          .slice(0, 50)
           .map((c) => (
             <article className="card" key={c.id}>
               <strong>
@@ -188,6 +192,7 @@ function StationDetail() {
               <small>{dateTime(c.at)}</small>
             </article>
           ))}
+        <HistoryMore history={checkinHistory} />
         <SectionHeader>{t('maintenance_reports')}</SectionHeader>
         {maintenance
           ?.sort((a, b) => b.createdAt - a.createdAt)
@@ -213,6 +218,7 @@ function StationDetail() {
               )}
             </article>
           ))}
+        <HistoryMore history={maintenanceHistory} />
       </div>
       {modal === 'checkin' && (
         <Dialog title={t('check_in')} onClose={() => setModal('')}>

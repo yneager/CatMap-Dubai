@@ -48,8 +48,13 @@ export default function PostDetailScreen() {
     { profile, toast } = useApp(),
     action = useAction();
   const post = useDoc(() => PostRepository.postFlow(id), PostFromDoc, 'post-' + id, true),
-    liveUpdates = useList(() => PostRepository.updates(id), PostUpdateFromDoc, 'updates-' + id),
-    postMatches = usePostMatches(id) ?? [];
+    liveUpdates = useList(
+      () => (post ? PostRepository.updates(id) : null),
+      PostUpdateFromDoc,
+      'updates-' + id + '-' + !!post,
+    ),
+    postMatchHistory = usePostMatches(post ? id : ''),
+    postMatches = postMatchHistory.matches ?? [];
   const history = useOlder(
     () => listQuery(`posts/${id}/updates`, orderBy('createdAt', 'desc')),
     PostUpdateFromDoc,
@@ -406,7 +411,9 @@ export default function PostDetailScreen() {
         ) : (
           <EmptyState text={t('no_updates_yet')} />
         )}{' '}
-        {searchPost && <PostMatchesSection post={post} />}
+        {searchPost && (
+          <PostMatchesSection post={post} matches={postMatches} history={postMatchHistory} />
+        )}
         {post.category === 'lost' && !own && post.status === 'open' && (
           <LinkSightingButton lost={post} />
         )}

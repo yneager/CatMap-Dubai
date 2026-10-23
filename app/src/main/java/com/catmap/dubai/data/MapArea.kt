@@ -27,6 +27,18 @@ data class MapArea(
     val visiblePosts: List<Post> get() = posts.values.filter { !it.hidden }
     val visibleCats: List<Cat> get() = cats.values.filter { !it.hidden && it.mergedInto.isEmpty() }
 
+    /** A limited live query is a display window; its evictions never delete sources. */
+    fun withPostWindow(cell: String, values: List<Post>, at: Long): MapArea {
+        val ids = values.mapTo(HashSet()) { it.id }
+        val kept = posts.filterValues { cell !in it.geoCells || it.id in ids }
+        return copy(posts = kept, seen = seen.filterKeys { !it.startsWith("p:") || it.drop(2) in kept }).withPosts(values, at)
+    }
+    fun withCatWindow(cell: String, values: List<Cat>, at: Long): MapArea {
+        val ids = values.mapTo(HashSet()) { it.id }
+        val kept = cats.filterValues { cell !in it.geoCells || it.id in ids }
+        return copy(cats = kept, seen = seen.filterKeys { !it.startsWith("c:") || it.drop(2) in kept }).withCats(values, at)
+    }
+
     /** Cells of [plan] that need asking: not loaded recently, and not inside a recently and fully loaded bigger cell. */
     fun toLoad(cells: List<String>, now: Long): List<String> = cells.filter { cell ->
         val own = this.cells[cell]

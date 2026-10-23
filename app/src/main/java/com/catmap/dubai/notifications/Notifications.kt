@@ -259,20 +259,29 @@ class NotificationWorker(context: Context, params: WorkerParameters) : Coroutine
     override suspend fun doWork(): Result {
         val container = (applicationContext as CatMapApp).container
         if (!container.firebaseReady) return Result.success()
+        val preferences = container.settings.current()
+        if (!preferences.notificationsEnabled || preferences.categories.values.none { it }
+            || !NotificationManagerCompat.from(applicationContext).areNotificationsEnabled()) return Result.success()
+        val time = java.time.LocalTime.now()
+        if (preferences.quietHoursEnabled && QuietHours.contains(time.hour * 60 + time.minute, preferences.quietStart, preferences.quietEnd)) return Result.success()
         val uid = container.authRepo.currentUid ?: return Result.success()
         return runCatching {
             val started = System.currentTimeMillis()
-            val lastCheck = container.settings.lastInboxCheck(uid)
-            // The first check (or one without a delivery baseline) reads the full window once; after that only alerts
-            // newer than the previous check, with an hour of overlap for senders whose clock runs a little behind.
-            // Alerts seen twice are filtered by NotificationDelivery's remembered ids.
-            val inbox = if (lastCheck == null || container.settings.deliveredNotifications(uid) == null) {
-                container.notifications.latest(uid)
-            } else {
-                container.notifications.since(uid, lastCheck - CHECK_OVERLAP_MS)
+            val lastCheck = container.settings.lastInboxCheck(uid) ?: (started - CHECK_OVERLAP_MS)
+            var cursor = container.settings.pollCursor(uid)
+            var complete = false
+            repeat(5) {
+                if (complete) return@repeat
+                val page = container.notifications.sincePage(uid, lastCheck - CHECK_OVERLAP_MS, cursor)
+                SystemNotifications.deliver(container, uid, page)
+                cursor = page.lastOrNull()?.let { it.createdAt to it.id } ?: cursor
+                container.settings.setPollCursor(uid, cursor)
+                complete = page.size < 50
             }
-            SystemNotifications.deliver(container, uid, inbox)
-            container.settings.setLastInboxCheck(uid, started)
+            if (complete) {
+                container.settings.setLastInboxCheck(uid, started)
+                container.settings.setPollCursor(uid, null)
+            }
             Result.success()
         }.getOrElse { if (it is CancellationException) throw it else Result.retry() }
     }

@@ -225,7 +225,7 @@ fun AppNavHost(pendingRoute: MutableState<String?>) {
 
     val unreadMessages by remember(user?.uid) {
         val uid = user?.uid
-        if (uid == null) flowOf(0L) else container.chats.chatsFor(uid).map { list -> list.sumOf { it.unread[uid] ?: 0L } }
+        if (uid == null) flowOf(0L) else container.chats.unreadCount(uid)
     }.collectAsStateWithLifecycle(0L)
 
     val backStack by nav.currentBackStackEntryAsState()

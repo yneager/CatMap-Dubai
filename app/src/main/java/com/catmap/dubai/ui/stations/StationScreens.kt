@@ -201,8 +201,12 @@ fun StationDetailScreen(nav: NavHostController, stationId: String) {
     val context = LocalContext.current
     val stationState by remember(stationId) { container.stations.station(stationId).loaded() }.collectAsStateWithLifecycle(null)
     val station = stationState?.value
-    val checkins by remember(stationId) { container.stations.checkins(stationId) }.collectAsStateWithLifecycle(emptyList())
-    val issues by remember(stationId) { container.stations.maintenanceFor(stationId) }.collectAsStateWithLifecycle(emptyList())
+    val checkinHistory = com.catmap.dubai.ui.components.rememberLiveHistory<com.catmap.dubai.data.model.StationCheckin>(stationId,
+        container.stations.checkinsQuery(stationId), id = { it.id })
+    val issueHistory = com.catmap.dubai.ui.components.rememberLiveHistory<com.catmap.dubai.data.model.MaintenanceReport>(stationId,
+        container.stations.maintenanceQuery(stationId), id = { it.id })
+    val checkins = checkinHistory.page.items
+    val issues = issueHistory.page.items
     val me by container.session.profile.collectAsStateWithLifecycle()
     val isAdmin = isAdminRole(me?.role)
     var dialog by remember { mutableStateOf<String?>(null) }
@@ -223,7 +227,7 @@ fun StationDetailScreen(nav: NavHostController, stationId: String) {
             else EmptyState(com.catmap.dubai.ui.icons.catMapVector(com.catmap.dubai.ui.icons.CatMapIcons.STATION), stringResource(R.string.station_not_found), Modifier.padding(padding))
             return@Scaffold
         }
-        val activity: List<Activity> = (checkins.map { CheckinActivity(it) } + issues.map { IssueActivity(it) }).sortedByDescending { it.at }.take(40)
+        val activity: List<Activity> = (checkins.map { CheckinActivity(it) } + issues.map { IssueActivity(it) }).sortedByDescending { it.at }
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -279,6 +283,16 @@ fun StationDetailScreen(nav: NavHostController, stationId: String) {
                         HorizontalDivider(Modifier.padding(top = 6.dp))
                     }
                 }
+            }
+            item {
+                val page = com.catmap.dubai.data.Page(items = activity, loaded = checkinHistory.page.loaded && issueHistory.page.loaded,
+                    loading = checkinHistory.page.loading || issueHistory.page.loading,
+                    end = checkinHistory.page.end && issueHistory.page.end,
+                    error = checkinHistory.page.error ?: issueHistory.page.error)
+                com.catmap.dubai.ui.components.PagingFooter(page, {
+                    if (!checkinHistory.page.end) checkinHistory.more()
+                    if (!issueHistory.page.end) issueHistory.more()
+                })
             }
         }
 

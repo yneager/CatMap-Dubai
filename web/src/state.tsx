@@ -15,15 +15,13 @@ import {
   type DocumentData,
 } from 'firebase/firestore';
 import { auth } from './firebase';
-import { AppErrors, errorMessage } from './data/Firestore';
+import { AppErrors, errorMessage, ref } from './data/Firestore';
 import { SettingsRepository } from './data/SettingsRepository';
 import { LocationRepository } from './data/LocationRepository';
 import {
   UserProfileFromDoc,
   AppNotificationFromDoc,
   FavoriteFromDoc,
-  ChatFromDoc,
-  type Chat,
   type UserProfile,
   type AppNotification,
 } from './data/model';
@@ -31,10 +29,10 @@ import { UserRepository } from './data/UserRepository';
 import { PostRepository } from './data/PostRepository';
 import { NotificationRepository } from './data/NotificationRepository';
 import { FavoritesRepository } from './data/FavoritesRepository';
-import { ChatRepository } from './data/ChatRepository';
 import { t, setLanguage } from './i18n';
 import { QuietHours } from './notifications/QuietHours';
 import { NotificationText, NotificationDelivery } from './notifications/NotificationDelivery';
+import { useForegroundRefresh } from './data/ForegroundRefresh';
 export function useSettings() {
   return useSyncExternalStore(SettingsRepository.subscribe, SettingsRepository.get);
 }
@@ -50,6 +48,8 @@ export function useLive<T>(
   const latest = useRef({ factory, mapper });
   latest.current = { factory, mapper };
   const retry = useSyncExternalStore(AppErrors.subscribe, AppErrors.version);
+  const foreground = useForegroundRefresh();
+  const availabilityRefresh = unavailableOnDenied ? foreground : 0;
   const [result, setResult] = useState<{ key: string; value: T[] | T | null | undefined }>({
     key,
     value: undefined,
@@ -76,7 +76,7 @@ export function useLive<T>(
         else if (auth?.currentUser?.uid === subscribedUid) AppErrors.report(error);
       },
     );
-  }, [key, retry, unavailableOnDenied]);
+  }, [key, retry, unavailableOnDenied, availabilityRefresh]);
   return result.key === key ? result.value : undefined;
 }
 export function useList<T>(
@@ -101,7 +101,6 @@ interface State {
   ready: boolean;
   inbox: AppNotification[];
   favoriteIds: string[];
-  chats: Chat[] | undefined;
   unreadMessages: number;
   toast: (text: string) => void;
 }
@@ -112,7 +111,6 @@ const Context = createContext<State>({
   ready: false,
   inbox: [],
   favoriteIds: [],
-  chats: undefined,
   unreadMessages: 0,
   toast: () => {},
 });
@@ -166,10 +164,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     AppNotificationFromDoc,
     'inbox-' + uid,
   );
-  const chats = useList(
-    () => (uid ? ChatRepository.chatsFor(uid) : null),
-    ChatFromDoc,
-    'shared-chats-' + uid,
+  const unreadCount = useDoc(
+    () => (uid ? ref(`userLimits/${uid}`) : null),
+    (_id, data) => Number(data.unreadCount ?? 0),
+    'unread-total-' + uid,
   );
   const favorites = useList(
     () => (uid ? FavoritesRepository.favorites(uid) : null),
@@ -253,8 +251,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         profile: uid ? profile : null,
         inbox: inbox ?? [],
         favoriteIds: favorites?.map((f) => f.id) ?? [],
-        chats,
-        unreadMessages: chats?.reduce((sum, c) => sum + (c.unread[uid] ?? 0), 0) ?? 0,
+        unreadMessages: unreadCount ?? 0,
         toast: setMessage,
       }}
     >

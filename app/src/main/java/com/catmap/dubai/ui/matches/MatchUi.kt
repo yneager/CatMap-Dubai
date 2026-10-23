@@ -178,11 +178,11 @@ fun SideBySide(lost: Post?, sighting: Post?, modifier: Modifier = Modifier, heig
  * ones folded away.
  */
 @Composable
-fun PostMatchesSection(nav: NavHostController, post: Post) {
+fun PostMatchesSection(nav: NavHostController, post: Post, matches: List<PostMatch>, history: com.catmap.dubai.ui.components.LiveHistory<PostMatch>) {
     val container = LocalContainer.current
     val uid = container.session.uid.orEmpty()
     val me by container.session.profile.collectAsStateWithLifecycle()
-    val all by remember(post.id, uid) { container.matches.forPost(uid, post.id) }.collectAsStateWithLifecycle(null)
+    val all = matches
     val pcOnline by produceState<Boolean?>(null, post.id) { value = container.aiServer.health() != null }
     var showWeak by rememberSaveable { mutableStateOf(false) }
     val isLost = post.category == PostCategory.LOST.key
@@ -192,7 +192,7 @@ fun PostMatchesSection(nav: NavHostController, post: Post) {
         val profile = me ?: return@LaunchedEffect
         if (pcOnline == false && isOwner) runCatching { container.matches.reconcile(post, profile) }
     }
-    val list = all ?: return
+    val list = all
     // A pair someone turned down leaves their list (it stays stored, so it is never suggested again).
     val visible = list.filter {
         it.visible && !(it.lostOwnerId == uid && it.rejected) && !(it.sightingOwnerId == uid && it.reporterState == "not_same")
@@ -200,16 +200,17 @@ fun PostMatchesSection(nav: NavHostController, post: Post) {
     val shown = visible.filter { it.tier != MatchTier.WEAK.key || it.ownerState != "new" || it.reporterState != "new" }
     val weak = visible - shown.toSet()
     val fresh = System.currentTimeMillis() - post.createdAt < 3 * 60_000
-    if (visible.isEmpty() && !isOwner) return
+    if (visible.isEmpty() && !isOwner && history.page.end && !history.page.loading) return
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionHeader(stringResource(R.string.possible_post_matches))
         when {
+            visible.isEmpty() && history.page.loading -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
             visible.isEmpty() && fresh && pcOnline == true -> Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(10.dp))
                 Text(stringResource(if (isLost) R.string.matches_checking else R.string.matches_checking_sighting), style = MaterialTheme.typography.bodyMedium)
             }
-            visible.isEmpty() -> Text(
+            visible.isEmpty() && history.page.end -> Text(
                 stringResource(if (isLost) R.string.matches_none_lost else R.string.matches_none_sighting),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -227,6 +228,7 @@ fun PostMatchesSection(nav: NavHostController, post: Post) {
         if (weak.isNotEmpty() && !showWeak) {
             TextButton(onClick = { showWeak = true }) { Text(stringResource(R.string.show_weak_matches, weak.size)) }
         }
+        com.catmap.dubai.ui.components.HistoryMore(history)
     }
 }
 

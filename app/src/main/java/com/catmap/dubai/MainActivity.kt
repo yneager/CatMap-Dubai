@@ -39,6 +39,10 @@ import com.catmap.dubai.ui.theme.isDark
 
 // AppCompatActivity (rather than ComponentActivity) gives per-app language switching on all Android versions.
 class MainActivity : AppCompatActivity() {
+    override fun onResume() {
+        super.onResume()
+        com.catmap.dubai.data.ForegroundRefresh.refresh()
+    }
     /** Screen requested by a tapped notification. */
     private val pendingRoute = mutableStateOf<String?>(null)
 

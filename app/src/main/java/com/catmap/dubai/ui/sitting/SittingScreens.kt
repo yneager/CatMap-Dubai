@@ -205,7 +205,9 @@ private fun SitterCard(s: SitterProfile, modifier: Modifier = Modifier, onClick:
 fun SitterDetailScreen(nav: NavHostController, uid: String) {
     val container = LocalContainer.current
     val loaded by remember(uid) { container.sitting.sitterFlow(uid).loaded() }.collectAsStateWithLifecycle(null)
-    val reviews by remember(uid) { container.sitting.reviewsFor(uid) }.collectAsStateWithLifecycle(emptyList())
+    val reviewHistory = com.catmap.dubai.ui.components.rememberLiveHistory<com.catmap.dubai.data.model.Review>(uid,
+        container.sitting.reviewsQuery(uid), id = { it.id })
+    val reviews = reviewHistory.page.items
     val me = container.session.uid
     val sitter = loaded?.value
     Scaffold(topBar = { AppTopBar(sitter?.name.orEmpty(), onBack = { nav.popBackStack() }) }) { padding ->
@@ -277,6 +279,7 @@ fun SitterDetailScreen(nav: NavHostController, uid: String) {
                         HorizontalDivider(Modifier.padding(top = 8.dp))
                     }
                 }
+                item { com.catmap.dubai.ui.components.HistoryMore(reviewHistory) }
             }
         }
     }
@@ -479,10 +482,10 @@ fun BookingsScreen(nav: NavHostController, startAsSitter: Boolean = false) {
     val me by container.session.profile.collectAsStateWithLifecycle()
     val uid = container.session.uid ?: return
     var tab by rememberSaveable { mutableStateOf(if (startAsSitter) BookingTab.SITTING else BookingTab.MINE) }
-    val asOwner by remember(uid) { container.sitting.asOwner(uid) }.collectAsStateWithLifecycle(null)
-    val asSitter by remember(uid) { container.sitting.asSitter(uid) }.collectAsStateWithLifecycle(null)
+    val bookingHistory = com.catmap.dubai.ui.components.rememberLiveHistory<Booking>(uid + tab.name,
+        container.sitting.bookingsQuery(uid, tab == BookingTab.SITTING), id = { it.id })
     var reviewing by remember { mutableStateOf<Booking?>(null) }
-    val list = if (tab == BookingTab.MINE) asOwner else asSitter
+    val list = if (bookingHistory.page.loaded) bookingHistory.page.items else null
 
     Scaffold(topBar = { AppTopBar(stringResource(R.string.bookings), onBack = { nav.popBackStack() }) }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
@@ -500,16 +503,17 @@ fun BookingsScreen(nav: NavHostController, startAsSitter: Boolean = false) {
                     else -> items(list, key = { it.id }, contentType = { "SittingScreens" }) { b ->
                         BookingCard(
                             b, asSitter = tab == BookingTab.SITTING, modifier = Modifier.animateItem(),
-                            onStatus = { st -> runner.run(R.string.updated) { container.sitting.setStatus(b, st, me ?: return@run) } },
+                            onStatus = { st -> runner.run(R.string.updated) { container.sitting.setStatus(b, st, me ?: return@run); bookingHistory.update(b.id) { it.copy(status = st.key) } } },
                             onMessage = { nav.navigate(Routes.chatWith(if (tab == BookingTab.SITTING) b.ownerId else b.sitterId)) },
                             onReview = { reviewing = b },
                         )
                     }
                 }
+                item { com.catmap.dubai.ui.components.HistoryMore(bookingHistory) }
             }
         }
     }
-    reviewing?.let { b -> ReviewDialog(b) { reviewing = null } }
+    reviewing?.let { b -> ReviewDialog(b, onSaved = { bookingHistory.update(b.id) { it.copy(reviewed = true) } }) { reviewing = null } }
 }
 
 @Composable
@@ -553,7 +557,7 @@ private fun BookingCard(b: Booking, asSitter: Boolean, modifier: Modifier, onSta
 }
 
 @Composable
-private fun ReviewDialog(b: Booking, onDismiss: () -> Unit) {
+private fun ReviewDialog(b: Booking, onSaved: () -> Unit = {}, onDismiss: () -> Unit) {
     val container = LocalContainer.current
     val runner = rememberRunner()
     val me by container.session.profile.collectAsStateWithLifecycle()
@@ -570,7 +574,7 @@ private fun ReviewDialog(b: Booking, onDismiss: () -> Unit) {
         },
         confirmButton = {
             TextButton(enabled = !runner.busy && me != null, onClick = {
-                runner.run(R.string.review_thanks, onSuccess = onDismiss) { container.sitting.review(b, rating, text, me ?: return@run) }
+                runner.run(R.string.review_thanks, onSuccess = { onSaved(); onDismiss() }) { container.sitting.review(b, rating, text, me ?: return@run) }
             }) { Text(stringResource(R.string.submit)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },

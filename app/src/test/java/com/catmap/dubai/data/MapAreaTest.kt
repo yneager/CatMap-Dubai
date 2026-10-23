@@ -27,6 +27,23 @@ class MapAreaTest {
         Cat(id = id, lat = 25.2, lng = 55.27, updatedAt = updatedAt, hidden = hidden, mergedInto = merged, geoCells = listOf("thrr", cell, "${cell}s"))
 
     @Test
+    fun liveWindowsRemoveLimitEvictionsAndHiddenRecordsFromDisplay() {
+        val original = MapArea().withPosts(listOf(post("old", 1), post("kept", 2)), now)
+        val refreshed = original.withPostWindow(cell, listOf(post("kept", 2), post("new", 3)), now + 1)
+        assertEquals(setOf("kept", "new"), refreshed.posts.keys)
+        assertFalse("p:old" in refreshed.seen)
+        assertTrue(refreshed.withPostWindow(cell, emptyList(), now + 2).posts.isEmpty())
+    }
+
+    @Test
+    fun catWindowsDropRemovedAndMergedPinsButPreserveOtherCells() {
+        val elsewhere = cat("other", 1).copy(geoCells = listOf("thrq5"))
+        val original = MapArea().withCats(listOf(cat("gone", 1), cat("merged", 1), elsewhere), now)
+        val refreshed = original.withCatWindow(cell, listOf(cat("merged", 2, merged = "kept")), now + 1)
+        assertEquals(setOf("other"), refreshed.cats.keys)
+    }
+
+    @Test
     fun toLoadSkipsFreshCellsAndCompleteParents() {
         val a = MapArea(cells = mapOf("thrr" to CellLoad(now - hour, complete = true), "thrq5" to CellLoad(now - hour, false)))
         assertEquals(emptyList<String>(), a.toLoad(listOf("thrr3", "thrr3s"), now))

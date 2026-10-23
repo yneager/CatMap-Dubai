@@ -1,6 +1,6 @@
 // The lost-to-reunited workflow on the web (same documents and wording as Android's ui/matches):
 // possible matches on a report, the side-by-side review, linking a sighting, the reunion and the report's history.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   PostFromDoc,
@@ -12,6 +12,9 @@ import {
 import { PostRepository, type PostAvailability } from '../../data/PostRepository';
 import { MatchRepository, visibleMatch } from '../../data/MatchRepository';
 import { AiServer } from '../../data/AiServer';
+import { useForegroundRefresh } from '../../data/ForegroundRefresh';
+import { useHistory, HistoryMore } from '../../data/useHistory';
+import { cachedAvailability } from '../../data/PostAvailabilityCache';
 import { Dubai } from '../../data/Neighborhoods';
 import * as Engine from '../../ai/MatchEngine';
 import { dateTime, distanceText, t } from '../../i18n';
@@ -156,44 +159,77 @@ function MatchCard({ m, viewerIsOwner }: { m: PostMatch; viewerIsOwner: boolean 
  */
 export function usePostMatches(postId: string) {
   const { profile } = useApp();
-  const uid = profile?.uid ?? '';
-  const all = useList(
-    () => (uid ? MatchRepository.mine(uid) : null),
+  const uid = profile?.uid ?? '',
+    foreground = useForegroundRefresh(),
+    scope = `${uid}/${postId}/${foreground}`;
+  const lost = useHistory(
+    () => (uid && postId ? MatchRepository.forPostQuery(uid, postId, 'lostPostId') : null),
     PostMatchFromDoc,
-    'matches-' + uid,
+    'matches-lost-' + uid + '-' + postId,
+    'matches',
   );
-  const [gone, setGone] = useState<Record<string, PostAvailability>>({});
-  const asked = useRef(new Set<string>());
-  const here = all?.filter((m) => m.lostPostId === postId || m.sightingPostId === postId);
-  const scope = uid + '/' + postId + '/';
-  const other = (m: PostMatch) =>
-    scope + (m.lostPostId === postId ? m.sightingPostId : m.lostPostId);
+  const sightings = useHistory(
+    () => (uid && postId ? MatchRepository.forPostQuery(uid, postId, 'sightingPostId') : null),
+    PostMatchFromDoc,
+    'matches-sightings-' + uid + '-' + postId,
+    'matches',
+  );
+  const all =
+    lost.items && sightings.items
+      ? [...new Map([...lost.items, ...sightings.items].map((m) => [m.id, m])).values()]
+      : undefined;
+  const signature = JSON.stringify(
+    all?.map((m) => ({
+      mid: m.id,
+      id: m.lostPostId === postId ? m.sightingPostId : m.lostPostId,
+    })) ?? null,
+  );
+  const [checked, setChecked] = useState<{
+    scope: string;
+    states: Record<string, PostAvailability>;
+  }>({ scope: '', states: {} });
   useEffect(() => {
-    for (const m of here ?? []) {
-      const id = other(m);
-      if (asked.current.has(id)) continue;
-      asked.current.add(id);
-      void PostRepository.availability(id.slice(scope.length)).then((state) =>
-        setGone((g) => ({ ...g, [id]: state })),
-      );
-    }
-    for (const m of here ?? [])
-      if (gone[other(m)] === 'gone' && !asked.current.has(scope + 'drop/' + m.id)) {
-        asked.current.add(scope + 'drop/' + m.id);
-        MatchRepository.drop(m);
-      }
-  });
-  if (!here) return undefined;
-  // Until the first answers arrive, nothing (rather than a list that loses a card a moment later).
-  if (here.length && !here.some((m) => other(m) in gone)) return undefined;
-  return here.filter((m) => gone[other(m)] === 'there');
+    const pairs = JSON.parse(signature) as { mid: string; id: string }[] | null;
+    if (!pairs) return;
+    const controller = new AbortController();
+    void Promise.all(
+      pairs.map(async (pair) => {
+        const state = await cachedAvailability(uid, pair.id, foreground, controller.signal);
+        if (!controller.signal.aborted && state === 'gone') MatchRepository.drop({ id: pair.mid });
+        return [pair.mid, state] as const;
+      }),
+    ).then((states) => {
+      if (!controller.signal.aborted) setChecked({ scope, states: Object.fromEntries(states) });
+    });
+    return () => controller.abort();
+  }, [signature, uid, foreground, scope]);
+  const ready = all && checked.scope === scope && all.every((m) => m.id in checked.states);
+  return {
+    matches: ready ? all.filter((m) => checked.states[m.id] === 'there') : undefined,
+    more: lost.more || sightings.more,
+    busy: !ready || lost.busy || sightings.busy,
+    load: async () => {
+      await Promise.all([
+        lost.more ? lost.load() : undefined,
+        sightings.more ? sightings.load() : undefined,
+      ]);
+    },
+  };
 }
 
 /** "Possible matches" on a lost report or sighting, for the two people involved. */
-export function PostMatchesSection({ post }: { post: Post }) {
+export function PostMatchesSection({
+  post,
+  matches,
+  history,
+}: {
+  post: Post;
+  matches: PostMatch[];
+  history: ReturnType<typeof usePostMatches>;
+}) {
   const { profile } = useApp();
   const uid = profile?.uid ?? '';
-  const all = usePostMatches(post.id);
+  const all = matches;
   const [pcOnline, setPcOnline] = useState<boolean | null>(null),
     [showWeak, setShowWeak] = useState(false);
   const isLost = post.category === 'lost',
@@ -221,14 +257,16 @@ export function PostMatchesSection({ post }: { post: Post }) {
     (m) => m.tier !== 'weak' || m.ownerState !== 'new' || m.reporterState !== 'new',
   );
   const weak = visible.filter((m) => !shown.includes(m));
-  if (!visible.length && !isOwner) return null;
+  if (!visible.length && !isOwner && !history.more && !history.busy) return null;
   const fresh = Date.now() - post.createdAt < 3 * 60000;
   return (
     <section aria-label={t('possible_post_matches')}>
       <SectionHeader>{t('possible_post_matches')}</SectionHeader>
-      {!visible.length && fresh && pcOnline ? (
+      {!visible.length && history.busy ? (
+        <Loading />
+      ) : !visible.length && fresh && pcOnline ? (
         <p role="status">{t(isLost ? 'matches_checking' : 'matches_checking_sighting')}</p>
-      ) : !visible.length ? (
+      ) : !visible.length && !history.more ? (
         <p className="muted">{t(isLost ? 'matches_none_lost' : 'matches_none_sighting')}</p>
       ) : null}
       {visible.some((m) => m.source === 'device') && (
@@ -242,6 +280,7 @@ export function PostMatchesSection({ post }: { post: Post }) {
           {t('show_weak_matches', weak.length)}
         </button>
       )}
+      <HistoryMore history={history} />
     </section>
   );
 }

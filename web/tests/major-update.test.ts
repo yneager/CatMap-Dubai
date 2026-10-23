@@ -271,6 +271,6 @@ it('hosting CSP is explicit and the service worker has no account response cache
   expect(headers).toContainEqual({ key: 'Strict-Transport-Security', value: 'max-age=31536000' });
   expect(headers).toContainEqual({ key: 'Cross-Origin-Opener-Policy', value: 'same-origin' });
   const sw = readFileSync('vite.config.ts', 'utf8');
-  expect(sw).toContain('runtimeCaching: []');
-  expect(sw).not.toMatch(/urlPattern|CacheFirst|NetworkFirst|StaleWhileRevalidate/);
+  expect(sw).toContain('urlPattern: optionalRouteAsset');
+  expect(sw).not.toMatch(/NetworkFirst|StaleWhileRevalidate/);
 });

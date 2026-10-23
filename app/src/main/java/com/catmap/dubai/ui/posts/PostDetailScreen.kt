@@ -174,7 +174,7 @@ private fun PostDetail(nav: NavHostController, post: Post) {
     val runner = rememberRunner()
     val scope = rememberCoroutineScope()
     val me by container.session.profile.collectAsStateWithLifecycle()
-    val uid = container.session.uid.orEmpty()
+    val uid = container.session.uid ?: return
     val isOwner = post.ownerId == uid
     val isMod = isModeratorRole(me?.role)
     val liveUpdates by remember(post.id) { container.posts.updates(post.id) }.collectAsStateWithLifecycle(null)
@@ -194,7 +194,14 @@ private fun PostDetail(nav: NavHostController, post: Post) {
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
     var menu by remember { mutableStateOf(false) }
     val saved = post.id in favorites
-    val myMatches by remember(post.id, uid) { container.matches.forPost(uid, post.id) }.collectAsStateWithLifecycle(emptyList())
+    val matchHistory = com.catmap.dubai.ui.components.rememberLiveHistory<com.catmap.dubai.data.model.PostMatch>(uid + post.id,
+        container.matches.queryForPost(uid, post.id), id = { it.id })
+    val availableMatches by produceState<List<com.catmap.dubai.data.model.PostMatch>?>(null, matchHistory.page.items, uid, post.id) {
+        value = null
+        value = container.matches.filterForPost(uid, post.id, matchHistory.page.items)
+    }
+    val myMatches = availableMatches.orEmpty()
+    val matchPresentation = matchHistory.copy(page = matchHistory.page.copy(loading = matchHistory.page.loading || availableMatches == null))
     val creditedMatch = myMatches.firstOrNull { it.id == post.resolvedMatchId }
     val searchPost = com.catmap.dubai.ai.MatchEngine.isLost(post) || com.catmap.dubai.ai.MatchEngine.isSighting(post)
 
@@ -286,7 +293,7 @@ private fun PostDetail(nav: NavHostController, post: Post) {
             }
 
             // ---- Possible matches (lost report <-> sightings), for the two people involved ----
-            if (searchPost) item { com.catmap.dubai.ui.matches.PostMatchesSection(nav, post) }
+            if (searchPost) item { com.catmap.dubai.ui.matches.PostMatchesSection(nav, post, myMatches, matchPresentation) }
             // Someone who posted a sighting can link it to this lost report themselves.
             if (category == PostCategory.LOST && !isOwner && post.status == PostStatus.OPEN.key) item { LinkSightingButton(nav, post) }
 

@@ -168,16 +168,18 @@ fun AdoptionRequestsScreen(nav: NavHostController) {
     val container = LocalContainer.current
     val uid = container.session.uid ?: return
     var tab by rememberSaveable { mutableStateOf(RequestTab.RECEIVED) }
-    val received by remember(uid) { container.adoption.received(uid) }.collectAsStateWithLifecycle(null)
-    val sent by remember(uid) { container.adoption.sent(uid) }.collectAsStateWithLifecycle(null)
+    val requestHistory = com.catmap.dubai.ui.components.rememberLiveHistory<AdoptionRequest>(uid + tab.name,
+        container.adoption.requestsQuery(uid, tab == RequestTab.SENT), id = { it.id })
     var deciding by remember { mutableStateOf<Pair<AdoptionRequest, Boolean>?>(null) }
     val runner = rememberRunner()
-    val list = if (tab == RequestTab.RECEIVED) received else sent
+    val list = if (requestHistory.page.loaded) requestHistory.page.items else null
     val availability = remember(uid) { mutableStateMapOf<String, PostAvailability>() }
     val cleaned = remember(uid) { HashSet<String>() }
-    LaunchedEffect(received, sent) {
-        for (r in (received.orEmpty() + sent.orEmpty()).distinctBy { it.id }) {
-            val state = availability.getOrPut(r.postId) { container.posts.availability(r.postId) }
+    val foreground by com.catmap.dubai.data.ForegroundRefresh.version.collectAsStateWithLifecycle()
+    LaunchedEffect(list, foreground) {
+        availability.clear()
+        for (r in list.orEmpty()) {
+            val state = availability.getOrPut(r.postId) { container.posts.cachedAvailability(uid, r.postId) }
             if (state == PostAvailability.GONE && cleaned.add(r.id)) {
                 if (deciding?.first?.id == r.id) deciding = null
                 runCatching { container.adoption.delete(r) }.onFailure { android.util.Log.i("CatMap", "Old request cleanup failed", it) }
@@ -200,11 +202,12 @@ fun AdoptionRequestsScreen(nav: NavHostController) {
                             onOpen = { nav.navigate(Routes.post(r.postId)) },
                             onMessage = { nav.navigate(Routes.chatWith(if (tab == RequestTab.RECEIVED) r.requesterId else r.ownerId, r.postId)) },
                             onDecide = { approve -> deciding = r to approve },
-                            onWithdraw = { runner.run(R.string.updated) { container.adoption.withdraw(r) } },
+                            onWithdraw = { runner.run(R.string.updated) { container.adoption.withdraw(r); requestHistory.update(r.id) { it.copy(status = "withdrawn") } } },
                             modifier = Modifier.animateItem(),
                         )
                     }
                 }
+                item { com.catmap.dubai.ui.components.HistoryMore(requestHistory) }
             }
         }
     }
@@ -212,7 +215,7 @@ fun AdoptionRequestsScreen(nav: NavHostController) {
         TextInputDialog(
             stringResource(if (approve) R.string.approve_request else R.string.decline_request),
             stringResource(R.string.note_to_requester), stringResource(if (approve) R.string.approve else R.string.reject),
-            onConfirm = { note -> runner.run(R.string.updated) { container.adoption.decide(request, approve, note) } },
+            onConfirm = { note -> runner.run(R.string.updated) { container.adoption.decide(request, approve, note); requestHistory.update(request.id) { it.copy(status = if (approve) "approved" else "declined", ownerNote = note) } } },
             onDismiss = { deciding = null },
         )
     }

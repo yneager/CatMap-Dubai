@@ -1,6 +1,10 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { readFileSync } from 'node:fs';
+import { optionalRouteAsset } from './src/offlinePolicy';
+const packageVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+  .version as string;
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   if (command === 'build' && mode === 'production' && env.VITE_INSTALL_GATE === 'off')
@@ -16,6 +20,7 @@ export default defineConfig(({ command, mode }) => {
   }
   return {
     define: {
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(packageVersion),
       ...(mode === 'emulators'
         ? { 'import.meta.env.VITE_USE_EMULATORS': JSON.stringify('true') }
         : {}),
@@ -56,10 +61,21 @@ export default defineConfig(({ command, mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,mjs,css,html,png,svg,json,woff,woff2}'],
+          // Core routes and Arabic fonts remain install-offline. Rare tools cache on first visit.
+          globIgnores: ['**/AdminScreens-*.js', '**/PosterScreen-*.js'],
           maximumFileSizeToCacheInBytes: 3000000,
           navigateFallback: '/index.html',
           cleanupOutdatedCaches: true,
-          runtimeCaching: [],
+          runtimeCaching: [
+            {
+              urlPattern: optionalRouteAsset,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'optional-routes-v1',
+                expiration: { maxEntries: 12, maxAgeSeconds: 30 * 86400 },
+              },
+            },
+          ],
           navigateFallbackDenylist: [/^\/(?:__|v1)\//],
         },
       }),

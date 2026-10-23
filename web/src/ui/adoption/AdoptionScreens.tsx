@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useApp, useList, useAction } from '../../state';
+import { useHistory, HistoryMore } from '../../data/useHistory';
+import { useApp, useAction } from '../../state';
 import { AdoptionRepository } from '../../data/AdoptionRepository';
 import { usePager, PagingFooter } from '../../data/usePager';
 import { PostRepository, type PostAvailability } from '../../data/PostRepository';
+import { useForegroundRefresh } from '../../data/ForegroundRefresh';
 import { PostFromDoc, AdoptionRequestFromDoc } from '../../data/model';
 import { t, dateTime } from '../../i18n';
 import {
@@ -27,20 +29,25 @@ export default function AdoptionScreens() {
     [decision, setDecision] = useState<{ id: string; approve: boolean } | null>(null),
     [note, setNote] = useState(''),
     uid = profile?.uid ?? '';
-  const requests = useList(
+  const requestHistory = useHistory(
     () =>
-      uid && path === '/adoption-requests'
-        ? sent
-          ? AdoptionRepository.sent(uid)
-          : AdoptionRepository.received(uid)
-        : null,
+      uid && path === '/adoption-requests' ? AdoptionRepository.requestsQuery(uid, sent) : null,
     AdoptionRequestFromDoc,
     'adoption-requests-' + uid + '-' + sent + '-' + path,
+    'adoptionRequests',
   );
+  const requests = requestHistory.items;
   const availability = useRef(new Map<string, Promise<PostAvailability>>());
+  const foreground = useForegroundRefresh();
+  const availabilityScope = useRef('');
   const cleaned = useRef(new Set<string>());
   const [removed, setRemoved] = useState<Record<string, boolean>>({});
   useEffect(() => {
+    const scope = uid + '/' + foreground;
+    if (availabilityScope.current !== scope) {
+      availability.current.clear();
+      availabilityScope.current = scope;
+    }
     let active = true;
     for (const r of requests ?? []) {
       if (!availability.current.has(r.postId))
@@ -59,7 +66,7 @@ export default function AdoptionScreens() {
     return () => {
       active = false;
     };
-  }, [requests]);
+  }, [requests, uid, foreground]);
   const page = usePager(
     () => (path === '/adoption' ? PostRepository.feedQuery(['adoption']) : null),
     PostFromDoc,
@@ -143,7 +150,10 @@ export default function AdoptionScreens() {
                         className="text-button"
                         disabled={action.busy}
                         onClick={() =>
-                          void action.run(() => AdoptionRepository.withdraw(r), t('updated'))
+                          void action.run(async () => {
+                            await AdoptionRepository.withdraw(r);
+                            requestHistory.patch(r.id, { status: 'withdrawn' });
+                          }, t('updated'))
                         }
                       >
                         {t('withdraw_request')}
@@ -177,6 +187,7 @@ export default function AdoptionScreens() {
         ) : (
           <EmptyState text={t('no_requests')} />
         )}
+        <HistoryMore history={requestHistory} />
       </div>
       {selected && !removed[selected.postId] && decision && (
         <Dialog
@@ -196,6 +207,10 @@ export default function AdoptionScreens() {
             onClick={() =>
               void action.run(async () => {
                 await AdoptionRepository.decide(selected, decision.approve, note);
+                requestHistory.patch(selected.id, {
+                  status: decision.approve ? 'approved' : 'declined',
+                  ownerNote: note,
+                });
                 setDecision(null);
               }, t('updated'))
             }
