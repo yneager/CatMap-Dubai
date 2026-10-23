@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useApp, useList, useAction } from '../../state';
 import { AdoptionRepository } from '../../data/AdoptionRepository';
 import { usePager, PagingFooter } from '../../data/usePager';
-import { PostRepository } from '../../data/PostRepository';
+import { PostRepository, type PostAvailability } from '../../data/PostRepository';
 import { PostFromDoc, AdoptionRequestFromDoc } from '../../data/model';
 import { t, dateTime } from '../../i18n';
 import {
@@ -37,6 +37,24 @@ export default function AdoptionScreens() {
     AdoptionRequestFromDoc,
     'adoption-requests-' + uid + '-' + sent + '-' + path,
   );
+  const availability = useRef(new Map<string, Promise<PostAvailability>>());
+  const cleaned = useRef(new Set<string>());
+  const [removed, setRemoved] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    let active = true;
+    for (const r of requests ?? []) {
+      if (!availability.current.has(r.postId)) availability.current.set(r.postId, PostRepository.availability(r.postId));
+      void availability.current.get(r.postId)!.then((state) => {
+        if (!active || state !== 'gone') return;
+        setRemoved((before) => before[r.postId] ? before : { ...before, [r.postId]: true });
+        if (!cleaned.current.has(r.id)) {
+          cleaned.current.add(r.id);
+          void AdoptionRepository.delete(r).catch((error) => console.info('Old request cleanup failed', error));
+        }
+      });
+    }
+    return () => { active = false; };
+  }, [requests]);
   const page = usePager(
     () => (path === '/adoption' ? PostRepository.feedQuery(['adoption']) : null),
     PostFromDoc,
@@ -112,7 +130,8 @@ export default function AdoptionScreens() {
                 <p dir="auto">{t('about_home_x', r.home)}</p>
                 {r.ownerNote && <p dir="auto">{t('owner_note_x', r.ownerNote)}</p>}
                 <small>{dateTime(r.createdAt)}</small>
-                {r.status === 'pending' && (
+                {removed[r.postId] && <p>{t('adoption_listing_removed')}</p>}
+                {!removed[r.postId] && r.status === 'pending' && (
                   <div className="row">
                     {sent ? (
                       <button
@@ -154,7 +173,7 @@ export default function AdoptionScreens() {
           <EmptyState text={t('no_requests')} />
         )}
       </div>
-      {selected && decision && (
+      {selected && !removed[selected.postId] && decision && (
         <Dialog
           title={t(decision.approve ? 'approve_request' : 'decline_request')}
           onClose={() => setDecision(null)}

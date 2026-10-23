@@ -1,4 +1,4 @@
-import { where, writeBatch, setDoc, updateDoc } from 'firebase/firestore';
+import { where, writeBatch, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { database } from '../firebase';
 import { ref, listQuery, AppException } from './Firestore';
 import {
@@ -58,6 +58,7 @@ export const AdoptionRepository = {
       `post/${request.postId}`,
     );
   },
+  delete: (request: AdoptionRequest) => deleteDoc(ref(`adoptionRequests/${request.id}`)),
   withdraw: (request: AdoptionRequest) =>
     updateDoc(ref(`adoptionRequests/${request.id}`), { status: 'withdrawn' }),
 };

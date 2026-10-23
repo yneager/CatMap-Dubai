@@ -99,4 +99,5 @@ S = [
 ('load_more','Load more','Load more'), # TODO-AR
 ('older_messages','Show older messages','Show older messages'), # TODO-AR
 ('search_more_letters','Type at least 2 letters to search','Type at least 2 letters to search'), # TODO-AR
+('adoption_listing_removed','This listing was removed','This listing was removed'), # TODO-AR
 ]

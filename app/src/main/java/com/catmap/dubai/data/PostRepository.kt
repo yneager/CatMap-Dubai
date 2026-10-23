@@ -233,6 +233,10 @@ class PostRepository(
         val updates = ref(post.id).collection(Col.UPDATES).get().await().documents
         updates.chunked(400).forEach { chunk -> db.runBatch { b -> chunk.forEach { b.delete(it.reference) } }.await() }
         ref(post.id).delete().await()
+        runCatching {
+            db.collection(Col.ADOPTION_REQUESTS).whereEqualTo("ownerId", post.ownerId).whereEqualTo("postId", post.id)
+                .get().await().documents.forEach { it.reference.delete().await() }
+        }.onFailure { android.util.Log.i("CatMap", "Adoption cleanup failed", it) }
         (post.photoIds + updates.mapNotNull { it.getString("photoId") }.filter { it.isNotBlank() })
             .forEach { runCatching { images.delete(it) } }
         // Its match suggestions too (allowed once the post is gone). A moderator can't delete them; the two people's

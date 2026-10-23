@@ -1162,6 +1162,7 @@
     <string name="load_more">Load more</string>
     <string name="older_messages">Show older messages</string>
     <string name="search_more_letters">Type at least 2 letters to search</string>
+    <string name="adoption_listing_removed">This listing was removed</string>
     <string name="tier_strong">تطابق محتمل قوي</string>
     <string name="tier_possible">تطابق محتمل</string>
     <string name="tier_weak">تطابق ضعيف</string>

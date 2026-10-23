@@ -61,6 +61,10 @@ class AdoptionRepository(
         )
     }
 
+    suspend fun delete(request: AdoptionRequest) {
+        requests.document(request.id).delete().await()
+    }
+
     suspend fun withdraw(request: AdoptionRequest) {
         requests.document(request.id).update("status", RequestStatus.WITHDRAWN.key).await()
     }

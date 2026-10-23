@@ -9,6 +9,7 @@ import {
   deleteDoc,
   deleteField,
   getDoc,
+  getDocs,
   getDocFromServer,
 } from 'firebase/firestore';
 import { database } from '../firebase';
@@ -260,6 +261,9 @@ export const PostRepository = {
     const updates = await list(listQuery(`posts/${p.id}/updates`), PostUpdateFromDoc);
     await deleteDocuments(updates.map((u) => `posts/${p.id}/updates/${u.id}`));
     await deleteDoc(ref(`posts/${p.id}`));
+    await getDocs(listQuery('adoptionRequests', where('ownerId', '==', p.ownerId), where('postId', '==', p.id)))
+      .then((snap) => Promise.allSettled(snap.docs.map((d) => deleteDoc(d.ref))))
+      .catch((error) => console.info('Adoption cleanup failed', error));
     await Promise.allSettled(
       [...p.photoIds, ...updates.map((u) => u.photoId).filter(Boolean)].map(ImageRepository.delete),
     );

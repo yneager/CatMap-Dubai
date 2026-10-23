@@ -40,6 +40,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateMapOf
+import com.catmap.dubai.data.PostAvailability
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -170,6 +173,17 @@ fun AdoptionRequestsScreen(nav: NavHostController) {
     var deciding by remember { mutableStateOf<Pair<AdoptionRequest, Boolean>?>(null) }
     val runner = rememberRunner()
     val list = if (tab == RequestTab.RECEIVED) received else sent
+    val availability = remember(uid) { mutableStateMapOf<String, PostAvailability>() }
+    val cleaned = remember(uid) { HashSet<String>() }
+    LaunchedEffect(received, sent) {
+        for (r in (received.orEmpty() + sent.orEmpty()).distinctBy { it.id }) {
+            val state = availability.getOrPut(r.postId) { container.posts.availability(r.postId) }
+            if (state == PostAvailability.GONE && cleaned.add(r.id)) {
+                if (deciding?.first?.id == r.id) deciding = null
+                runCatching { container.adoption.delete(r) }.onFailure { android.util.Log.i("CatMap", "Old request cleanup failed", it) }
+            }
+        }
+    }
 
     Scaffold(topBar = { AppTopBar(stringResource(R.string.adoption_requests), onBack = { nav.popBackStack() }) }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
@@ -182,7 +196,7 @@ fun AdoptionRequestsScreen(nav: NavHostController) {
                     list.isEmpty() -> item { EmptyState(Icons.Outlined.Inbox, stringResource(R.string.no_requests)) }
                     else -> items(list, key = { it.id }, contentType = { "AdoptionScreens" }) { r ->
                         RequestCard(
-                            r, incoming = tab == RequestTab.RECEIVED,
+                            r, incoming = tab == RequestTab.RECEIVED, removed = availability[r.postId] == PostAvailability.GONE,
                             onOpen = { nav.navigate(Routes.post(r.postId)) },
                             onMessage = { nav.navigate(Routes.chatWith(if (tab == RequestTab.RECEIVED) r.requesterId else r.ownerId, r.postId)) },
                             onDecide = { approve -> deciding = r to approve },
@@ -206,7 +220,7 @@ fun AdoptionRequestsScreen(nav: NavHostController) {
 
 @Composable
 private fun RequestCard(
-    r: AdoptionRequest, incoming: Boolean, onOpen: () -> Unit, onMessage: () -> Unit,
+    r: AdoptionRequest, incoming: Boolean, removed: Boolean, onOpen: () -> Unit, onMessage: () -> Unit,
     onDecide: (Boolean) -> Unit, onWithdraw: () -> Unit, modifier: Modifier = Modifier,
 ) {
     val status = labeledFrom(r.status, RequestStatus.PENDING)
@@ -220,7 +234,7 @@ private fun RequestCard(
                 Column(Modifier.weight(1f)) {
                     Text(r.postName.ifBlank { stringResource(R.string.adoption) }, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        (if (incoming) "@" + r.requesterName + " · " else "") + relativeTime(r.createdAt),
+                        (if (incoming) "@" + r.requesterName + " Â· " else "") + relativeTime(r.createdAt),
                         style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -229,13 +243,14 @@ private fun RequestCard(
             if (r.message.isNotBlank()) Text(r.message, style = MaterialTheme.typography.bodyMedium)
             if (r.home.isNotBlank()) Text(stringResource(R.string.about_home_x, r.home), style = MaterialTheme.typography.bodySmall)
             if (r.ownerNote.isNotBlank()) Text(stringResource(R.string.owner_note_x, r.ownerNote), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            if (removed) Text(stringResource(R.string.adoption_listing_removed))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onMessage) { Text(stringResource(R.string.message)) }
-                if (incoming && status == RequestStatus.PENDING) {
+                if (!removed && incoming && status == RequestStatus.PENDING) {
                     FilledTonalButton(onClick = { onDecide(true) }) { Text(stringResource(R.string.approve)) }
                     TextButton(onClick = { onDecide(false) }) { Text(stringResource(R.string.reject)) }
                 }
-                if (!incoming && status == RequestStatus.PENDING) TextButton(onClick = onWithdraw) { Text(stringResource(R.string.withdraw_request)) }
+                if (!removed && !incoming && status == RequestStatus.PENDING) TextButton(onClick = onWithdraw) { Text(stringResource(R.string.withdraw_request)) }
             }
         }
     }
