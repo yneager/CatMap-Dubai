@@ -385,6 +385,11 @@ function BookingEditor() {
     </>
   );
 }
+function RemovedSitterNote({ uid }: { uid: string }) {
+  const sitter = useDoc(() => SittingRepository.sitterFlow(uid), SitterProfileFromDoc, 'booked-sitter-' + uid);
+  return sitter === null ? <p>{t('sitter_no_longer_listed')}</p> : null;
+}
+
 function Bookings() {
   const { profile } = useApp(),
     location = useLocation(),
@@ -421,6 +426,7 @@ function Bookings() {
               <article className="card" key={b.id}>
                 <h3>@{sitter ? b.ownerName : b.sitterName}</h3>
                 <StatusPill value={b.status} group="BookingStatus" />
+                {!sitter && <RemovedSitterNote uid={b.sitterId} />}
                 <p>
                   {dateTime(b.startAt)} → {dateTime(b.endAt)}
                 </p>

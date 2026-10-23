@@ -1163,6 +1163,7 @@
     <string name="older_messages">Show older messages</string>
     <string name="search_more_letters">Type at least 2 letters to search</string>
     <string name="adoption_listing_removed">This listing was removed</string>
+    <string name="sitter_no_longer_listed">This sitter is no longer listed</string>
     <string name="tier_strong">Strong possible match</string>
     <string name="tier_possible">Possible match</string>
     <string name="tier_weak">Weak match</string>

@@ -515,12 +515,16 @@ fun BookingsScreen(nav: NavHostController, startAsSitter: Boolean = false) {
 @Composable
 private fun BookingCard(b: Booking, asSitter: Boolean, modifier: Modifier, onStatus: (BookingStatus) -> Unit, onMessage: () -> Unit, onReview: () -> Unit) {
     val status = labeledFrom(b.status, BookingStatus.REQUESTED)
+    val container = LocalContainer.current
+    val sitter by remember(b.sitterId) { container.sitting.sitterFlow(b.sitterId).loaded() }.collectAsStateWithLifecycle(null)
+    val removed = !asSitter && sitter != null && sitter?.value == null
     Card(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("@" + (if (asSitter) b.ownerName else b.sitterName).ifBlank {stringResource(R.string.deleted_member)}, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 StatusPill(stringResource(status.label), Color(status.color))
             }
+            if (removed) Text(stringResource(R.string.sitter_no_longer_listed))
             Text(stringResource(R.string.date_range, dateOnly(b.startAt), dateOnly(b.endAt)), style = MaterialTheme.typography.bodyMedium)
             Text(
                 animalNames(b.petTypes) + "  ×" + b.petCount,
