@@ -41,6 +41,13 @@ class StationRepository(
     }
 
     suspend fun delete(station: FeedingStation, admin: UserProfile) {
+        runCatching {
+            maintenance.whereEqualTo("stationId", station.id).get().await().safeObjects<MaintenanceReport>()
+                .filter { it.status in listOf(MaintenanceStatus.OPEN.key, MaintenanceStatus.IN_PROGRESS.key) }.forEach { report ->
+                    runCatching { updateMaintenance(report, MaintenanceStatus.RESOLVED.key, "station deleted", admin) }
+                        .onFailure { android.util.Log.i("CatMap", "Station report cleanup failed", it) }
+                }
+        }.onFailure { android.util.Log.i("CatMap", "Station report lookup failed", it) }
         stations.document(station.id).delete().await()
         moderation.log(admin, "station_deleted", "station", station.id, station.name, "")
     }

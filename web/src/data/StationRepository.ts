@@ -8,12 +8,13 @@ import {
   increment,
 } from 'firebase/firestore';
 import { database } from '../firebase';
-import { col, ref, listQuery } from './Firestore';
+import { col, ref, listQuery, list } from './Firestore';
 import {
   FeedingStationToDoc,
   FeedingStationDefaults,
   StationCheckinDefaults,
   StationCheckinToDoc,
+  MaintenanceReportFromDoc,
   MaintenanceReportDefaults,
   MaintenanceReportToDoc,
   type FeedingStation,
@@ -49,6 +50,11 @@ export const StationRepository = {
     return target.id;
   },
   delete: async (s: FeedingStation, me: UserProfile) => {
+    const reports = await list(listQuery('maintenance', where('stationId', '==', s.id)), MaintenanceReportFromDoc)
+      .catch((error) => { console.info('Station report lookup failed', error); return []; });
+    await Promise.allSettled(reports.filter((r) => ['open', 'in_progress'].includes(r.status)).map((r) =>
+      StationRepository.updateMaintenance(r, 'resolved', 'station deleted', me)
+        .catch((error) => console.info('Station report cleanup failed', error))));
     await deleteDoc(ref(`stations/${s.id}`));
     await moderation.log(me, 'station_deleted', 'station', s.id, s.name, '');
   },
