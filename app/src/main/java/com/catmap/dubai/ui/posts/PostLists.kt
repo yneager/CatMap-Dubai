@@ -64,6 +64,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.catmap.dubai.data.PostAvailability
 import com.catmap.dubai.R
 import com.catmap.dubai.data.AppSettings
 import com.catmap.dubai.data.Dubai
@@ -214,6 +215,15 @@ fun FavoritesScreen(nav: NavHostController) {
         if (saved != null) value = runCatching { container.posts.byIds(ids) }.getOrDefault(emptyList())
     }
     val shown = if (saved == null) null else posts?.let { list -> ids.mapNotNull { id -> list.firstOrNull { it.id == id } } }
+    val checked = remember(uid) { HashSet<String>() }
+    LaunchedEffect(shown, ids) {
+        if (shown != null) for (id in ids.filterNot { id -> shown.any { it.id == id } }) {
+            if (checked.add(id) && container.posts.availability(id) == PostAvailability.GONE) {
+                runCatching { container.favorites.set(uid, id, false) }
+                    .onFailure { android.util.Log.i("CatMap", "Favorite cleanup failed", it) }
+            }
+        }
+    }
 
     Scaffold(topBar = { AppTopBar(stringResource(R.string.favorites), onBack = { nav.popBackStack() }) }) { padding ->
         when {

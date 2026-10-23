@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAsyncList } from '../../data/useAsyncList';
 import { useLocation } from 'react-router-dom';
 import { useApp, useList, useDoc, useAction } from '../../state';
 import { PostFromDoc, AreaFollowFromDoc } from '../../data/model';
+import { FavoritesRepository } from '../../data/FavoritesRepository';
 import { PostRepository } from '../../data/PostRepository';
 import { t } from '../../i18n';
 import { AppTopBar, PostCard, Loading, EmptyState, Switch } from '../components/Components';
@@ -24,6 +25,18 @@ export default function PostLists() {
     () => (path === '/favorites' ? PostRepository.byIds(favoriteIds) : Promise.resolve([])),
     'favorites-' + uid + '-' + path + '-' + favoriteIds.join(','),
   );
+  const checked = useRef(new Set<string>());
+  useEffect(() => {
+    if (path !== '/favorites' || !saved || !uid) return;
+    for (const id of favoriteIds.filter((id) => !saved.some((post) => post.id === id))) {
+      const key = uid + '/' + id;
+      if (checked.current.has(key)) continue;
+      checked.current.add(key);
+      void PostRepository.availability(id).then(async (state) => {
+        if (state === 'gone') await FavoritesRepository.set(uid, id, false);
+      }).catch((error) => console.info('Favorite cleanup failed', error));
+    }
+  }, [path, saved, favoriteIds, uid]);
   const centre = useDoc(
     () => (uid && path === '/area-alerts' ? PostRepository.areaCentre(uid) : null),
     AreaFollowFromDoc,
