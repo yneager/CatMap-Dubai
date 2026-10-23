@@ -349,7 +349,7 @@ fun ChatScreen(nav: NavHostController, chatId: String, sharePostId: String?) {
                             Text(dateTime(m.createdAt), Modifier.fillMaxWidth().padding(vertical = 6.dp), style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         }
-                        Bubble(m, mine, onPost = { nav.navigate(Routes.post(it)) }, onMatch = { nav.navigate(Routes.match(it)) }, onPhoto = { nav.navigate(Routes.photo(it)) }, onDelete = { runner.run { container.chats.deleteMessage(chatId, m); older = older.filterNot { it.id == m.id } } })
+                        Bubble(m, mine, onPost = { nav.navigate(Routes.post(it)) }, onMatch = { nav.navigate(Routes.match(it)) }, onPhoto = { nav.navigate(Routes.photo(it)) }, onDelete = { runner.run { container.chats.deleteMessage(chatId, m, uid); older = older.filterNot { it.id == m.id } } })
                     }
                 }
                 // With the list reversed, the last item sits at the top: older messages load above.

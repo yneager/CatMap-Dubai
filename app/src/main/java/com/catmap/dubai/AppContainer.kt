@@ -116,7 +116,7 @@ class AppContainer(context: Context) {
     val map by lazy { com.catmap.dubai.data.MapRepository(db, appContext, scope) }
     val adoption by lazy { AdoptionRepository(db, notifications) }
     val sitting by lazy { SittingRepository(db, notifications, moderation) }
-    val chats by lazy { ChatRepository(db, users, notifications) }
+    val chats by lazy { ChatRepository(db, users, notifications, images) }
     val favorites by lazy { FavoritesRepository(db) }
     val admin by lazy { AdminRepository(db, moderation, notifications) }
     val videos by lazy { VideoRepository(appContext) }

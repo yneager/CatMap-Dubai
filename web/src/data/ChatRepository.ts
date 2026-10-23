@@ -8,13 +8,20 @@ import {
   deleteDoc,
   writeBatch,
   increment,
+  getDocFromServer,
+  getDocsFromServer,
+  orderBy as orderMessages,
+  limit,
+  runTransaction,
 } from 'firebase/firestore';
+import { ImageRepository } from './ImageRepository';
 import { database } from '../firebase';
 import { col, ref, read, listQuery, AppException } from './Firestore';
 import {
   ChatDefaults,
   ChatFromDoc,
   ChatToDoc,
+  MessageFromDoc,
   MessageDefaults,
   MessageToDoc,
   type Chat,
@@ -96,7 +103,24 @@ export const ChatRepository = {
     await updateDoc(ref(`chats/${id}`), { [`unread.${uid}`]: 0 }).catch(() => {});
     await notifications.dismiss(uid, `msg_${id}`);
   },
-  deleteMessage: (id: string, m: Message) => deleteDoc(ref(`chats/${id}/messages/${m.id}`)),
+  deleteMessage: async (id: string, m: Message, uid: string) => {
+    const chatRef = ref(`chats/${id}`);
+    const before = await getDocFromServer(chatRef).catch(() => null);
+    const newest = await getDocsFromServer(listQuery(`chats/${id}/messages`, orderMessages('createdAt', 'desc'), limit(2)))
+      .then((snap) => snap.docs.map((d) => MessageFromDoc(d.id, d.data()))).catch(() => []);
+    await deleteDoc(ref(`chats/${id}/messages/${m.id}`));
+    if (m.imageId) await ImageRepository.delete(m.imageId).catch((error) => console.info('Message image cleanup failed', error));
+    if (before?.data()?.lastSender !== uid || newest[0]?.id !== m.id) return;
+    await runTransaction(database(), async (tx) => {
+      const fresh = await tx.get(chatRef), data = fresh.data(), old = before.data();
+      if (data?.lastAt === old?.lastAt && data?.lastSender === uid && data?.lastText === old?.lastText) {
+        const previous = newest[1];
+        const text = !previous ? '' : previous.text ? previous.text.slice(0, 120) : previous.imageId ? 'Photo'
+          : previous.matchId ? ('Possible match: ' + previous.postTitle).trim() : 'Post: ' + previous.postTitle;
+        tx.update(chatRef, { lastText: text });
+      }
+    }).catch((error) => console.info('Message preview cleanup failed', error));
+  },
   blocked: (uid: string) => listQuery(`users/${uid}/blocked`),
   block: (me: string, other: string) =>
     setDoc(ref(`users/${me}/blocked/${other}`), { at: Date.now() }),

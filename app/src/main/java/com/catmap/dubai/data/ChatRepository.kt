@@ -7,6 +7,7 @@ import com.catmap.dubai.data.model.Post
 import com.catmap.dubai.data.model.UserProfile
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -17,6 +18,7 @@ class ChatRepository(
     private val db: FirebaseFirestore,
     private val users: UserRepository,
     private val notifications: NotificationRepository,
+    private val images: ImageRepository,
 ) {
     private val chats = db.collection(Col.CHATS)
 
@@ -124,8 +126,34 @@ class ChatRepository(
         notifications.dismiss(uid, "msg_$chatId")
     }
 
-    suspend fun deleteMessage(chatId: String, message: Message) {
-        chats.document(chatId).collection(Col.MESSAGES).document(message.id).delete().await()
+    suspend fun deleteMessage(chatId: String, message: Message, uid: String) {
+        val chatRef = chats.document(chatId)
+        val messages = chatRef.collection(Col.MESSAGES)
+        val before = runCatching { chatRef.get(Source.SERVER).await() }.getOrNull()
+        val newest = runCatching {
+            messages.orderBy("createdAt", Query.Direction.DESCENDING).limit(2).get(Source.SERVER).await().safeObjects<Message>()
+        }.getOrDefault(emptyList())
+        messages.document(message.id).delete().await()
+        if (message.imageId.isNotBlank()) runCatching { images.delete(message.imageId) }
+            .onFailure { android.util.Log.i("CatMap", "Message image cleanup failed", it) }
+        if (before?.getString("lastSender") != uid || newest.firstOrNull()?.id != message.id) return
+        // Updating only the preview satisfies chatUpdateOk; keep unread counts and ordering intact.
+        runCatching {
+            db.runTransaction { tx ->
+                val fresh = tx.get(chatRef)
+                if (fresh.getLong("lastAt") == before.getLong("lastAt") && fresh.getString("lastSender") == uid &&
+                    fresh.getString("lastText") == before.getString("lastText")) {
+                    tx.update(chatRef, "lastText", newest.getOrNull(1)?.let(::preview).orEmpty())
+                }
+            }.await()
+        }.onFailure { android.util.Log.i("CatMap", "Message preview cleanup failed", it) }
+    }
+
+    private fun preview(message: Message): String = when {
+        message.text.isNotBlank() -> message.text.take(120)
+        message.imageId.isNotBlank() -> "Photo"
+        message.matchId.isNotBlank() -> "Possible match: ${message.postTitle}".trim()
+        else -> "Post: ${message.postTitle}"
     }
 
     // ---------- blocking ----------
