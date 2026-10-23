@@ -118,6 +118,7 @@ function MatchCard({ m, viewerIsOwner }: { m: PostMatch; viewerIsOwner: boolean 
       ' — ' +
       t('match_lost_near', Dubai.nameOf(lost?.neighborhood ?? '') || '-');
   const answer = answerLine(m, viewerIsOwner);
+  if (lost === null || sighting === null) return null;
   return (
     <Link className="card match-card" to={'/match/' + m.id}>
       <SideBySide lost={lost} sighting={sighting} />
@@ -155,17 +156,18 @@ export function usePostMatches(postId: string) {
   const [gone, setGone] = useState<Record<string, PostAvailability>>({});
   const asked = useRef(new Set<string>());
   const here = all?.filter((m) => m.lostPostId === postId || m.sightingPostId === postId);
-  const other = (m: PostMatch) => (m.lostPostId === postId ? m.sightingPostId : m.lostPostId);
+  const scope = uid + '/' + postId + '/';
+  const other = (m: PostMatch) => scope + (m.lostPostId === postId ? m.sightingPostId : m.lostPostId);
   useEffect(() => {
     for (const m of here ?? []) {
       const id = other(m);
       if (asked.current.has(id)) continue;
       asked.current.add(id);
-      void PostRepository.availability(id).then((state) => setGone((g) => ({ ...g, [id]: state })));
+      void PostRepository.availability(id.slice(scope.length)).then((state) => setGone((g) => ({ ...g, [id]: state })));
     }
     for (const m of here ?? [])
-      if (gone[other(m)] === 'gone' && !asked.current.has(m.id)) {
-        asked.current.add(m.id);
+      if (gone[other(m)] === 'gone' && !asked.current.has(scope + 'drop/' + m.id)) {
+        asked.current.add(scope + 'drop/' + m.id);
         MatchRepository.drop(m);
       }
   });
@@ -451,14 +453,18 @@ export default function MatchReviewScreen() {
   const lost = usePost(m?.lostPostId ?? ''),
     sighting = usePost(m?.sightingPostId ?? '');
   // Opened from an old alert after one of the two posts was deleted: the pair is gone too.
-  const [orphaned, setOrphaned] = useState<boolean | null>(null);
+  const [orphaned, setOrphaned] = useState<{ id: string; unavailable: boolean } | null>(null);
   const matchId = m?.id;
   useEffect(() => {
-    if (m) void MatchRepository.orphaned(m).then(setOrphaned);
+    let active = true;
+    if (m) void MatchRepository.orphaned(m).then((unavailable) => {
+      if (active) setOrphaned({ id: m.id, unavailable });
+    });
+    return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per match
   }, [matchId]);
-  if (m === undefined || (m && orphaned === null)) return <Loading />;
-  if (!m || orphaned)
+  if (m === undefined || (m && (orphaned?.id !== m.id || lost === undefined || sighting === undefined))) return <Loading />;
+  if (!m || orphaned?.unavailable || lost === null || sighting === null)
     return (
       <>
         <AppTopBar title="" />

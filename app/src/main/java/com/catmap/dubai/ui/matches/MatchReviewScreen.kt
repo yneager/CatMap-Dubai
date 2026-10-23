@@ -92,8 +92,17 @@ private fun MatchReview(nav: NavHostController, match: PostMatch) {
     val runner = rememberRunner()
     val me by container.session.profile.collectAsStateWithLifecycle()
     val uid = container.session.uid.orEmpty()
-    val lost by remember(match.lostPostId) { container.posts.postFlow(match.lostPostId) }.collectAsStateWithLifecycle(null)
-    val sighting by remember(match.sightingPostId) { container.posts.postFlow(match.sightingPostId) }.collectAsStateWithLifecycle(null)
+    val lostState by remember(match.lostPostId) { container.posts.postFlow(match.lostPostId).loaded() }.collectAsStateWithLifecycle(null)
+    val sightingState by remember(match.sightingPostId) { container.posts.postFlow(match.sightingPostId).loaded() }.collectAsStateWithLifecycle(null)
+    val lost = lostState?.value
+    val sighting = sightingState?.value
+    if (lostState == null || sightingState == null) { LoadingBox(); return }
+    if (lost == null || sighting == null) {
+        Scaffold(topBar = { AppTopBar("", onBack = { nav.popBackStack() }) }) { padding ->
+            EmptyState(Icons.Outlined.SearchOff, stringResource(R.string.match_unavailable), Modifier.padding(padding))
+        }
+        return
+    }
     val found = lost?.status == PostStatus.REUNITED.key && lost?.resolvedMatchId != match.id
     val isOwner = uid == match.lostOwnerId
     val isReporter = uid == match.sightingOwnerId

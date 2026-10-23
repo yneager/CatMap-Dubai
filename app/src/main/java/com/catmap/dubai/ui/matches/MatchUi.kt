@@ -235,6 +235,7 @@ fun PostMatchesSection(nav: NavHostController, post: Post) {
 fun MatchCard(match: PostMatch, viewerIsOwner: Boolean, onClick: () -> Unit) {
     val lost = rememberPost(match.lostPostId)
     val sighting = rememberPost(match.sightingPostId)
+    if (lost == null || sighting == null) return
     val found = lost?.status == PostStatus.REUNITED.key && lost.resolvedMatchId != match.id
     val other = if (viewerIsOwner) sighting else lost
     val headline = if (viewerIsOwner) stringResource(R.string.match_seen_near, Dubai.nameOf(sighting?.neighborhood).ifBlank { "-" })
