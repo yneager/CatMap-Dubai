@@ -5,8 +5,21 @@ export function blockAccountWrites() {
 }
 function open() {
   return (connection ??= new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open('catmap-device', 1);
-    request.onupgradeneeded = () => request.result.createObjectStore('values');
+    const request = indexedDB.open('catmap-device', 2);
+    request.onupgradeneeded = (event) => {
+      const store =
+        event.oldVersion < 1
+          ? request.result.createObjectStore('values')
+          : request.transaction!.objectStore('values');
+      // Remove legacy photo bytes on upgrade; their original audience was not recorded.
+      const cursor = store.openCursor();
+      cursor.onsuccess = () => {
+        const row = cursor.result;
+        if (!row) return;
+        if (typeof row.key === 'string' && row.key.startsWith('image_')) row.delete();
+        row.continue();
+      };
+    };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   }));

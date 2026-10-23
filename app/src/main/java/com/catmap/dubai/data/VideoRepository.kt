@@ -7,6 +7,7 @@ import com.catmap.dubai.BuildConfig
 import com.catmap.dubai.R
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
@@ -34,6 +35,8 @@ class VideoRepository(private val context: Context) {
         val type = context.contentResolver.getType(uri) ?: "video/mp4"
         if (!type.startsWith("video/")) throw AppException(R.string.err_video_type)
         val path = "videos/$uid/${UUID.randomUUID()}"
+        FirebaseFirestore.getInstance().collection("videoUploads").document(path.substringAfterLast('/'))
+            .set(mapOf("ownerId" to uid, "path" to path, "status" to "staged", "expiresAt" to now() + 7L * 86_400_000)).await()
         storage.reference.child(path).putFile(uri, StorageMetadata.Builder().setContentType(type).build()).await()
         return path
     }
@@ -44,6 +47,26 @@ class VideoRepository(private val context: Context) {
     suspend fun delete(path: String) {
         if (enabled && path.isNotBlank()) runCatching { storage.reference.child(path).delete().await() }
             .onFailure { android.util.Log.i("CatMap", "Video cleanup failed", it) }
+    }
+
+    suspend fun deleteRequired(path: String) {
+        if (path.isBlank()) return
+        if (!enabled) throw AppException(R.string.err_video_unavailable)
+        try { storage.reference.child(path).delete().await() }
+        catch (error: com.google.firebase.storage.StorageException) {
+            if (error.errorCode != com.google.firebase.storage.StorageException.ERROR_OBJECT_NOT_FOUND) throw error
+        }
+    }
+    suspend fun retain(path: String) {
+        if (path.isBlank()) return
+        val db = FirebaseFirestore.getInstance()
+        db.runTransaction { tx ->
+            val lease = tx.get(db.collection("videoUploads").document(path.substringAfterLast('/')))
+            if (lease.exists()) {
+                check(lease.getString("status") in listOf("staged", "linked")) { "Staged video expired; select it again" }
+                tx.update(lease.reference, "expiresAt", now() + 7L * 86_400_000)
+            }
+        }.await()
     }
 
     companion object {

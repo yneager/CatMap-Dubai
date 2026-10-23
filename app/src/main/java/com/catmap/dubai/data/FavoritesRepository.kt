@@ -17,7 +17,6 @@ class FavoritesRepository(private val db: FirebaseFirestore) {
     fun ids(uid: String): Flow<Set<String>> = favorites(uid).map { l -> l.map { it.id }.toSet() }
 
     suspend fun set(uid: String, postId: String, saved: Boolean) {
-        if (saved) col(uid).document(postId).set(Favorite(postId = postId, savedAt = now())).await()
-        else col(uid).document(postId).delete().await()
+        PrivateSlots(db).set(uid, Col.FAVORITES, postId, if (saved) mapOf("postId" to postId, "savedAt" to now()) else null)
     }
 }

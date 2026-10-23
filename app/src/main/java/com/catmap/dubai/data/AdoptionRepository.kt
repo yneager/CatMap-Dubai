@@ -7,6 +7,7 @@ import com.catmap.dubai.data.model.Post
 import com.catmap.dubai.data.model.RequestStatus
 import com.catmap.dubai.data.model.UserProfile
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
@@ -19,11 +20,13 @@ class AdoptionRepository(
 
     fun requestId(postId: String, uid: String) = "${postId}_$uid"
 
+    fun requestsQuery(uid: String, sent: Boolean): Query = requests.whereEqualTo(if (sent) "requesterId" else "ownerId", uid).orderBy("createdAt", Query.Direction.DESCENDING)
+
     fun received(uid: String): Flow<List<AdoptionRequest>> =
-        requests.whereEqualTo("ownerId", uid).listFlow<AdoptionRequest>().map { l -> l.sortedByDescending { it.createdAt } }
+        requestsQuery(uid, false).limit(50).listFlow<AdoptionRequest>().map { l -> l.sortedByDescending { it.createdAt } }
 
     fun sent(uid: String): Flow<List<AdoptionRequest>> =
-        requests.whereEqualTo("requesterId", uid).listFlow<AdoptionRequest>().map { l -> l.sortedByDescending { it.createdAt } }
+        requestsQuery(uid, true).limit(50).listFlow<AdoptionRequest>().map { l -> l.sortedByDescending { it.createdAt } }
 
     fun myRequestFor(postId: String, uid: String): Flow<AdoptionRequest?> = requests.document(requestId(postId, uid)).objectFlow()
 
@@ -37,7 +40,7 @@ class AdoptionRepository(
             ),
         ).await()
         notifications.send(
-            listOf(post.ownerId), NotifType.ADOPTION_REQUEST, mapOf("user" to me.username, "name" to post.name), "adoption-requests",
+            listOf(post.ownerId), NotifType.ADOPTION_REQUEST, mapOf("user" to me.username, "name" to post.name), "adoption-requests", sourceId = requestId(post.id, me.uid),
         )
     }
 
@@ -57,7 +60,7 @@ class AdoptionRepository(
         }.await()
         notifications.send(
             listOf(request.requesterId), NotifType.ADOPTION_DECISION,
-            mapOf("name" to request.postName, "decision" to if (approve) "approved" else "declined"), "post/${request.postId}",
+            mapOf("name" to request.postName, "decision" to if (approve) "approved" else "declined"), "post/${request.postId}", sourceId = request.id,
         )
     }
 

@@ -21,7 +21,8 @@ import kotlinx.coroutines.sync.withLock
  * Cloud Storage, and access is governed by the same security rules as everything else.
  */
 class ImageRepository(context: Context, private val db: FirebaseFirestore?, private val byteSource:(suspend (String)->ByteArray?)?=null) {
-    private val disk = ImageDiskCache(File(context.cacheDir, "images"))
+    private val disk = ImageDiskCache(File(context.cacheDir, "images-v2"))
+    init { File(context.cacheDir, "images").deleteRecursively() } // Withdraw pre-audience disk copies on upgrade.
     private val loads = Array(32) { Mutex() }
     private val memory = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 1024 / 8).coerceAtMost(64 * 1024).toInt()) {
         override fun sizeOf(key: String, value: Bitmap) = (value.byteCount / 1024).coerceAtLeast(1)
@@ -30,17 +31,21 @@ class ImageRepository(context: Context, private val db: FirebaseFirestore?, priv
     private fun docId(id: String, thumb: Boolean) = if (thumb) "${id}_t" else id
 
     private fun memoryKey(id:String,thumb:Boolean,target:Int)=docId(id,thumb)+if(target>0) "@$target" else ""
-    fun cached(id: String, thumb: Boolean, target:Int=0): Bitmap? = if (id.isBlank()) null else memory.get(memoryKey(id,thumb,target))
+    fun cached(id: String, thumb: Boolean, target:Int=0): Bitmap? = if (id.isBlank() || id.startsWith("c_")) null else memory.get(memoryKey(id,thumb,target))
 
     suspend fun bytes(id: String, thumb: Boolean = false): ByteArray? = withContext(Dispatchers.IO) {
         if (id.isBlank()) return@withContext null
         val key = docId(id, thumb)
-        disk.read(key)?.let { return@withContext it }
-        val data = try { byteSource?.let { it(key) } ?: requireNotNull(db).collection(Col.IMAGES).document(key).get().await().getBlob("data")?.toBytes() }
+        val private = id.startsWith("c_")
+        if (!private) disk.read(key)?.let { return@withContext it }
+        val data = try { byteSource?.let { it(key) } ?: if(private) PrivateImageTransport(requireNotNull(db)).bytes(key) else {
+            val snap=requireNotNull(db).collection(Col.IMAGES).document(key).get().await()
+            if(snap.getString("audience")=="community" || snap.getString("ownerId")==com.google.firebase.auth.FirebaseAuth.getInstance(db.app).currentUser?.uid) snap.getBlob("data")?.toBytes() else null
+        } }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { null }
             ?: if (thumb) return@withContext bytes(id, thumb = false) else return@withContext null
-        data.also { disk.write(key, it) }
+        data.also { if (!private) disk.write(key, it) }
     }
 
     suspend fun bitmap(id: String, thumb: Boolean, target:Int=0): Bitmap? {
@@ -58,28 +63,39 @@ class ImageRepository(context: Context, private val db: FirebaseFirestore?, priv
                     while(maxOf(bounds.outWidth,bounds.outHeight)/(sample*2)>=target) sample*=2
                     options.inSampleSize=sample
                 }
-                BitmapFactory.decodeByteArray(data, 0, data.size,options)?.also { memory.put(memoryKey(id,thumb,target), it) }
+                BitmapFactory.decodeByteArray(data, 0, data.size,options)?.also { if (!id.startsWith("c_")) memory.put(memoryKey(id,thumb,target), it) }
             }
         }
     }
 
     /** Uploads one photo and returns its id. */
-    suspend fun upload(ownerId: String, photo: ProcessedPhoto): String {
+    suspend fun upload(ownerId: String, photo: ProcessedPhoto, chatId: String = ""): String {
         val db=requireNotNull(db)
-        val ref = db.collection(Col.IMAGES).document()
+        val ref = db.collection(Col.IMAGES).document((if (chatId.isNotEmpty()) "c_" else "") + db.collection(Col.IMAGES).document().id)
+        val audience = if (chatId.isNotEmpty()) "chat" else "community"
         val created = now()
+        if(chatId.isNotEmpty()) {
+            PrivateImageTransport(db).upload(ref.id,ownerId,chatId,photo.full,photo.thumb,created)
+            return ref.id
+        }
         db.runBatch { batch ->
-            batch.set(ref, mapOf("data" to Blob.fromBytes(photo.full), "ownerId" to ownerId, "createdAt" to created))
+            batch.set(ref, mapOf("data" to Blob.fromBytes(photo.full), "ownerId" to ownerId, "createdAt" to created, "audience" to audience, "chatId" to chatId, "rootId" to ref.id, "messageId" to ""))
             batch.set(
                 db.collection(Col.IMAGES).document("${ref.id}_t"),
-                mapOf("data" to Blob.fromBytes(photo.thumb), "ownerId" to ownerId, "createdAt" to created),
+                mapOf("data" to Blob.fromBytes(photo.thumb), "ownerId" to ownerId, "createdAt" to created, "audience" to audience, "chatId" to chatId, "rootId" to ref.id, "messageId" to ""),
             )
+            batch.set(db.collection("mediaUploads").document(ref.id), mapOf("ownerId" to ownerId, "chatId" to chatId,
+                "audience" to audience, "status" to "staged", "expiresAt" to created + 7L * 86_400_000))
         }.await()
-        withContext(Dispatchers.IO) {
+        if (chatId.isEmpty()) withContext(Dispatchers.IO) {
             disk.write(ref.id, photo.full)
             disk.write("${ref.id}_t", photo.thumb)
         }
         return ref.id
+    }
+
+    suspend fun retain(ids: List<String>) {
+        MediaLease.retain(requireNotNull(db), ids)
     }
 
     suspend fun delete(id: String) {
@@ -87,6 +103,7 @@ class ImageRepository(context: Context, private val db: FirebaseFirestore?, priv
         db.runBatch { batch ->
             batch.delete(db.collection(Col.IMAGES).document(id))
             batch.delete(db.collection(Col.IMAGES).document("${id}_t"))
+            batch.delete(db.collection("mediaUploads").document(id))
         }.await()
         memory.remove(id)
         memory.remove("${id}_t")

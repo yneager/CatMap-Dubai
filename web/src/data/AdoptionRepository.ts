@@ -1,4 +1,12 @@
-import { where, writeBatch, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import {
+  orderBy,
+  limit,
+  where,
+  writeBatch,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+} from 'firebase/firestore';
 import { database } from '../firebase';
 import { ref, listQuery, AppException } from './Firestore';
 import {
@@ -11,8 +19,26 @@ import {
 import { NotificationRepository as notifications } from './NotificationRepository';
 export const AdoptionRepository = {
   requestId: (postId: string, uid: string) => `${postId}_${uid}`,
-  received: (uid: string) => listQuery('adoptionRequests', where('ownerId', '==', uid)),
-  sent: (uid: string) => listQuery('adoptionRequests', where('requesterId', '==', uid)),
+  requestsQuery: (uid: string, sent: boolean) =>
+    listQuery(
+      'adoptionRequests',
+      where(sent ? 'requesterId' : 'ownerId', '==', uid),
+      orderBy('createdAt', 'desc'),
+    ),
+  received: (uid: string) =>
+    listQuery(
+      'adoptionRequests',
+      where('ownerId', '==', uid),
+      orderBy('createdAt', 'desc'),
+      limit(50),
+    ),
+  sent: (uid: string) =>
+    listQuery(
+      'adoptionRequests',
+      where('requesterId', '==', uid),
+      orderBy('createdAt', 'desc'),
+      limit(50),
+    ),
   myRequestFor: (postId: string, uid: string) => ref(`adoptionRequests/${postId}_${uid}`),
   request: async (post: Post, message: string, home: string, me: UserProfile) => {
     if (post.ownerId === me.uid) throw new AppException('err_own_listing');
@@ -36,6 +62,8 @@ export const AdoptionRepository = {
       'adoption_request',
       { user: me.username, name: post.name },
       'adoption-requests',
+      undefined,
+      AdoptionRepository.requestId(post.id, me.uid),
     );
   },
   decide: async (request: AdoptionRequest, approve: boolean, note: string) => {
@@ -56,6 +84,8 @@ export const AdoptionRepository = {
       'adoption_decision',
       { name: request.postName, decision: approve ? 'approved' : 'declined' },
       `post/${request.postId}`,
+      undefined,
+      request.id,
     );
   },
   delete: (request: AdoptionRequest) => deleteDoc(ref(`adoptionRequests/${request.id}`)),

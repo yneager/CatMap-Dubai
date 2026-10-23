@@ -68,6 +68,17 @@ data class AppSettings(
 }
 
 class SettingsRepository(private val context: Context) {
+    suspend fun pollCursor(uid: String): Pair<Long, String>? {
+        val raw = context.dataStore.data.first()[stringPreferencesKey("poll_cursor_$uid")] ?: return null
+        val split = raw.indexOf(':')
+        return if (split > 0) raw.substring(0, split).toLongOrNull()?.let { it to raw.substring(split + 1) } else null
+    }
+    suspend fun setPollCursor(uid: String, cursor: Pair<Long, String>?) {
+        context.dataStore.edit { prefs ->
+            val key = stringPreferencesKey("poll_cursor_$uid")
+            if (cursor == null) prefs.remove(key) else prefs[key] = "${cursor.first}:${cursor.second}"
+        }
+    }
     private object Keys {
         val THEME = stringPreferencesKey("theme")
         val LARGE_TEXT = booleanPreferencesKey("large_text")

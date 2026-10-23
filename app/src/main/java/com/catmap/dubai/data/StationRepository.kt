@@ -83,15 +83,19 @@ class StationRepository(
         moderation.log(admin, "stations_seeded", "station", "", "${samples.size}", "")
     }
 
+    fun checkinsQuery(id: String): com.google.firebase.firestore.Query = checkins.whereEqualTo("stationId", id).orderBy("at", com.google.firebase.firestore.Query.Direction.DESCENDING)
+    fun maintenanceQuery(id: String): com.google.firebase.firestore.Query = maintenance.whereEqualTo("stationId", id).orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+
     fun checkins(stationId: String): Flow<List<StationCheckin>> =
-        checkins.whereEqualTo("stationId", stationId).listFlow<StationCheckin>().map { l -> l.sortedByDescending { it.at }.take(50) }
+        checkinsQuery(stationId).limit(50).listFlow<StationCheckin>().map { l -> l.sortedByDescending { it.at }.take(50) }
 
     suspend fun checkIn(station: FeedingStation, catsSeen: Int, catIds: List<String>, food: String, water: String, note: String, me: UserProfile) {
         val at = now()
+        val checkinRef = checkins.document()
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         db.runBatch { b ->
             b.set(
-                checkins.document(),
+                checkinRef,
                 StationCheckin(
                     stationId = station.id, stationName = station.name, userId = me.uid, username = me.username,
                     catsSeen = catsSeen.toLong(), catIds = catIds, foodLevel = food, waterLevel = water,
@@ -100,7 +104,7 @@ class StationRepository(
             )
             b.update(
                 stations.document(station.id),
-                mapOf("checkinCount" to FieldValue.increment(1), "lastCheckinAt" to at, "lastCheckinBy" to me.username),
+                mapOf("checkinCount" to FieldValue.increment(1), "counterSourceId" to checkinRef.id, "lastCheckinAt" to at, "lastCheckinBy" to me.username),
             )
             val stats = mapOf(Stats.CHECKINS to 1L, Stats.IFTAR_CHECKINS to if (hour in 18..19) 1L else 0L)
             // Stamps the posting timer too, so a later rules update can rate-limit check-ins (docs/security/LATER_RULES.md).
@@ -109,7 +113,7 @@ class StationRepository(
     }
 
     fun maintenanceFor(stationId: String): Flow<List<MaintenanceReport>> =
-        maintenance.whereEqualTo("stationId", stationId).listFlow<MaintenanceReport>().map { l -> l.sortedByDescending { it.createdAt } }
+        maintenanceQuery(stationId).limit(50).listFlow<MaintenanceReport>().map { l -> l.sortedByDescending { it.createdAt } }
 
     fun openMaintenance(): Flow<List<MaintenanceReport>> =
         maintenance.whereIn("status", listOf(MaintenanceStatus.OPEN.key, MaintenanceStatus.IN_PROGRESS.key))

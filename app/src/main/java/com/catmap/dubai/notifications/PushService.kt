@@ -46,8 +46,12 @@ class PushService : FirebaseMessagingService() {
 
         private suspend fun saveToken(token: String) {
             val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
-            FirebaseFirestore.getInstance().collection(Col.USERS).document(uid).collection(Col.PRIVATE).document("push")
-                .set(mapOf("tokens" to FieldValue.arrayUnion(token)), SetOptions.merge()).await()
+            val db = FirebaseFirestore.getInstance()
+            val target = db.collection(Col.USERS).document(uid).collection(Col.PRIVATE).document("push")
+            db.runTransaction { tx ->
+                val before = (tx.get(target).get("tokens") as? List<*>)?.filterIsInstance<String>().orEmpty()
+                tx.set(target, mapOf("tokens" to (before.filter { it != token }.takeLast(9) + token)))
+            }.await()
         }
     }
 }

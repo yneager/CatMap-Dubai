@@ -65,6 +65,7 @@ class AuthRepository(
     private suspend fun createProfile(user: FirebaseUser, username: String, displayName: String, role: String = Roles.USER) {
         db.runBatch { b ->
             b.set(db.collection(Col.USERNAMES).document(username.lowercase()), mapOf("uid" to user.uid))
+            b.set(db.collection("userLimits").document(user.uid), mapOf("favorites" to 0, "blocked" to 0, "unreadCount" to 0))
             b.set(
                 users.ref(user.uid),
                 UserProfile(username = username, displayName = displayName.trim().take(60), role = role, createdAt = now()),
@@ -74,7 +75,7 @@ class AuthRepository(
                 mapOf("email" to (user.email ?: ""), "createdAt" to now()),
             )
         }.await()
-        notifications.send(listOf(user.uid), NotifType.WELCOME, mapOf("user" to username))
+        if(user.isEmailVerified) notifications.send(listOf(user.uid), NotifType.WELCOME, mapOf("user" to username))
     }
 
     /**
@@ -153,7 +154,9 @@ class AuthRepository(
 
     /** Recovers from a registration that created the account but not the profile. */
     private suspend fun ensureProfile(user: FirebaseUser) {
-        if (users.ref(user.uid).get().await().exists()) return
+        val existing=users.ref(user.uid).get().await()
+        if(existing.exists()) { if(user.isEmailVerified) notifications.send(listOf(user.uid),NotifType.WELCOME,mapOf("user" to existing.getString("username").orEmpty())); return }
+        if (db.collection("accountDeletions").document(user.uid).get().await().exists()) return
         // Match the same ASCII alphabet accepted by validateUsername, including short/non-Latin emails.
         val base = (user.email ?: "cat").substringBefore('@')
             .filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '_' }
@@ -171,7 +174,11 @@ class AuthRepository(
         val user = auth.currentUser ?: return false
         user.reload().await()
         val verified = auth.currentUser?.isEmailVerified == true
-        if (verified) user.getIdToken(true).await()
+        if (verified) {
+            user.getIdToken(true).await()
+            val profile=users.ref(user.uid).get().await()
+            if(profile.exists()) notifications.send(listOf(user.uid),NotifType.WELCOME,mapOf("user" to profile.getString("username").orEmpty()))
+        }
         _user.value = auth.currentUser
         return verified
     }
@@ -215,6 +222,7 @@ class AuthRepository(
         user.reauthenticate(credential).await()
         val uid = user.uid
         val savedProfile = users.ref(uid).get().await().toObject(UserProfile::class.java) ?: profile
+        db.collection("accountDeletions").document(uid).set(mapOf("requestedAt" to FieldValue.serverTimestamp())).await()
         CommunityAccountCleanup(db, videos).clean(uid)
 
         // Each transaction includes the source deletion and its aggregate change. A retry after
@@ -229,7 +237,7 @@ class AuthRepository(
                     val cat = catRef?.let(tx::get)
                     tx.delete(sighting.reference)
                     tx.delete(db.collection(Col.PRIVATE_LOCATIONS).document(sighting.id))
-                    if (catRef != null && cat?.exists() == true) tx.update(catRef, "sightingCount", ((cat.getLong("sightingCount") ?: 0) - 1).coerceAtLeast(0))
+                    if (catRef != null && cat?.exists() == true) tx.update(catRef, mapOf("sightingCount" to ((cat.getLong("sightingCount") ?: 0) - 1).coerceAtLeast(0), "counterSourceId" to sighting.id))
                 }
             }.await()
         }
@@ -243,7 +251,7 @@ class AuthRepository(
                     val station = stationRef?.let(tx::get)
                     tx.delete(checkin.reference)
                     if (stationRef != null && station?.exists() == true) {
-                        val updates = mutableMapOf<String, Any>("checkinCount" to ((station.getLong("checkinCount") ?: 0) - 1).coerceAtLeast(0))
+                        val updates = mutableMapOf<String, Any>("checkinCount" to ((station.getLong("checkinCount") ?: 0) - 1).coerceAtLeast(0), "counterSourceId" to checkin.id)
                         if (station.getLong("lastCheckinAt") == fresh.getLong("at")) {
                             updates["lastCheckinAt"] = 0L
                             updates["lastCheckinBy"] = ""
@@ -258,13 +266,14 @@ class AuthRepository(
         db.collection(Col.IMAGES).whereEqualTo("ownerId", uid).pages().collect {page -> photos.addAll(page.map {it.reference})}
         val photoIds = photos.map { it.id }.filterNot { it.endsWith("_t") }
         // Gallery and cover references must be detached before deleting the actual JPEGs.
-        for (chunk in photoIds.chunked(10)) {
+        for (chunk in photoIds.chunked(3)) {
             val cats = db.collection(Col.CATS).whereArrayContainsAny("photoIds", chunk).get().await().documents
             for (cat in cats) db.runTransaction { tx ->
                 val fresh = tx.get(cat.reference)
                 if (fresh.exists()) {
                     val remaining = (fresh.get("photoIds") as? List<*>)?.filterIsInstance<String>().orEmpty() - chunk.toSet()
-                    val updates = mutableMapOf<String, Any>("photoIds" to remaining)
+                    val updates = mutableMapOf<String, Any>("photoIds" to remaining,
+                        "removedPhotoIds" to chunk.filter { it in (fresh.get("photoIds") as? List<*>).orEmpty() })
                     if (fresh.getString("coverPhotoId") in chunk) updates["coverPhotoId"] = remaining.firstOrNull().orEmpty()
                     tx.update(cat.reference, updates)
                 }
@@ -287,9 +296,16 @@ class AuthRepository(
         deleteDocuments(refs)
         // The AI job can hold the last photos sent to the PC. A job still waiting for its answer can't be deleted for
         // its first seconds (rules); the PC removes answered jobs within the hour.
-        runCatching { db.collection(Col.AI_JOBS).document(uid).delete().await() }
+        val job = db.collection(Col.AI_JOBS).document(uid)
+        val currentJob = job.get().await()
+        if (currentJob.exists() && currentJob.getString("status") == "pending") {
+            val age = now() - (currentJob.getTimestamp("createdAt")?.toDate()?.time ?: now())
+            kotlinx.coroutines.delay((15_000 - age).coerceAtLeast(0))
+        }
+        job.delete().await() // Privacy-critical: do not delete Auth while photo payloads remain.
         // Keep the profile until the last batch, so role checks still work throughout cleanup.
         deleteDocuments(buildList {
+            add(db.collection("userLimits").document(uid))
             add(users.ref(uid).collection(Col.PRIVATE).document("account"))
             savedProfile?.username?.takeIf { it.isNotBlank() }?.let { add(db.collection(Col.USERNAMES).document(it.lowercase())) }
             add(users.ref(uid))

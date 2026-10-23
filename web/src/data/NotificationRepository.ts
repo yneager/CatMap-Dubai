@@ -1,4 +1,14 @@
-import { doc, orderBy, limit, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import {
+  doc,
+  orderBy,
+  limit,
+  where,
+  getDocsFromServer,
+  runTransaction,
+  updateDoc,
+  deleteDoc,
+  writeBatch,
+} from 'firebase/firestore';
 import { auth, database } from '../firebase';
 import { ref, col, listQuery, deleteDocuments, list } from './Firestore';
 import { AppNotificationDefaults, AppNotificationFromDoc, AppNotificationToDoc } from './model';
@@ -9,7 +19,35 @@ export const notificationId = {
   update: (id: string) => `upd_${id}`,
 };
 const inbox = (uid: string) => `users/${uid}/notifications`;
+const readingChats = new Map<string, Promise<void>>();
 export const NotificationRepository = {
+  readChat: async (uid: string, chatId: string) => {
+    const key = uid + '/' + chatId;
+    if (readingChats.has(key)) return readingChats.get(key)!;
+    const task = (async () => {
+      while (true) {
+        const page = await getDocsFromServer(
+          listQuery(
+            inbox(uid),
+            where('route', '==', `chat/${chatId}`),
+            where('read', '==', false),
+            limit(100),
+          ),
+        );
+        if (page.empty) return;
+        const batch = writeBatch(database());
+        page.docs.forEach((d) => batch.update(d.ref, { read: true }));
+        await batch.commit();
+        if (page.size < 100) return;
+      }
+    })();
+    readingChats.set(key, task);
+    try {
+      await task;
+    } finally {
+      readingChats.delete(key);
+    }
+  },
   notifications: (uid: string) => listQuery(inbox(uid), orderBy('createdAt', 'desc'), limit(30)),
   latest: (uid: string) => list(NotificationRepository.notifications(uid), AppNotificationFromDoc),
   markRead: (uid: string, id: string) => updateDoc(ref(`${inbox(uid)}/${id}`), { read: true }),
@@ -40,6 +78,7 @@ export const NotificationRepository = {
     params: Record<string, string>,
     route = '',
     dedupeKey?: string,
+    sourceId = '',
   ) => {
     const fromUid = auth?.currentUser?.uid;
     if (!fromUid) return;
@@ -50,14 +89,34 @@ export const NotificationRepository = {
       params,
       route,
       fromUid,
+      sourceId:
+        sourceId ||
+        params.matchId ||
+        (route.includes('/') ? route.slice(route.indexOf('/') + 1) : ''),
       createdAt: Date.now(),
     });
-    if (dedupeKey) {
-      await Promise.allSettled(
-        targets.map((uid) => setDoc(ref(`${inbox(uid)}/${dedupeKey}`), value)),
-      );
-      return;
-    }
-    await Promise.allSettled(targets.map((uid) => setDoc(doc(col(inbox(uid))), value)));
+    const results = await Promise.allSettled(
+      targets.map(async (uid) => {
+        const stable =
+          dedupeKey ||
+          (value.sourceId
+            ? `${type}_${value.sourceId}_${params.status || params.decision || ''}`
+            : type === 'welcome'
+              ? 'welcome'
+              : type === 'achievement'
+                ? `achievement_${params.badge}`
+                : '');
+        const target = stable ? ref(`${inbox(uid)}/${stable}`) : doc(col(inbox(uid)));
+        const receipt = ref(`users/${uid}/notificationReceipts/${target.id}`);
+        await runTransaction(database(), async (tx) => {
+          if (!(await tx.get(receipt)).exists()) {
+            tx.set(target, value);
+            tx.set(receipt, { fromUid, sourceId: value.sourceId, createdAt: value.createdAt });
+          }
+        });
+      }),
+    );
+    for (const result of results)
+      if (result.status === 'rejected') console.info('Notification delivery failed', result.reason);
   },
 };

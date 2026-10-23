@@ -4,11 +4,14 @@ import com.catmap.dubai.data.model.AppNotification
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.FieldPath
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Notification types. Their text is formatted on the receiving phone, in its own language. */
 object NotifType {
@@ -42,6 +45,7 @@ object NotifType {
 }
 
 class NotificationRepository(private val db: FirebaseFirestore, private val auth: FirebaseAuth) {
+    private val readMutex = Mutex()
     private fun col(uid: String) = db.collection(Col.USERS).document(uid).collection(Col.NOTIFICATIONS)
 
     /** The newest [WINDOW] alerts, live (the bell, the inbox, alerts shown while the app is open). */
@@ -64,8 +68,24 @@ class NotificationRepository(private val db: FirebaseFirestore, private val auth
         col(uid).whereGreaterThan("createdAt", sinceMillis).orderBy("createdAt", Query.Direction.DESCENDING).limit(50)
             .get().await().safeObjects<AppNotification>()
 
+    /** Stable ascending cursor: equal timestamps cannot skip a page. */
+    suspend fun sincePage(uid: String, since: Long, cursor: Pair<Long, String>?): List<AppNotification> {
+        var query = col(uid).whereGreaterThanOrEqualTo("createdAt", since)
+            .orderBy("createdAt").orderBy(FieldPath.documentId()).limit(50)
+        if (cursor != null) query = query.startAfter(cursor.first, cursor.second)
+        return query.get().await().safeObjects()
+    }
+
     suspend fun markRead(uid: String, id: String) {
         col(uid).document(id).update("read", true).await()
+    }
+    suspend fun readChat(uid: String, chatId: String) = readMutex.withLock {
+        while (true) {
+            val page = col(uid).whereEqualTo("route", "chat/$chatId").whereEqualTo("read", false).limit(100).get(com.google.firebase.firestore.Source.SERVER).await()
+            if (page.isEmpty) break
+            db.runBatch { b -> page.documents.forEach { b.update(it.reference, "read", true) } }.await()
+            if (page.size() < 100) break
+        }
     }
 
     suspend fun markAllRead(uid: String, ids: List<String>) {
@@ -93,20 +113,25 @@ class NotificationRepository(private val db: FirebaseFirestore, private val auth
      * Writes a notification into each recipient's inbox. Failures are swallowed: a notification
      * that can't be delivered must never undo the action that triggered it.
      */
-    suspend fun send(recipients: Collection<String>, type: String, params: Map<String, String>, route: String = "", dedupeKey: String? = null) {
+    suspend fun send(recipients: Collection<String>, type: String, params: Map<String, String>, route: String = "", dedupeKey: String? = null, sourceId: String = "") {
         val me = auth.currentUser?.uid ?: return
         val targets = recipients.filter { it.isNotBlank() }.toSet()
         if (targets.isEmpty()) return
-        // One write per person, never one batch: the rules refuse an alert to someone who blocked the sender, and in a
-        // batch that one refusal would stop everyone else's alert too. A fixed id ([dedupeKey]) makes repeats
-        // harmless: writing over an existing alert is an update, which the rules refuse, so each person gets one
-        // alert per key until they read and remove it.
+        // Each recipient has an independent atomic inbox+receipt transaction. A blocked recipient
+        // cannot stop other deliveries. Immutable event receipts prevent replay after inbox dismissal.
         coroutineScope {
             targets.map { uid ->
                 async {
                     runCatching {
-                        val ref = if (dedupeKey != null) col(uid).document(dedupeKey) else col(uid).document()
-                        ref.set(AppNotification(type = type, params = params, route = route, fromUid = me, createdAt = now())).await()
+                        val source = sourceId.ifBlank { params["matchId"].orEmpty().ifBlank { if ('/' in route) route.substringAfter('/') else "" } }
+                        val stable = dedupeKey ?: if (source.isNotBlank()) "${type}_${source}_${params["status"] ?: params["decision"].orEmpty()}" else if (type == NotifType.WELCOME) "welcome" else if (type == NotifType.ACHIEVEMENT) "achievement_${params["badge"]}" else null
+                        val ref = stable?.let { col(uid).document(it) } ?: col(uid).document()
+                        val value = AppNotification(type = type, params = params, route = route, fromUid = me, sourceId = source, createdAt = now())
+                        val receipt = db.collection(Col.USERS).document(uid).collection("notificationReceipts").document(ref.id)
+                        db.runTransaction { tx -> if (!tx.get(receipt).exists()) {
+                            tx.set(ref, value)
+                            tx.set(receipt, mapOf("fromUid" to me, "sourceId" to source, "createdAt" to value.createdAt))
+                        } }.await()
                     }.onFailure { android.util.Log.w("CatMap", "Notification to one person not delivered", it) }
                 }
             }.awaitAll()

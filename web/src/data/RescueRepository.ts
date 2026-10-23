@@ -1,5 +1,6 @@
 import { doc, where, writeBatch, updateDoc, arrayUnion, orderBy, limit } from 'firebase/firestore';
 import { database } from '../firebase';
+import { ImageRepository } from './ImageRepository';
 import { col, ref, listQuery } from './Firestore';
 import { RescueReportToDoc, type RescueReport, type UserProfile } from './model';
 import { Dubai, LocationPrivacy } from './Neighborhoods';
@@ -21,6 +22,7 @@ export const RescueRepository = {
   pending: () => listQuery('rescues', where('status', '==', 'submitted')),
   report: (id: string) => ref(`rescues/${id}`),
   submit: async (report: RescueReport, me: UserProfile) => {
+    await ImageRepository.retain(report.photoIds);
     const target = doc(col('rescues')),
       created = Date.now(),
       hood = Dubai.nearest(report.lat, report.lng).key;

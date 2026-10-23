@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { VideoRepository } from './VideoRepository';
 import { database } from '../firebase';
-import { col, ref, listQuery, list, read, deleteDocuments } from './Firestore';
+import { col, ref, listQuery, list, read } from './Firestore';
 import {
   ContentReportFromDoc,
   PostDefaults,
@@ -24,7 +24,6 @@ import {
   PostUpdateDefaults,
   PostUpdateToDoc,
   PostUpdateFromDoc,
-  AreaFollowFromDoc,
   type Post,
   type PostUpdate,
   type UserProfile,
@@ -35,6 +34,7 @@ import { NotificationRepository as notifications } from './NotificationRepositor
 import { PostStaleness } from './PostStaleness';
 import { ImageRepository } from './ImageRepository';
 import { ModerationRepository } from './ModerationRepository';
+import { journalPostDeletion } from './DeletionJournal';
 import { Geohash } from './Geohash';
 import { SearchTerms } from './SearchTerms';
 export function keywords(...parts: string[]) {
@@ -166,6 +166,8 @@ export const PostRepository = {
   publicPostsBy: (uid: string) =>
     listQuery('posts', where('ownerId', '==', uid), where('hidden', '==', false)),
   create: async (draft: Post, me: UserProfile) => {
+    await ImageRepository.retain(draft.photoIds);
+    await VideoRepository.retain(draft.videoPath);
     const target = doc(col('posts'));
     const now = Date.now();
     const post = {
@@ -177,35 +179,21 @@ export const PostRepository = {
     };
     const b = writeBatch(database());
     b.set(target, PostToDoc(post));
+    if (post.category === 'lost')
+      b.set(ref(`lostAlertJobs/${target.id}`), {
+        ownerId: me.uid,
+        status: 'pending',
+        cursor: '',
+        createdAt: now,
+      });
     UserRepository.addStats(b, me.uid, { posts: 1 }, 10, post.neighborhood, true);
     await b.commit();
-    const params = {
-      type: post.animalType,
-      category: post.category,
-      area: post.neighborhood,
-      name: post.name,
-    };
-    if (post.category === 'lost') {
-      const followers = await list(
-        listQuery(
-          'areaFollows',
-          where('neighborhoods', 'array-contains', post.neighborhood),
-          limit(300),
-        ),
-        AreaFollowFromDoc,
-      ).catch(() => []);
-      await notifications.send(
-        followers.map((p) => p.uid).filter((uid) => uid !== me.uid),
-        'lost_nearby',
-        params,
-        `post/${target.id}`,
-        `lost_${target.id}`,
-      );
-    }
     // Possible matches are found by MatchRepository.afterPublish (the PC's AI model, or this device offline).
     return target.id;
   },
   edit: async (existing: Post, draft: Post, me: UserProfile) => {
+    await ImageRepository.retain(draft.photoIds);
+    await VideoRepository.retain(draft.videoPath);
     const p = toPost(draft, me);
     const data = PostToDoc(p);
     for (const key of [
@@ -217,6 +205,7 @@ export const PostRepository = {
       'createdAt',
       'hidden',
       'updatesCount',
+      'counterSourceId',
       'resolvedAt',
       'resolution',
       'resolvedMatchId',
@@ -260,8 +249,16 @@ export const PostRepository = {
   setAdoptionStatus: (p: Post, status: string) =>
     updateDoc(ref(`posts/${p.id}`), { adoptionStatus: status, updatedAt: Date.now() }),
   delete: async (p: Post) => {
+    await journalPostDeletion(p);
     const updates = await list(listQuery(`posts/${p.id}/updates`), PostUpdateFromDoc);
-    await deleteDocuments(updates.map((u) => `posts/${p.id}/updates/${u.id}`));
+    for (const update of updates) {
+      try {
+        if (update.photoId) await ImageRepository.delete(update.photoId);
+        await deleteDoc(ref(`posts/${p.id}/updates/${update.id}`));
+      } catch (error) {
+        console.info('Deferred child cleanup', error);
+      }
+    }
     await deleteDoc(ref(`posts/${p.id}`));
     await VideoRepository.delete(p.videoPath).catch((error) =>
       console.info('Post video cleanup failed', error),
@@ -280,15 +277,23 @@ export const PostRepository = {
         ),
       )
       .catch((error) => console.info('Adoption cleanup failed', error));
-    await Promise.allSettled(
-      [...p.photoIds, ...updates.map((u) => u.photoId).filter(Boolean)].map(ImageRepository.delete),
-    );
+    await Promise.allSettled(p.photoIds.map(ImageRepository.delete));
     // Its match suggestions too (allowed once the post is gone). A moderator can't delete them; the two people's
     // apps drop them when they next see them (usePostMatches).
-    const matches = await list(
-      listQuery('matches', where('members', 'array-contains', p.ownerId)),
-      PostMatchFromDoc,
-    ).catch(() => []);
+    const matches = (
+      await Promise.all(
+        ['lostPostId', 'sightingPostId'].map((field) =>
+          list(
+            listQuery(
+              'matches',
+              where('members', 'array-contains', p.ownerId),
+              where(field, '==', p.id),
+            ),
+            PostMatchFromDoc,
+          ).catch(() => []),
+        ),
+      )
+    ).flat();
     await Promise.allSettled(
       matches
         .filter((m) => m.lostPostId === p.id || m.sightingPostId === p.id)
@@ -352,8 +357,10 @@ export const PostRepository = {
     me: UserProfile,
   ) => {
     const b = writeBatch(database());
+    const updateRef = doc(col(`posts/${p.id}/updates`));
+    await ImageRepository.retain([photoId]);
     b.set(
-      doc(col(`posts/${p.id}/updates`)),
+      updateRef,
       PostUpdateToDoc({
         ...PostUpdateDefaults,
         postId: p.id,
@@ -368,7 +375,11 @@ export const PostRepository = {
         createdAt: Date.now(),
       }),
     );
-    b.update(ref(`posts/${p.id}`), { updatesCount: increment(1), updatedAt: Date.now() });
+    b.update(ref(`posts/${p.id}`), {
+      updatesCount: increment(1),
+      counterSourceId: updateRef.id,
+      updatedAt: Date.now(),
+    });
     UserRepository.addStats(b, me.uid, { postUpdates: 1 }, 5, undefined, true);
     await b.commit();
     if (p.ownerId !== me.uid)
@@ -377,13 +388,14 @@ export const PostRepository = {
         'post_update',
         { user: me.username, kind, name: p.name, type: p.animalType },
         `post/${p.id}`,
-        `upd_${p.id}`,
+        `upd_${p.id}_${updateRef.id}`,
+        updateRef.id,
       );
   },
   deleteUpdate: async (p: Post, u: PostUpdate) => {
     const b = writeBatch(database());
     b.delete(ref(`posts/${p.id}/updates/${u.id}`));
-    b.update(ref(`posts/${p.id}`), { updatesCount: increment(-1) });
+    b.update(ref(`posts/${p.id}`), { updatesCount: increment(-1), counterSourceId: u.id });
     await b.commit();
     if (u.photoId) await ImageRepository.delete(u.photoId).catch(() => {});
   },

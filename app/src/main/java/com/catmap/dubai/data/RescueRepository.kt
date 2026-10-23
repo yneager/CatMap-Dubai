@@ -42,6 +42,7 @@ class RescueRepository(
     fun report(id: String): Flow<RescueReport?> = col.document(id).objectFlow()
 
     suspend fun submit(report: RescueReport, me: UserProfile): String {
+        MediaLease.retain(db, report.photoIds)
         val ref = col.document()
         val created = now()
         val hood = Dubai.nearest(report.lat, report.lng).key

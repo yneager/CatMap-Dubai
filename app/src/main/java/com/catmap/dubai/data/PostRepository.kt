@@ -23,8 +23,13 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.util.Locale
 
 /** What the post form collects; photos are uploaded before [PostRepository.create] is called. */
@@ -67,6 +72,28 @@ class PostRepository(
 ) {
     private val posts = db.collection(Col.POSTS)
     private val areas = db.collection(Col.AREA_FOLLOWS)
+    private val availabilitySlots = Semaphore(4)
+    private val availabilityLocks = Array(32) { Mutex() }
+    private val availabilityMemo = LinkedHashMap<String, Pair<Long, PostAvailability>>()
+    private var availabilityScope = ""
+
+    suspend fun cachedAvailability(uid: String, id: String): PostAvailability =
+        availabilityLocks[(id.hashCode() and Int.MAX_VALUE) % availabilityLocks.size].withLock {
+            val scope = "$uid/${ForegroundRefresh.version.value}"
+            val cached = synchronized(availabilityMemo) {
+                if (availabilityScope != scope) { availabilityMemo.clear(); availabilityScope = scope }
+                availabilityMemo[id]?.takeIf { now() - it.first < 30_000 }?.second
+            }
+            if (cached != null) return@withLock cached
+            val state = availabilitySlots.withPermit { availability(id) }
+            synchronized(availabilityMemo) {
+                if (availabilityScope == scope) {
+                    availabilityMemo[id] = now() to state
+                    while (availabilityMemo.size > 256) availabilityMemo.remove(availabilityMemo.keys.first())
+                }
+            }
+            state
+        }
 
     fun ref(id: String) = posts.document(id)
 
@@ -112,11 +139,12 @@ class PostRepository(
         return q.orderBy("createdAt", Query.Direction.DESCENDING)
     }
 
-    fun postFlow(id: String): Flow<Post?> = ref(id).snapshotFlow().map { it.safeObject<Post>() }
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun postFlow(id: String): Flow<Post?> = ForegroundRefresh.version.flatMapLatest { ref(id).snapshotFlow().map { it.safeObject<Post>() }
         .catch { error ->
             if (error is FirebaseFirestoreException && error.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) emit(null)
             else throw error
-        }.retryWhen { error, _ -> AppErrors.awaitListenerRetry(error) }
+        }.retryWhen { error, _ -> AppErrors.awaitListenerRetry(error) } }
 
     suspend fun post(id: String): Post? = runCatching { ref(id).get().await().toObject(Post::class.java) }.getOrNull()
 
@@ -137,30 +165,23 @@ class PostRepository(
     // ---------- creating and editing ----------
 
     suspend fun create(draft: PostDraft, me: UserProfile): String {
+        MediaLease.retain(db, draft.photoIds)
+        videos.retain(draft.videoPath)
         val ref = posts.document()
         val created = now()
         val post = draft.toPost(me, created).apply { createdAt = created; lastActivityAt = created }
         val category = labeledFrom(draft.category, PostCategory.OTHER)
         db.runBatch { b ->
             b.set(ref, post)
+            if (category == PostCategory.LOST) b.set(db.collection("lostAlertJobs").document(ref.id), mapOf("ownerId" to me.uid, "status" to "pending", "cursor" to "", "createdAt" to created))
             users.addStats(b, me.uid, mapOf(Stats.POSTS to 1), points = 10, neighborhood = post.neighborhood, rateLimited = true)
         }.await()
-        val title = post.name.ifBlank { "" }
-        val params = mapOf("type" to post.animalType, "category" to post.category, "area" to post.neighborhood, "name" to title)
-        if (category == PostCategory.LOST) {
-            // Everyone following this area hears about it, at most once per post.
-            val followers = runCatching {
-                areas.whereArrayContains("neighborhoods", post.neighborhood).limit(300).get().await()
-                    .safeObjects<AreaFollow>().map { it.uid }
-            }.getOrDefault(emptyList()) - me.uid
-            notifications.send(followers, NotifType.LOST_NEARBY, params, "post/${ref.id}", dedupeKey = "lost_${ref.id}")
-        }
-        // Possible matches with lost reports (and, for a lost report, with earlier sightings) are found by
-        // MatchRepository.afterPublish: the PC's AI model when it's online, the phone's fingerprint otherwise.
         return ref.id
     }
 
     suspend fun update(existing: Post, draft: PostDraft, me: UserProfile) {
+        MediaLease.retain(db, draft.photoIds)
+        videos.retain(draft.videoPath)
         val fresh = draft.toPost(me, now())
         val changes = mapOf(
             "animalType" to fresh.animalType, "category" to fresh.category, "name" to fresh.name,
@@ -232,8 +253,12 @@ class PostRepository(
 
     /** Deletes a post with its updates and photos. */
     suspend fun delete(post: Post, images: ImageRepository) {
+        DeletionJournal(db).post(post.id)
         val updates = ref(post.id).collection(Col.UPDATES).get().await().documents
-        updates.chunked(400).forEach { chunk -> db.runBatch { b -> chunk.forEach { b.delete(it.reference) } }.await() }
+        for (update in updates) runCatching {
+            update.getString("photoId")?.takeIf { it.isNotBlank() }?.let { images.delete(it) }
+            update.reference.delete().await()
+        }.onFailure { android.util.Log.i("CatMap", "Deferred child cleanup", it) }
         ref(post.id).delete().await()
         runCatching { videos.delete(post.videoPath) }.onFailure { android.util.Log.i("CatMap", "Post video cleanup failed", it) }
         runCatching { db.collection(Col.POST_EMBEDDINGS).document(post.id).delete().await() }
@@ -242,13 +267,12 @@ class PostRepository(
             db.collection(Col.ADOPTION_REQUESTS).whereEqualTo("ownerId", post.ownerId).whereEqualTo("postId", post.id)
                 .get().await().documents.forEach { it.reference.delete().await() }
         }.onFailure { android.util.Log.i("CatMap", "Adoption cleanup failed", it) }
-        (post.photoIds + updates.mapNotNull { it.getString("photoId") }.filter { it.isNotBlank() })
+        post.photoIds
             .forEach { runCatching { images.delete(it) } }
         // Its match suggestions too (allowed once the post is gone). A moderator can't delete them; the two people's
         // apps drop them when they next see them (MatchRepository.forPost).
         runCatching {
-            db.collection(Col.MATCHES).whereArrayContains("members", post.ownerId).get().await().documents
-                .filter { it.getString("lostPostId") == post.id || it.getString("sightingPostId") == post.id }
+            for(field in listOf("lostPostId", "sightingPostId")) db.collection(Col.MATCHES).whereArrayContains("members", post.ownerId).whereEqualTo(field, post.id).get().await().documents
                 .forEach { runCatching { it.reference.delete().await() } }
         }
     }
@@ -290,6 +314,7 @@ class PostRepository(
         ref(postId).collection(Col.UPDATES).orderBy("createdAt", Query.Direction.DESCENDING).startAfter(before)
 
     suspend fun addUpdate(post: Post, kind: UpdateKind, text: String, photoId: String, lat: Double, lng: Double, me: UserProfile) {
+        MediaLease.retain(db, listOf(photoId))
         val doc = ref(post.id).collection(Col.UPDATES).document()
         db.runBatch { b ->
             b.set(
@@ -300,14 +325,14 @@ class PostRepository(
                     byUid = me.uid, byName = me.username, createdAt = now(),
                 ),
             )
-            b.update(ref(post.id), mapOf("updatesCount" to FieldValue.increment(1), "updatedAt" to now()))
+            b.update(ref(post.id), mapOf("updatesCount" to FieldValue.increment(1), "counterSourceId" to doc.id, "updatedAt" to now()))
             users.addStats(b, me.uid, mapOf(Stats.POST_UPDATES to 1), points = 5, rateLimited = true)
         }.await()
         if (post.ownerId != me.uid) {
             notifications.send(
                 listOf(post.ownerId), NotifType.POST_UPDATE,
                 mapOf("user" to me.username, "kind" to kind.key, "name" to post.name, "type" to post.animalType),
-                "post/${post.id}", dedupeKey = "upd_${post.id}",
+                "post/${post.id}", dedupeKey = "upd_${post.id}_${doc.id}", sourceId = doc.id,
             )
         }
     }
@@ -315,7 +340,7 @@ class PostRepository(
     suspend fun deleteUpdate(post: Post, update: PostUpdate, images: ImageRepository) {
         db.runBatch { b ->
             b.delete(ref(post.id).collection(Col.UPDATES).document(update.id))
-            b.update(ref(post.id), "updatesCount", FieldValue.increment(-1))
+            b.update(ref(post.id), mapOf("updatesCount" to FieldValue.increment(-1), "counterSourceId" to update.id))
         }.await()
         if (update.photoId.isNotBlank()) runCatching { images.delete(update.photoId) }
     }

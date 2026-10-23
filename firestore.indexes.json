@@ -211,6 +211,232 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "matches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "members",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "lostPostId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "matches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "members",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "sightingPostId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "chats",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "members",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "lastAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "adoptionRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ownerId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "adoptionRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "requesterId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ownerId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "sitterId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "reviews",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "sitterId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "checkins",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "stationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "maintenance",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "stationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "mediaUploads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "expiresAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "videoUploads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "expiresAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "postEmbeddings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "model",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "aiJobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "doneAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "cats",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "hidden",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "mergedInto",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "geoCells",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -266,6 +492,134 @@
       "collectionGroup": "posts",
       "fieldPath": "keywords",
       "indexes": []
+    },
+    {
+      "collectionGroup": "postEmbeddings",
+      "fieldPath": "vectors",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "postEmbeddings",
+      "fieldPath": "detected",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "postEmbeddings",
+      "fieldPath": "animals",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "postEmbeddings",
+      "fieldPath": "lowQuality",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiJobs",
+      "fieldPath": "query",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiJobs",
+      "fieldPath": "images",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiJobs",
+      "fieldPath": "ids",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiJobs",
+      "fieldPath": "labels",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiJobs",
+      "fieldPath": "photos",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiJobs",
+      "fieldPath": "results",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiJobs",
+      "fieldPath": "embeddings",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiJobs",
+      "fieldPath": "classification",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiJobs",
+      "fieldPath": "error",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "notifications",
+      "fieldPath": "params",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "postDeletions",
+      "fieldPath": "photoIds",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "postDeletions",
+      "fieldPath": "videoPath",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "posts",
+      "fieldPath": "features",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "chats",
+      "fieldPath": "lastText",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "updates",
+      "fieldPath": "text",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "bookings",
+      "fieldPath": "notes",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "bookings",
+      "fieldPath": "sitterNote",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "reviews",
+      "fieldPath": "text",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "updates",
+      "fieldPath": "photoId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
     }
   ]
 }

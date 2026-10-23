@@ -10,6 +10,7 @@ import {
   documentId,
 } from 'firebase/firestore';
 import { database } from '../firebase';
+import { ImageRepository } from './ImageRepository';
 import { col, ref, read, list, listQuery } from './Firestore';
 import {
   CatDefaults,
@@ -125,6 +126,7 @@ export const CatRepository = {
     privacyLevel: string,
     shareExact: boolean,
   ) => {
+    await ImageRepository.retain(d.photoIds);
     const created = Date.now(),
       sighting = doc(col('sightings')),
       existing = d.existingCat,
@@ -174,6 +176,7 @@ export const CatRepository = {
           firstSeen: d.seenAt,
           lastSeen: d.seenAt,
           sightingCount: 1,
+          counterSourceId: sighting.id,
           ...position,
           geoCells: Geohash.cells(position.lat, position.lng),
           searchTerms: SearchTerms.of(SearchTerms.words(name)),
@@ -189,6 +192,7 @@ export const CatRepository = {
     else {
       const changes: Record<string, unknown> = {
         sightingCount: increment(1),
+        counterSourceId: sighting.id,
         contributors: arrayUnion(me.uid),
         neighborhoods: arrayUnion(hood),
         updatedAt: created,
@@ -290,6 +294,8 @@ export const CatRepository = {
         'followed_cat',
         { cat: name, user: me.username, area: hood },
         `cat/${catRef.id}`,
+        undefined,
+        sighting.id,
       );
     return catRef.id;
   },
@@ -343,15 +349,20 @@ export const CatRepository = {
     const b = writeBatch(database());
     b.delete(ref(`sightings/${s.id}`));
     b.delete(ref(`privateLocations/${s.id}`));
-    b.update(ref(`cats/${s.catId}`), { sightingCount: increment(-1), updatedAt: Date.now() });
+    b.update(ref(`cats/${s.catId}`), {
+      sightingCount: increment(-1),
+      counterSourceId: s.id,
+      updatedAt: Date.now(),
+    });
     users.addStats(b, s.userId, { sightings: -1 }, -10);
     await b.commit();
   },
   medicalRecords: (catId: string) => listQuery('medicalRecords', where('catId', '==', catId)),
   addMedicalRecord: async (cat: Cat, type: string, note: string, by: UserProfile) => {
+    const record = doc(col('medicalRecords'));
     const b = writeBatch(database());
     b.set(
-      doc(col('medicalRecords')),
+      record,
       MedicalRecordToDoc({
         ...MedicalRecordDefaults,
         catId: cat.id,
@@ -374,6 +385,8 @@ export const CatRepository = {
       'followed_cat',
       { cat: cat.name, user: by.username, area: 'medical' },
       `cat/${cat.id}`,
+      undefined,
+      record.id,
     );
   },
   mergeRequests: () => listQuery('mergeRequests', where('status', '==', 'pending')),
@@ -416,13 +429,13 @@ export const CatRepository = {
       'merge_rejected',
       'cat',
       r.primaryCatId,
-      `${r.duplicateName} → ${r.primaryName}`,
+      `${r.duplicateName} â†’ ${r.primaryName}`,
       note,
     );
     await notifications.send(
       [r.requestedBy],
       'moderation',
-      { target: 'merge', label: `${r.duplicateName} → ${r.primaryName}`, decision: 'rejected' },
+      { target: 'merge', label: `${r.duplicateName} â†’ ${r.primaryName}`, decision: 'rejected' },
       `cat/${r.primaryCatId}`,
     );
   },
@@ -499,13 +512,13 @@ export const CatRepository = {
       'merge_approved',
       'cat',
       primary.id,
-      `${duplicate.name} → ${primary.name}`,
+      `${duplicate.name} â†’ ${primary.name}`,
       note,
     );
     await notifications.send(
       [r.requestedBy],
       'moderation',
-      { target: 'merge', label: `${duplicate.name} → ${primary.name}`, decision: 'approved' },
+      { target: 'merge', label: `${duplicate.name} â†’ ${primary.name}`, decision: 'approved' },
       `cat/${primary.id}`,
     );
   },

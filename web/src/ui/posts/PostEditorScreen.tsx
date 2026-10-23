@@ -244,7 +244,6 @@ export default function PostEditorScreen() {
       let videoPath = post.videoPath;
       if (video) {
         videoPath = await VideoRepository.upload(profile.uid, video);
-        if (post.videoPath) await VideoRepository.delete(post.videoPath);
         setVideo(null);
         change({ videoPath });
       }
@@ -273,6 +272,8 @@ export default function PostEditorScreen() {
         editing && existing
           ? (await PostRepository.edit(existing, prepared, profile), existing.id)
           : await PostRepository.create(prepared, profile);
+      if (existing?.videoPath && existing.videoPath !== videoPath)
+        await VideoRepository.delete(existing.videoPath);
       // Look for matching lost reports / sightings in the background (the PC when online, this device otherwise).
       if (!editing) void MatchRepository.afterPublish(target, profile).catch(() => 0);
       if (existing)

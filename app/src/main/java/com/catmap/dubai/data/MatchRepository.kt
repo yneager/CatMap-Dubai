@@ -7,7 +7,14 @@ import com.catmap.dubai.data.model.PostStatus
 import com.catmap.dubai.data.model.Resolution
 import com.catmap.dubai.data.model.Stats
 import com.catmap.dubai.data.model.UserProfile
+import com.google.firebase.firestore.Filter
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -42,16 +49,22 @@ class MatchRepository(
      * always (a moderator's delete, an older app), so each other post is checked once while the screen is open and a
      * pair whose post is gone is dropped and deleted.
      */
-    fun forPost(uid: String, postId: String): Flow<List<PostMatch>> = flow {
-        val checked = HashMap<String, PostAvailability>()
-        emitAll(
-            mine(uid).map { l ->
-                l.filter { it.lostPostId == postId || it.sightingPostId == postId }.filterNot { m ->
-                    val other = if (m.lostPostId == postId) m.sightingPostId else m.lostPostId
-                    checked.getOrPut(other) { posts.availability(other) }.also { if (it == PostAvailability.GONE) drop(m) } != PostAvailability.THERE
-                }
-            },
-        )
+    fun queryForPost(uid: String, postId: String): Query = col.whereArrayContains("members", uid)
+        .where(Filter.or(Filter.equalTo("lostPostId", postId), Filter.equalTo("sightingPostId", postId)))
+        .orderBy("score", Query.Direction.DESCENDING)
+
+    suspend fun filterForPost(uid: String, postId: String, list: List<PostMatch>): List<PostMatch> = coroutineScope {
+        list.map { match -> async {
+            val other = if (match.lostPostId == postId) match.sightingPostId else match.lostPostId
+            val state = posts.cachedAvailability(uid, other)
+            if (state == PostAvailability.GONE) drop(match)
+            match.takeIf { state == PostAvailability.THERE }
+        } }.awaitAll().filterNotNull()
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun forPost(uid: String, postId: String): Flow<List<PostMatch>> = ForegroundRefresh.version.flatMapLatest {
+        queryForPost(uid, postId).limit(50).listFlow<PostMatch>().map { filterForPost(uid, postId, it) }
     }
 
     fun matchFlow(id: String): Flow<PostMatch?> = col.document(id).objectFlow()
@@ -198,7 +211,7 @@ class MatchRepository(
         val chatId = openChat(match, lost, sighting, me)
         notifications.send(
             listOf(match.sightingOwnerId), NotifType.MATCH_INFO,
-            mapOf("name" to lost?.name.orEmpty(), "type" to match.animalType, "user" to me.username), "chat/$chatId", dedupeKey = "mi_${match.id}",
+            mapOf("name" to lost?.name.orEmpty(), "type" to match.animalType, "user" to me.username), "chat/$chatId", dedupeKey = "mi_${match.id}", sourceId = match.id,
         )
         return chatId
     }
@@ -233,7 +246,7 @@ class MatchRepository(
         if (credited != null) {
             notifications.send(
                 listOf(credited.sightingOwnerId), NotifType.MATCH_REUNITED,
-                mapOf("name" to post.name, "type" to post.animalType), "post/${post.id}", dedupeKey = "ru_${credited.id}",
+                mapOf("name" to post.name, "type" to post.animalType), "post/${post.id}", dedupeKey = "ru_${credited.id}", sourceId = credited.id,
             )
         }
         return true

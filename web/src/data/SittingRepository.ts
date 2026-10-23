@@ -1,4 +1,5 @@
 import {
+  orderBy,
   doc,
   where,
   limit,
@@ -78,8 +79,18 @@ export const SittingRepository = {
       decision: 'removed',
     });
   },
-  asOwner: (uid: string) => listQuery('bookings', where('ownerId', '==', uid)),
-  asSitter: (uid: string) => listQuery('bookings', where('sitterId', '==', uid)),
+  bookingsQuery: (uid: string, sitter: boolean) =>
+    listQuery(
+      'bookings',
+      where(sitter ? 'sitterId' : 'ownerId', '==', uid),
+      orderBy('createdAt', 'desc'),
+    ),
+  reviewsQuery: (uid: string) =>
+    listQuery('reviews', where('sitterId', '==', uid), orderBy('createdAt', 'desc')),
+  asOwner: (uid: string) =>
+    listQuery('bookings', where('ownerId', '==', uid), orderBy('createdAt', 'desc'), limit(50)),
+  asSitter: (uid: string) =>
+    listQuery('bookings', where('sitterId', '==', uid), orderBy('createdAt', 'desc'), limit(50)),
   allBookings: () => listQuery('bookings', limit(500)),
   bookingFlow: (id: string) => ref(`bookings/${id}`),
   requestBooking: async (
@@ -92,7 +103,7 @@ export const SittingRepository = {
     me: UserProfile,
   ) => {
     if (sitter.uid === me.uid) throw new AppException('err_own_listing');
-    if (endAt < startAt) throw new AppException('err_dates');
+    if (endAt <= startAt) throw new AppException('err_dates');
     const target = doc(col('bookings'));
     const b = writeBatch(database());
     b.set(
@@ -119,6 +130,8 @@ export const SittingRepository = {
       'booking_request',
       { user: me.username },
       'bookings?tab=sitter',
+      undefined,
+      target.id,
     );
     return target.id;
   },
@@ -136,9 +149,12 @@ export const SittingRepository = {
       'booking_update',
       { user: me.username, status },
       other === booking.sitterId ? 'bookings?tab=sitter' : 'bookings',
+      undefined,
+      booking.id,
     );
   },
-  reviewsFor: (uid: string) => listQuery('reviews', where('sitterId', '==', uid)),
+  reviewsFor: (uid: string) =>
+    listQuery('reviews', where('sitterId', '==', uid), orderBy('createdAt', 'desc'), limit(50)),
   review: async (booking: Booking, rating: number, text: string, me: UserProfile) => {
     const score = Math.max(1, Math.min(5, Math.round(rating)));
     await runTransaction(database(), async (tx) => {
@@ -170,6 +186,8 @@ export const SittingRepository = {
       'review',
       { user: me.username, rating: String(score) },
       `sitter/${booking.sitterId}`,
+      undefined,
+      booking.id,
     );
   },
 };

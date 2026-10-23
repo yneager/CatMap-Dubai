@@ -7,6 +7,8 @@ import {
   runTransaction,
   updateDoc,
   arrayRemove,
+  setDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { authentication, database } from '../firebase';
 import { ref, listQuery, deleteDocuments } from './Firestore';
@@ -28,6 +30,7 @@ export async function deleteAccount(password: string) {
   );
   const uid = user.uid,
     profile = await UserRepository.profile(uid);
+  await setDoc(ref(`accountDeletions/${uid}`), { requestedAt: serverTimestamp() }, { merge: true });
   const jobRef = ref(`aiJobs/${uid}`),
     job = await getDoc(jobRef);
   if (job.exists()) {
@@ -55,6 +58,7 @@ export async function deleteAccount(password: string) {
         if (parent && snap?.exists()) {
           const changes: Record<string, unknown> = {
             [aggregate]: Math.max(0, (snap.data()[aggregate] ?? 0) - 1),
+            counterSourceId: d.id,
           };
           if (path === 'checkins' && snap.data().lastCheckinAt === fresh.data().at)
             Object.assign(changes, { lastCheckinAt: 0, lastCheckinBy: '' });
@@ -66,8 +70,8 @@ export async function deleteAccount(password: string) {
   for await (const page of pages(listQuery('images', where('ownerId', '==', uid))))
     photos.push(...page.map((d) => d.ref.path));
   const ids = photos.map((path) => path.split('/')[1]).filter((id) => !id.endsWith('_t'));
-  for (let i = 0; i < ids.length; i += 10) {
-    const chunk = ids.slice(i, i + 10),
+  for (let i = 0; i < ids.length; i += 3) {
+    const chunk = ids.slice(i, i + 3),
       cats = await getDocs(listQuery('cats', where('photoIds', 'array-contains-any', chunk)));
     for (const d of cats.docs)
       await runTransaction(database(), async (tx) => {
@@ -76,6 +80,7 @@ export async function deleteAccount(password: string) {
         const remaining = (fresh.data().photoIds ?? []).filter((id: string) => !chunk.includes(id));
         tx.update(d.ref, {
           photoIds: remaining,
+          removedPhotoIds: chunk.filter((id) => (fresh.data().photoIds ?? []).includes(id)),
           ...(chunk.includes(fresh.data().coverPhotoId)
             ? { coverPhotoId: remaining[0] ?? '' }
             : {}),
@@ -104,8 +109,21 @@ export async function deleteAccount(password: string) {
   refs.push(
     ...(await getDocs(listQuery(`users/${uid}/notifications`))).docs.map((d) => d.ref.path),
   );
+  for (const lease of (await getDocs(listQuery('videoUploads', where('ownerId', '==', uid))))
+    .docs) {
+    await (
+      await import('./VideoRepository')
+    ).VideoRepository.deleteRequired(lease.data().path ?? '');
+    refs.push(lease.ref.path);
+  }
+  refs.push(
+    ...(await getDocs(listQuery('mediaUploads', where('ownerId', '==', uid)))).docs.map(
+      (d) => d.ref.path,
+    ),
+  );
   await deleteDocuments(refs);
   await deleteDocuments([
+    `userLimits/${uid}`,
     `users/${uid}/private/account`,
     ...(profile?.username ? [`usernames/${profile.username.toLowerCase()}`] : []),
     `users/${uid}`,

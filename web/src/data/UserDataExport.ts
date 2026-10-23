@@ -89,7 +89,7 @@ export const UserDataExportRepository = {
               seen.add(d.id);
             }
     }
-    for (const name of ['notifications', 'favorites', 'blocked']) {
+    for (const name of ['notifications', 'notificationReceipts', 'favorites', 'blocked']) {
       records[name] = [];
       for await (const page of pages(listQuery(`users/${uid}/${name}`)))
         records[name].push(...page.map((d) => snapshot(d.id, d.data())));

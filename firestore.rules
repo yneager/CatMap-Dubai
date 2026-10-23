@@ -10,7 +10,8 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function uid() { return request.auth.uid; }
     // Suspended accounts (set by an admin) can still read, but every write that needs verified() is refused.
-    function verified() { return signedIn() && request.auth.token.email_verified == true && !suspended(); }
+    function verified() { return signedIn() && request.auth.token.email_verified == true && exists(userPath()) && !suspended()
+      && !exists(/databases/$(database)/documents/accountDeletions/$(uid())); }
     function suspended() { return exists(userPath()) && get(userPath()).data.get('suspended', false) == true; }
     function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
     function role() { return exists(userPath()) ? get(userPath()).data.role : 'user'; }
@@ -28,10 +29,12 @@ service cloud.firestore {
 
     // Client times are milliseconds. A time more than an hour ahead of the server would, for example, keep a post
     // at the top of everyone's feed, so it's refused.
-    function notFuture(t) { return t is int && t <= request.time.toMillis() + 3600000; }
+    function notFuture(t) { return t is int && t >= 0 && t <= request.time.toMillis() + 3600000; }
     // Optional string / list field `k` of map `d`, at most `max` long.
     function optStr(d, k, max) { return !(k in d) || (d[k] is string && d[k].size() <= max); }
     function optList(d, k, max) { return !(k in d) || (d[k] is list && d[k].size() <= max); }
+    function communityPhoto(id) { return id is string && !id.matches('c_.*'); }
+    function communityPhotos(ids) { return ids is list && !ids.join(',').matches('(^|.*,)(c_[^,]*)(,.*|$)'); }
 
     // Map-area codes (data/Geohash.kt): the position's geohash at precision 4, 5 and 6, or none for a missing position.
     function geoCellsOk(d) {
@@ -144,19 +147,73 @@ service cloud.firestore {
                          'badges', 'followedCats', 'showStatsPublicly', 'lastPostAt'])
         && (!('lastPostAt' in ch) || d.lastPostAt == request.time)
         && (!('volunteerStatus' in ch) || d.volunteerStatus == 'applied')
-        && (!('username' in ch) || (d.username is string && d.username.size() >= 3 && d.username.size() <= 30))
+        && (!('username' in ch) || canonicalUsername(d.username, uid()))
         && (!('displayName' in ch) || optStr(d, 'displayName', 60))
         && (!('bio' in ch) || optStr(d, 'bio', 300))
-        && (!('photoId' in ch) || optStr(d, 'photoId', 128))
+        && (!('photoId' in ch) || (optStr(d, 'photoId', 128) && communityPhoto(d.get('photoId', ''))))
         && (!('showStatsPublicly' in ch) || d.showStatsPublicly is bool)
         && statsStepOk(ch) && pointsStepOk(ch) && badgesOk(ch) && listStepOk(ch, 'neighborhoods') && listStepOk(ch, 'followedCats');
+    }
+
+    function slotStep(bucket, id, delta) {
+      let path = /databases/$(database)/documents/userLimits/$(uid());
+      return getAfter(path).data[bucket] == get(path).data[bucket] + delta
+        && getAfter(path).data[bucket + 'Source'] == id;
+    }
+    function slotSourceStep(bucket) {
+      let d = incoming();
+      let source = /databases/$(database)/documents/users/$(uid())/$(bucket)/$(d[bucket + 'Source']);
+      return d[bucket] is int && d[bucket] >= 0 && d[bucket] <= 500
+        && d[bucket + 'Source'] is string && d[bucket + 'Source'].size() <= 128
+        && ((d[bucket] == resource.data[bucket] + 1 && !exists(source) && existsAfter(source))
+          || (d[bucket] == resource.data[bucket] - 1 && exists(source) && !existsAfter(source)));
+    }
+    match /userLimits/{id} {
+      allow read: if signedIn() && uid() == id;
+      allow delete: if signedIn() && uid() == id && exists(/databases/$(database)/documents/accountDeletions/$(id));
+      allow create: if signedIn() && uid() == id && !exists(userPath()) && existsAfter(userPath())
+        && incoming().keys().hasOnly(['favorites','blocked','unreadCount']) && incoming().favorites == 0 && incoming().blocked == 0 && incoming().get('unreadCount', 0) == 0;
+      allow update: if signedIn() && ((uid() == id && (
+        (onlyChanging(['favorites','favoritesSource']) && slotSourceStep('favorites'))
+        || (onlyChanging(['blocked','blockedSource']) && slotSourceStep('blocked'))))
+        || (onlyChanging(['unreadCount','unreadChatId','unreadMessageId']) && unreadTotalStep(id)));
+    }
+    function unreadTotalStep(owner) {
+      let chatPath = /databases/$(database)/documents/chats/$(incoming().unreadChatId);
+      let before = get(chatPath).data;
+      let after = getAfter(chatPath).data;
+      let messagePath = /databases/$(database)/documents/chats/$(incoming().unreadChatId)/messages/$(incoming().get('unreadMessageId', ''));
+      return incoming().unreadCount is int && incoming().unreadCount >= 0 && uid() in before.members && owner in before.members
+        && ((owner != uid() && incoming().unreadCount == resource.data.get('unreadCount', 0) + 1
+          && !exists(messagePath) && getAfter(messagePath).data.senderId == uid()
+          && after.lastMessageId == incoming().unreadMessageId && after.unread[owner] == before.unread[owner] + 1)
+        || (owner == uid() && before.unread[owner] > 0 && after.unread[owner] == 0
+          && incoming().unreadCount == resource.data.get('unreadCount', 0) - before.unread[owner]));
+    }
+
+    function canonicalUsername(name, owner) {
+      return name is string && name.matches('[A-Za-z0-9_.]{3,20}')
+        && getAfter(/databases/$(database)/documents/usernames/$(name.lower())).data.uid == owner;
+    }
+    function areaNamesOk(names) {
+      return names is list && names.size() <= 200 && names.join(',').size() <= 4000
+        && names.join(',').matches('(|[a-z0-9_-]{1,64}(,[a-z0-9_-]{1,64})*)');
+    }
+    function privateShape(doc, d) {
+      return (doc == 'account' && d.keys().hasOnly(['email', 'createdAt'])
+          && d.email is string && d.email.size() <= 320 && d.email == request.auth.token.email && notFuture(d.createdAt))
+        || (doc == 'areaFollow' && d.keys().hasOnly(['lat', 'lng', 'radiusKm', 'updatedAt'])
+          && d.lat is number && d.lat >= -90 && d.lat <= 90 && d.lng is number && d.lng >= -180 && d.lng <= 180
+          && d.radiusKm is number && d.radiusKm > 0 && d.radiusKm <= 100 && notFuture(d.updatedAt))
+        || (doc == 'push' && d.keys().hasOnly(['tokens']) && d.tokens is list && d.tokens.size() <= 10
+          && d.tokens.join(',').size() <= 5120 && d.tokens.join(',').matches('[A-Za-z0-9_:.,-]{1,5120}'));
     }
 
     match /users/{userId} {
       // Verified members see public profiles (names, photos, badges); an unverified account sees only its own.
       allow get: if signedIn() && (uid() == userId || member());
       allow list: if member();
-      allow create: if signedIn() && uid() == userId
+      allow create: if signedIn() && uid() == userId && !exists(/databases/$(database)/documents/accountDeletions/$(uid()))
         && incoming().keys().hasOnly(userFields())
         && (incoming().role == 'user' || (incoming().role == 'admin' && demoAdminClaim()))
         && incoming().volunteerStatus == 'none'
@@ -167,8 +224,9 @@ service cloud.firestore {
         && incoming().get('neighborhoods', []).size() == 0
         && incoming().get('followedCats', []).size() == 0
         && incoming().get('lastPostAt', null) == null
-        && incoming().username is string && incoming().username.size() <= 30
-        && optStr(incoming(), 'displayName', 60) && optStr(incoming(), 'bio', 300) && optStr(incoming(), 'photoId', 128);
+        && canonicalUsername(incoming().username, userId)
+        && optStr(incoming(), 'displayName', 60) && optStr(incoming(), 'bio', 300) && optStr(incoming(), 'photoId', 128)
+        && communityPhoto(incoming().get('photoId', ''));
       // Only admins can change a role or suspend an account.
       allow update: if
         (signedIn() && uid() == userId && selfProfileUpdateOk())
@@ -176,35 +234,95 @@ service cloud.firestore {
         || isAdmin()
         || (signedIn() && uid() == userId && demoAdminClaim() && onlyChanging(['role']) && incoming().role == 'admin');
       // A suspended member can't delete their profile: re-creating it would clear the suspension.
-      allow delete: if (signedIn() && uid() == userId && resource.data.get('suspended', false) != true) || isAdmin();
+      allow delete: if (signedIn() && uid() == userId && (resource == null || resource.data.get('suspended', false) != true
+        || exists(/databases/$(database)/documents/accountDeletions/$(uid())))) || isAdmin();
 
       // Email address and other account data only the owner may see.
       match /private/{doc} {
-        allow read, write: if signedIn() && uid() == userId;
+        allow read, delete: if signedIn() && uid() == userId;
+        allow create, update: if signedIn() && uid() == userId && privateShape(doc, incoming())
+          && (doc == 'account' || (verified() && exists(userPath())));
       }
 
+      match /notificationReceipts/{id} {
+        allow get: if signedIn() && (uid() == userId || resource == null || resource.data.fromUid == uid());
+        allow list: if signedIn() && uid() == userId;
+        allow create: if signedIn() && incoming().keys().hasOnly(['fromUid','sourceId','createdAt'])
+          && incoming().fromUid == uid() && optStr(incoming(), 'sourceId', 300) && notFuture(incoming().createdAt)
+          && !exists(/databases/$(database)/documents/users/$(userId)/notifications/$(id))
+          && getAfter(/databases/$(database)/documents/users/$(userId)/notifications/$(id)).data.fromUid == uid()
+          && getAfter(/databases/$(database)/documents/users/$(userId)/notifications/$(id)).data.createdAt == incoming().createdAt;
+        allow delete: if signedIn() && uid() == userId && exists(/databases/$(database)/documents/accountDeletions/$(uid()));
+      }
       match /notifications/{notificationId} {
-        allow read, delete: if signedIn() && uid() == userId;
-        allow update: if signedIn() && uid() == userId && onlyChanging(['read']);
-        allow create: if (signedIn() && uid() == userId && validNotification(incoming()))
+        allow list, delete: if signedIn() && uid() == userId;
+        // A sender may check only their own fixed event ID for idempotent creation.
+        allow get: if signedIn() && (uid() == userId || resource == null || resource.data.fromUid == uid());
+        allow update: if signedIn() && uid() == userId && onlyChanging(['read']) && incoming().read is bool;
+        allow create: if exists(/databases/$(database)/documents/users/$(userId))
+          && !exists(/databases/$(database)/documents/accountDeletions/$(userId))
+          && receiptOk(userId, notificationId, incoming()) && notificationKey(incoming(), notificationId) && (
+          (verified() && uid() == userId && validNotification(incoming())
+            && (incoming().type == 'welcome' && incoming().params.user == get(userPath()).data.username
+              || incoming().type == 'stale_post' && eventStale(incoming())
+              || incoming().type == 'achievement' && incoming().params.badge in earnedBadges(get(userPath()).data)))
           // Into someone else's inbox: only the kinds of alert the sender's role sends, in the app's own shape.
           || (verified() && !aiWorker() && incoming().fromUid == uid() && validNotification(incoming())
-              && incoming().read == false && senderMaySend(incoming().type)
+              && incoming().read == false && notificationEvent(incoming(), userId)
+              && exists(/databases/$(database)/documents/users/$(userId))
+              && !exists(/databases/$(database)/documents/accountDeletions/$(userId))
               // Someone you blocked can't reach your inbox either (their messages are already refused).
               && !exists(/databases/$(database)/documents/users/$(userId)/blocked/$(uid())))
           // The AI worker may only announce a match it found, once per match (fixed ids pm_/pr_ + match id).
-          || (aiWorker() && incoming().fromUid == uid()
+          || (aiWorker() && incoming().fromUid == uid() && validNotification(incoming())
               && incoming().type in ['match_found', 'match_reporter']
-              && notificationId.matches('p[mr]_.+') && incoming().route == 'match/' + notificationId[3:]);
+              && incoming().get('sourceId', '') == notificationId[3:] && incoming().route == 'match/' + notificationId[3:]
+              && (incoming().type == 'match_found'
+                ? get(/databases/$(database)/documents/matches/$(incoming().sourceId)).data.lostOwnerId == userId
+                : get(/databases/$(database)/documents/matches/$(incoming().sourceId)).data.sightingOwnerId == userId))
+          || (maintenanceWorker() && incoming().fromUid == uid() && validNotification(incoming())
+              && incoming().type == 'lost_nearby' && notificationId == 'lost_' + incoming().sourceId
+              && incoming().route == 'post/' + incoming().sourceId && postAt(incoming().sourceId).hidden == false
+              && postAt(incoming().sourceId).status == 'open' && postAt(incoming().sourceId).category == 'lost'
+              && incoming().params.name == postAt(incoming().sourceId).name
+              && postAt(incoming().sourceId).neighborhood in get(/databases/$(database)/documents/areaFollows/$(userId)).data.neighborhoods
+              && !exists(/databases/$(database)/documents/users/$(userId)/blocked/$(postAt(incoming().sourceId).ownerId))));
       }
 
       // Saved posts and blocked people are private to their owner.
       match /favorites/{postId} {
-        allow read, write: if signedIn() && uid() == userId;
+        allow read: if signedIn() && uid() == userId;
+        allow delete: if signedIn() && uid() == userId && (exists(/databases/$(database)/documents/accountDeletions/$(uid())) || slotStep('favorites', postId, -1));
+        allow create: if verified() && uid() == userId && exists(userPath())
+          && postId.size() <= 128 && incoming().keys().hasOnly(['postId', 'savedAt'])
+          && incoming().postId == postId && notFuture(incoming().savedAt) && slotStep('favorites', postId, 1);
       }
       match /blocked/{otherId} {
-        allow read, write: if signedIn() && uid() == userId;
+        allow read: if maintenanceWorker() || (signedIn() && uid() == userId);
+        allow delete: if signedIn() && uid() == userId && (exists(/databases/$(database)/documents/accountDeletions/$(uid())) || slotStep('blocked', otherId, -1));
+        allow create: if verified() && uid() == userId && exists(userPath()) && otherId != uid()
+          && otherId.size() <= 128 && incoming().keys().hasOnly(['at']) && notFuture(incoming().at) && slotStep('blocked', otherId, 1);
       }
+    }
+
+    function receiptOk(recipient, id, n) {
+      let path = /databases/$(database)/documents/users/$(recipient)/notificationReceipts/$(id);
+      return !exists(path) && getAfter(path).data.fromUid == uid()
+        && getAfter(path).data.sourceId == n.get('sourceId', '') && getAfter(path).data.createdAt == n.createdAt;
+    }
+    function notificationKey(n, id) {
+      return n.type == 'message' ? id == 'msg_' + n.route[5:] + '_' + n.sourceId
+        : n.type == 'post_update' ? id == 'upd_' + n.route[5:] + '_' + n.sourceId
+        : n.type == 'match_found' ? id == 'pm_' + n.sourceId
+        : n.type == 'match_reporter' ? id == 'pr_' + n.sourceId
+        : n.type == 'match_info' ? id == 'mi_' + n.sourceId
+        : n.type == 'match_reunited' ? id == 'ru_' + n.sourceId
+        : n.type == 'welcome' ? id == 'welcome'
+        : n.type == 'stale_post' ? id == 'stale_' + n.sourceId + '_' + string(int(request.time.toMillis() / 1209600000))
+        : n.type == 'achievement' ? id == 'achievement_' + n.params.badge
+        : n.type in ['adoption_request','adoption_decision','booking_request','booking_update','review','followed_cat','rescue_moderation','rescue_update']
+          ? id == n.type + '_' + n.sourceId + '_' + n.params.get('status', n.params.get('decision', ''))
+          : true;
     }
 
     // ---------- notification shape ----------
@@ -214,14 +332,15 @@ service cloud.firestore {
     function validParams(m) {
       return m is map && m.size() <= 8
         && m.keys().hasOnly(['user', 'name', 'text', 'area', 'lostArea', 'matchId', 'type', 'category', 'kind', 'status', 'cat',
-                             'station', 'decision', 'target', 'label', 'rating', 'badge'])
+                             'station', 'decision', 'target', 'label', 'rating', 'badge', 'tier'])
         && paramOk(m, 'user') && paramOk(m, 'name') && paramOk(m, 'text') && paramOk(m, 'area') && paramOk(m, 'lostArea')
         && paramOk(m, 'matchId') && paramOk(m, 'type') && paramOk(m, 'category') && paramOk(m, 'kind') && paramOk(m, 'status')
         && paramOk(m, 'cat') && paramOk(m, 'station') && paramOk(m, 'decision') && paramOk(m, 'target') && paramOk(m, 'label')
-        && paramOk(m, 'rating') && paramOk(m, 'badge');
+        && paramOk(m, 'rating') && paramOk(m, 'badge') && paramOk(m, 'tier');
     }
     function validNotification(n) {
-      return n.keys().hasOnly(['type', 'params', 'route', 'fromUid', 'read', 'createdAt'])
+      return n.keys().hasOnly(['type', 'params', 'route', 'fromUid', 'read', 'createdAt', 'sourceId'])
+        && optStr(n, 'sourceId', 300) && n.get('sourceId', '').matches('(|[A-Za-z0-9_.-]{1,300})') && n.read is bool
         && n.type is string && n.type.size() <= 40
         && validParams(n.get('params', {}))
         && n.get('route', '') is string
@@ -230,6 +349,86 @@ service cloud.firestore {
     }
     // Alerts any member sends to another person (messages, matches, bookings, lost-pet alerts...). Moderation and
     // staff alerts need the role; welcome, achievement and stale-post reminders only ever go to your own inbox.
+    function eventMessage(n, recipient) {
+      let chatId = n.route[5:];
+      let c = get(/databases/$(database)/documents/chats/$(chatId)).data;
+      let m = get(/databases/$(database)/documents/chats/$(chatId)/messages/$(n.sourceId)).data;
+      return n.route.matches('chat/.+') && uid() in c.members && recipient in c.members && m.senderId == uid()
+        && n.params.user == get(userPath()).data.username
+        && n.params.text == (m.text != '' ? m.text[0:(m.text.size() < 120 ? m.text.size() : 120)] : m.imageId != '' ? 'Photo' : 'Post: ' + m.postTitle);
+    }
+    function eventStale(n) {
+      let p = postAt(n.sourceId);
+      let cutoff = request.time.toMillis() - 1209600000;
+      return n.route == 'post/' + n.sourceId && p.ownerId == uid() && p.hidden == false
+        && p.status == 'open' && p.category in ['lost','found'] && n.params.name == p.name
+        && p.createdAt > 0 && p.createdAt <= cutoff && p.updatedAt <= cutoff && p.get('lastActivityAt', 0) <= cutoff;
+    }
+    function eventAdoption(n, recipient) {
+      let r = get(/databases/$(database)/documents/adoptionRequests/$(n.sourceId)).data;
+      return n.params.name == r.postName && (n.type == 'adoption_request'
+        ? r.requesterId == uid() && r.ownerId == recipient && n.params.user == get(userPath()).data.username && n.route == 'adoption-requests'
+        : r.ownerId == uid() && r.requesterId == recipient && n.params.decision == r.status && r.status in ['approved','declined'] && n.route == 'post/' + r.postId);
+    }
+    function eventBooking(n, recipient) {
+      let b = get(/databases/$(database)/documents/bookings/$(n.sourceId)).data;
+      return n.params.user == get(userPath()).data.username
+        && (b.ownerId == uid() && b.sitterId == recipient || b.sitterId == uid() && b.ownerId == recipient)
+        && (n.type == 'booking_request' ? b.ownerId == uid() && b.status == 'requested' && n.route == 'bookings?tab=sitter'
+          : n.params.status == b.status && n.route in ['bookings','bookings?tab=sitter']);
+    }
+    function eventMatch(n, recipient) {
+      let m = get(/databases/$(database)/documents/matches/$(n.sourceId)).data;
+      let lost = postAt(m.lostPostId);
+      let sighting = postAt(m.sightingPostId);
+      return uid() in m.members && recipient in m.members && n.params.name == lost.name
+        && (n.type == 'match_found' ? recipient == m.lostOwnerId && n.route == 'match/' + n.sourceId
+          : n.type == 'match_reporter' ? recipient == m.sightingOwnerId && n.route == 'match/' + n.sourceId
+          : n.type == 'match_reunited' ? uid() == m.lostOwnerId && m.ownerState == 'reunited' && recipient == m.sightingOwnerId
+          : uid() == m.lostOwnerId && m.ownerState == 'need_info' && recipient == m.sightingOwnerId)
+        && lost.hidden == false && sighting.hidden == false;
+    }
+    function eventPostUpdate(n, recipient) {
+      let p = n.route[5:];
+      let u = get(/databases/$(database)/documents/posts/$(p)/updates/$(n.sourceId)).data;
+      return n.route.matches('post/.+') && u.byUid == uid() && postAt(p).ownerId == recipient
+        && n.params.user == get(userPath()).data.username && n.params.name == postAt(p).name && n.params.kind == u.kind;
+    }
+    function eventFollowed(n, recipient) {
+      let c = get(/databases/$(database)/documents/cats/$(n.route[4:])).data;
+      return n.route.matches('cat/.+') && recipient in c.followers && n.params.cat == c.name
+        && n.params.user == get(userPath()).data.username
+        && (n.params.area == 'medical' ? isVolunteer()
+          && get(/databases/$(database)/documents/medicalRecords/$(n.sourceId)).data.byUid == uid()
+          && get(/databases/$(database)/documents/medicalRecords/$(n.sourceId)).data.catId == n.route[4:] :
+          get(/databases/$(database)/documents/sightings/$(n.sourceId)).data.userId == uid()
+          && get(/databases/$(database)/documents/sightings/$(n.sourceId)).data.catId == n.route[4:]
+          && get(/databases/$(database)/documents/sightings/$(n.sourceId)).data.neighborhood == n.params.area);
+    }
+    function notificationEvent(n, recipient) {
+      return n.type == 'message' && eventMessage(n, recipient)
+        || n.type in ['adoption_request','adoption_decision'] && eventAdoption(n, recipient)
+        || n.type in ['booking_request','booking_update'] && eventBooking(n, recipient)
+        || n.type in ['match_found','match_reporter','match_info','match_reunited'] && eventMatch(n, recipient)
+        || n.type == 'post_update' && eventPostUpdate(n, recipient)
+        || n.type == 'followed_cat' && eventFollowed(n, recipient)
+        || n.type == 'review' && get(/databases/$(database)/documents/reviews/$(n.sourceId)).data.authorId == uid()
+          && get(/databases/$(database)/documents/reviews/$(n.sourceId)).data.sitterId == recipient
+          && n.route == 'sitter/' + recipient && n.params.user == get(userPath()).data.username
+          && n.params.rating == ['', '1','2','3','4','5'][get(/databases/$(database)/documents/reviews/$(n.sourceId)).data.rating]
+        || n.type == 'rescue_moderation' && get(/databases/$(database)/documents/rescues/$(n.sourceId)).data.reporterId == uid()
+          && n.route == 'rescue/' + n.sourceId
+          && n.params.type == get(/databases/$(database)/documents/rescues/$(n.sourceId)).data.type
+          && n.params.area == get(/databases/$(database)/documents/rescues/$(n.sourceId)).data.neighborhood
+          && get(/databases/$(database)/documents/users/$(recipient)).data.role in ['moderator','admin']
+        || n.type == 'rescue_update' && isVolunteer()
+          && get(/databases/$(database)/documents/rescues/$(n.sourceId)).data.reporterId == recipient
+          && n.route == 'rescue/' + n.sourceId
+          && n.params.area == get(/databases/$(database)/documents/rescues/$(n.sourceId)).data.neighborhood
+          && get(/databases/$(database)/documents/rescues/$(n.sourceId)).data.status == n.params.status
+        || n.type in ['moderation','rescue_volunteer','volunteer_decision','maintenance_update'] && isMod();
+    }
+
     function senderMaySend(t) {
       return t in ['message', 'adoption_request', 'adoption_decision', 'booking_request', 'booking_update', 'review',
                    'post_update', 'lost_nearby', 'followed_cat', 'match_found', 'match_reporter', 'match_info',
@@ -244,14 +443,30 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
       allow create: if signedIn() && incoming().uid == uid() && incoming().keys().hasOnly(['uid'])
-        && name.matches('[a-z0-9_.]{3,20}');
-      allow delete: if signedIn() && (resource.data.uid == uid() || isAdmin());
+        && name.matches('[a-z0-9_.]{3,20}')
+        && getAfter(userPath()).data.username.lower() == name;
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == uid()
+        && (!existsAfter(userPath()) || getAfter(userPath()).data.username.lower() != name));
       allow update: if false;
+    }
+
+    // Every aggregate step names the source created/deleted in this same atomic write.
+    function sourceStep(collectionPath, parentField, parentId, ownerField, countField) {
+      let source = path('/databases/' + database + '/documents/' + collectionPath + '/' + incoming().counterSourceId);
+      let before = resource.data.get(countField, 0);
+      let after = incoming()[countField];
+      return (!changed().hasAny(['updatedAt']) || notFuture(incoming().updatedAt))
+        && incoming().counterSourceId is string && incoming().counterSourceId.matches('[A-Za-z0-9_.-]{1,128}') && (
+        (verified() && after == before + 1 && rateLimited() && !exists(source)
+          && getAfter(source).data[parentField] == parentId && getAfter(source).data[ownerField] == uid())
+        || (signedIn() && before >= 0 && after == (before > 0 ? before - 1 : 0)
+          && exists(source) && !existsAfter(source) && get(source).data[parentField] == parentId
+          && (get(source).data[ownerField] == uid() || resource.data.get('ownerId', '') == uid())));
     }
 
     // ---------- cats ----------
     function communityCatFields() {
-      return ['sightingCount', 'lastSeen', 'lat', 'lng', 'neighborhood', 'neighborhoods', 'photoIds',
+      return ['counterSourceId', 'sightingCount', 'lastSeen', 'lat', 'lng', 'neighborhood', 'neighborhoods', 'photoIds',
               'coverPhotoId', 'contributors', 'followers', 'aliases', 'tnrStatus', 'healthStatus',
               'features', 'geoCells', 'searchTerms', 'updatedAt'];
     }
@@ -264,9 +479,11 @@ service cloud.firestore {
     }
 
     function catTextOk(d) {
-      return optStr(d, 'name', 60) && optStr(d, 'description', 2000) && optStr(d, 'distinctiveMarks', 1000)
+      return d.keys().hasOnly(['name', 'aliases', 'description', 'distinctiveMarks', 'coatColor', 'pattern', 'size', 'sex', 'breedHints', 'photoIds', 'coverPhotoId', 'createdBy', 'createdByName', 'contributors', 'followers', 'firstSeen', 'lastSeen', 'sightingCount', 'counterSourceId', 'lat', 'lng', 'neighborhood', 'neighborhoods', 'tnrStatus', 'tnrVerified', 'healthStatus', 'features', 'mergedInto', 'hidden', 'createdAt', 'updatedAt', 'geoCells', 'searchTerms', 'removedPhotoIds'])
+        && optStr(d, 'name', 60) && optStr(d, 'description', 2000) && optStr(d, 'distinctiveMarks', 1000)
         && optStr(d, 'createdByName', 40) && optStr(d, 'coverPhotoId', 128) && optStr(d, 'neighborhood', 80)
         // features: CatAnalyzer.FEATURE_SIZE is 117.
+        && communityPhotos(d.get('photoIds', [])) && communityPhoto(d.get('coverPhotoId', ''))
         && optList(d, 'photoIds', 1000) && optList(d, 'aliases', 50) && optList(d, 'breedHints', 20) && optList(d, 'features', 200)
         && optList(d, 'neighborhoods', 200) && geoCellsOk(d) && searchTermsOk(d);
     }
@@ -306,10 +523,27 @@ service cloud.firestore {
           // A new sighting of this cat.
           || newSightingOfCatOk(ch, before, d)
           // A sighting of this cat was deleted.
-          || (ch.hasOnly(['sightingCount', 'updatedAt']) && before.get('sightingCount', 0) > 0
+          || (ch.hasOnly(['sightingCount', 'updatedAt', 'counterSourceId']) && before.get('sightingCount', 0) > 0
               && d.sightingCount == before.get('sightingCount', 0) - 1));
     }
 
+    function ownedImage(id) { return get(/databases/$(database)/documents/images/$(id)).data.ownerId == uid(); }
+    function selfDetachCat() {
+      let d = incoming();
+      let removed = d.get('removedPhotoIds', []);
+      return signedIn() && onlyChanging(['photoIds','coverPhotoId','removedPhotoIds','contributors','followers'])
+        && onlySelfAddedOrRemoved(changed(), 'contributors') && onlySelfAddedOrRemoved(changed(), 'followers')
+        && d.get('contributors', []).toSet().difference(resource.data.get('contributors', []).toSet()).size() == 0
+        && d.get('followers', []).toSet().difference(resource.data.get('followers', []).toSet()).size() == 0
+        && removed is list && removed.size() <= 3
+        && (!changed().hasAny(['photoIds','coverPhotoId','removedPhotoIds']) || (
+          d.photoIds.toSet() == resource.data.get('photoIds', []).toSet().difference(removed.toSet())
+          && resource.data.get('photoIds', []).toSet().hasAll(removed.toSet())
+          && (removed.size() < 1 || ownedImage(removed[0])) && (removed.size() < 2 || ownedImage(removed[1]))
+          && (removed.size() < 3 || ownedImage(removed[2]))
+          && ((d.coverPhotoId == resource.data.coverPhotoId && !(resource.data.coverPhotoId in removed))
+            || (resource.data.coverPhotoId in removed && d.coverPhotoId == (d.photoIds.size() > 0 ? d.photoIds[0] : '')))));
+    }
     match /cats/{catId} {
       allow read: if member();
       allow create: if verified()
@@ -321,15 +555,21 @@ service cloud.firestore {
         && incoming().get('followers', []) == [uid()]
         && incoming().get('contributors', []) == [uid()]
         && incoming().get('sightingCount', 1) == 1
+        && rateLimited() && !exists(/databases/$(database)/documents/sightings/$(incoming().counterSourceId))
+        && getAfter(/databases/$(database)/documents/sightings/$(incoming().counterSourceId)).data.catId == catId
+        && getAfter(/databases/$(database)/documents/sightings/$(incoming().counterSourceId)).data.userId == uid()
         && notFuture(incoming().get('createdAt', 0))
         && catTextOk(incoming());
-      allow update: if isMod()
+      allow update: if isMod() || selfDetachCat()
         || (verified() && resource.data.createdBy == uid()
-            && notChanging(['createdBy', 'createdByName', 'createdAt', 'hidden', 'mergedInto', 'tnrVerified'])
+            && notChanging(['createdBy', 'createdByName', 'createdAt', 'hidden', 'mergedInto', 'tnrVerified','sightingCount','counterSourceId'])
             && tnrAllowed() && catTextOk(incoming()))
         // Volunteers confirm neutering (TNR) on top of what any member may do.
         || (isVolunteer() && onlyChanging(['tnrStatus', 'tnrVerified', 'updatedAt']))
-        || (verified() && communityCatUpdateOk())
+        || (verified() && communityCatUpdateOk()
+          && (!changed().hasAny(['sightingCount','counterSourceId']) || sourceStep('sightings', 'catId', catId, 'userId', 'sightingCount')))
+        || (signedIn() && onlyChanging(['sightingCount','counterSourceId','updatedAt'])
+          && sourceStep('sightings','catId',catId,'userId','sightingCount'))
         // The PC worker fills in the map-area codes and search words of profiles written by older app versions
         // (cat-server backfill).
         || (aiWorker() && onlyChanging(['geoCells', 'searchTerms']) && geoCellsOk(incoming()) && searchTermsOk(incoming()));
@@ -339,7 +579,7 @@ service cloud.firestore {
     // ---------- sightings ----------
     function sightingTextOk(d) {
       return optStr(d, 'catName', 80) && optStr(d, 'username', 40) && optStr(d, 'notes', 2000) && optStr(d, 'aiSummary', 2000)
-        && optStr(d, 'neighborhood', 80) && optList(d, 'photoIds', 6) && optList(d, 'healthTags', 20) && optList(d, 'behaviorTags', 20);
+        && optStr(d, 'neighborhood', 80) && communityPhotos(d.get('photoIds', [])) && optList(d, 'photoIds', 6) && optList(d, 'healthTags', 20) && optList(d, 'behaviorTags', 20);
     }
 
     match /sightings/{sightingId} {
@@ -353,6 +593,9 @@ service cloud.firestore {
         && notFuture(incoming().get('createdAt', 0)) && notFuture(incoming().get('seenAt', 0))
         && incoming().userId == uid()
         && incoming().status == 'pending'
+        && getAfter(/databases/$(database)/documents/cats/$(incoming().catId)).data.counterSourceId == sightingId
+        && getAfter(/databases/$(database)/documents/cats/$(incoming().catId)).data.sightingCount ==
+          (exists(/databases/$(database)/documents/cats/$(incoming().catId)) ? get(/databases/$(database)/documents/cats/$(incoming().catId)).data.get('sightingCount', 0) + 1 : 1)
         && incoming().get('suggestedCatIds', []).size() <= 6
         && incoming().get('rejectedCatIds', []).size() <= 6
         && rateLimited();
@@ -407,11 +650,11 @@ service cloud.firestore {
                                'catName', 'reporterId', 'reporterName', 'status', 'assignedTo', 'assignedName', 'updates',
                                'createdAt', 'updatedAt'])
         && ('' + d.get('type', '') + d.get('urgency', '') + d.get('description', '') + d.get('landmark', '') + d.get('neighborhood', '') + d.get('catId', '') + d.get('catName', '') + d.get('reporterName', '') + d.get('assignedTo', '') + d.get('assignedName', '')).size() <= 4000
-        && optList(d, 'photoIds', 12) && optList(d, 'updates', 3) && notFuture(d.get('createdAt', 0));
+        && communityPhotos(d.get('photoIds', [])) && optList(d, 'photoIds', 12) && optList(d, 'updates', 3) && notFuture(d.get('createdAt', 0));
     }
     match /rescues/{reportId} {
       allow read: if signedIn() && (
-        isMod()
+        isMod() || maintenanceWorker()
         || resource.data.reporterId == uid()
         || (isVolunteer() && resource.data.status in volunteerVisible()));
       allow create: if verified()
@@ -438,12 +681,9 @@ service cloud.firestore {
       allow create, delete: if isAdmin();
       // A check-in counts exactly one more visit; deleting one (yours, or during account deletion) one fewer.
       allow update: if isAdmin()
-        || (verified() && onlyChanging(['checkinCount', 'lastCheckinAt', 'lastCheckinBy'])
-            && (incoming().checkinCount == resource.data.get('checkinCount', 0) + 1
-                || incoming().checkinCount == resource.data.get('checkinCount', 0) - 1
-                || (incoming().checkinCount == 0 && resource.data.get('checkinCount', 0) == 0))
-            && incoming().checkinCount >= 0
-            && notFuture(incoming().get('lastCheckinAt', 0)) && optStr(incoming(), 'lastCheckinBy', 40));
+        || (signedIn() && onlyChanging(['checkinCount', 'lastCheckinAt', 'lastCheckinBy', 'counterSourceId'])
+          && sourceStep('checkins', 'stationId', stationId, 'userId', 'checkinCount')
+          && notFuture(incoming().get('lastCheckinAt', 0)) && optStr(incoming(), 'lastCheckinBy', 40));
     }
 
     match /checkins/{checkinId} {
@@ -451,7 +691,10 @@ service cloud.firestore {
       allow create: if verified() && incoming().userId == uid()
         && incoming().keys().hasOnly(['stationId', 'stationName', 'userId', 'username', 'catsSeen', 'catIds', 'foodLevel', 'waterLevel', 'note', 'at'])
         && optStr(incoming(), 'note', 1000) && optStr(incoming(), 'stationName', 120) && optStr(incoming(), 'username', 40)
-        && optList(incoming(), 'catIds', 30) && notFuture(incoming().get('at', 0));
+        && optList(incoming(), 'catIds', 30) && notFuture(incoming().get('at', 0))
+        && incoming().username == get(userPath()).data.username
+        && getAfter(/databases/$(database)/documents/stations/$(incoming().stationId)).data.counterSourceId == checkinId
+        && rateLimited();
       allow delete: if signedIn() && (resource.data.userId == uid() || isAdmin());
     }
 
@@ -530,7 +773,7 @@ service cloud.firestore {
       return ('' + d.ownerName + d.ownerPhotoId + d.name + d.description + d.color + d.breed + d.features + d.sex + d.ageGroup
               + d.videoPath + d.neighborhood + d.contactMethod + d.contactPhone + d.contactEmail + d.health).size() <= 4500
         && d.ownerName.size() <= 40 && d.features.size() <= 600 && d.health.size() <= 600
-        && d.photoIds is list && d.photoIds.join(',').size() <= 800
+        && communityPhotos(d.photoIds) && communityPhoto(d.get('ownerPhotoId', '')) && d.photoIds.join(',').size() <= 800
         && d.keywords is list && d.keywords.size() <= 100 && d.keywords.join(' ').size() <= 4000
         && (d.lat + d.lng) is number && d.lastSeenAt is int && d.updatesCount is int
         && [d.approximate, d.vaccinated, d.neutered, d.hidden].hasOnly([true, false]);
@@ -570,56 +813,144 @@ service cloud.firestore {
         && ((!creating && !ch.hasAny(['createdAt', 'lastActivityAt', 'updatedAt']))
             || (d.createdAt is int && d.createdAt <= latest && d.get('lastActivityAt', 0) <= latest
                 && d.updatedAt is int && d.updatedAt <= latest))
-        && d.keys().hasOnly(['ownerId', 'ownerName', 'ownerPhotoId', 'animalType', 'category', 'status', 'name', 'description', 'color', 'breed', 'features', 'sex', 'ageGroup', 'photoIds', 'videoPath', 'lat', 'lng', 'approximate', 'areaRadiusM', 'neighborhood', 'lastSeenAt', 'reward', 'contactMethod', 'contactPhone', 'contactEmail', 'adoptionStatus', 'health', 'vaccinated', 'neutered', 'updatesCount', 'hidden', 'keywords', 'createdAt', 'updatedAt', 'resolvedAt', 'lastActivityAt', 'fingerprint', 'microchip', 'resolution', 'resolvedMatchId', 'geoCells', 'searchTerms']);
+        && d.keys().hasOnly(['repairSourceId', 'counterSourceId', 'ownerId', 'ownerName', 'ownerPhotoId', 'animalType', 'category', 'status', 'name', 'description', 'color', 'breed', 'features', 'sex', 'ageGroup', 'photoIds', 'videoPath', 'lat', 'lng', 'approximate', 'areaRadiusM', 'neighborhood', 'lastSeenAt', 'reward', 'contactMethod', 'contactPhone', 'contactEmail', 'adoptionStatus', 'health', 'vaccinated', 'neutered', 'updatesCount', 'hidden', 'keywords', 'createdAt', 'updatedAt', 'resolvedAt', 'lastActivityAt', 'fingerprint', 'microchip', 'resolution', 'resolvedMatchId', 'geoCells', 'searchTerms']);
     }
 
     function ownerPostUpdateOk(ch) {
-      return !ch.hasAny(['ownerId', 'ownerName', 'hidden', 'createdAt', 'updatesCount']) && validPostWith(ch);
+      return !ch.hasAny(['ownerId', 'ownerName', 'hidden', 'createdAt', 'updatesCount', 'counterSourceId','repairSourceId']) && validPostWith(ch);
+    }
+    function reunionSourceOk(postId, ch) {
+      let d = incoming();
+      return !ch.hasAny(['status','resolution','resolvedMatchId']) || d.get('resolvedMatchId', '') == ''
+        || (d.status == 'reunited' && d.get('resolution', '') == 'catmap'
+          && getAfter(/databases/$(database)/documents/matches/$(d.resolvedMatchId)).data.lostPostId == postId
+          && getAfter(/databases/$(database)/documents/matches/$(d.resolvedMatchId)).data.lostOwnerId == uid()
+          && getAfter(/databases/$(database)/documents/matches/$(d.resolvedMatchId)).data.ownerState == 'reunited');
     }
 
+    function deletingPost(id) { return exists(/databases/$(database)/documents/postDeletions/$(id)); }
+    function maintenanceWorker() { return aiWorker() && request.auth.token.get('catmapMaintenance', false) == true; }
+    match /mediaUploads/{id} {
+      allow get: if signedIn() && (resource == null || resource.data.ownerId == uid() || maintenanceWorker());
+      allow list: if maintenanceWorker() || (signedIn() && resource.data.ownerId == uid());
+      allow create: if verified() && incoming().keys().hasOnly(['ownerId','chatId','audience','status','expiresAt'])
+        && incoming().ownerId == uid() && incoming().status == 'staged'
+        && incoming().audience in ['community','chat'] && optStr(incoming(), 'chatId', 300)
+        && incoming().expiresAt is int && incoming().expiresAt > request.time.toMillis()
+        && incoming().expiresAt <= request.time.toMillis() + 691200000
+        && getAfter(/databases/$(database)/documents/images/$(id)).data.ownerId == uid()
+        && getAfter(/databases/$(database)/documents/images/$(id)).data.audience == incoming().audience
+        && getAfter(/databases/$(database)/documents/images/$(id)).data.chatId == incoming().chatId;
+      allow update: if (signedIn() && resource.data.ownerId == uid() && resource.data.status in ['staged','linked']
+          && onlyChanging(['expiresAt']) && incoming().expiresAt is int && incoming().expiresAt > request.time.toMillis()
+          && incoming().expiresAt <= request.time.toMillis() + 691200000)
+        || (maintenanceWorker() && onlyChanging(['status','expiresAt']) && incoming().status in ['linked','deleting','deleted']);
+      allow delete: if signedIn() && (resource == null || resource.data.ownerId == uid() || maintenanceWorker());
+    }
+    match /videoUploads/{id} {
+      allow get: if signedIn() && (resource == null || resource.data.ownerId == uid() || maintenanceWorker());
+      allow list: if maintenanceWorker() || (signedIn() && resource.data.ownerId == uid());
+      allow create: if verified() && incoming().keys().hasOnly(['ownerId','path','status','expiresAt'])
+        && incoming().ownerId == uid() && incoming().path == 'videos/' + uid() + '/' + id && incoming().status == 'staged'
+        && incoming().expiresAt is int && incoming().expiresAt > request.time.toMillis() && incoming().expiresAt <= request.time.toMillis() + 691200000;
+      allow update: if (signedIn() && resource.data.ownerId == uid() && resource.data.status in ['staged','linked']
+          && onlyChanging(['expiresAt']) && incoming().expiresAt is int && incoming().expiresAt > request.time.toMillis()
+          && incoming().expiresAt <= request.time.toMillis() + 691200000)
+        || (maintenanceWorker() && onlyChanging(['status','expiresAt']) && incoming().status in ['linked','deleting','deleted']);
+      allow delete: if signedIn() && (resource == null || resource.data.ownerId == uid() || maintenanceWorker());
+    }
+    match /accountDeletions/{id} {
+      allow get: if (signedIn() && uid() == id) || maintenanceWorker();
+      allow create, update: if signedIn() && uid() == id && incoming().keys().hasOnly(['requestedAt']) && incoming().requestedAt == request.time;
+      // Retaining this UID-only tombstone prevents recreating a deleted suspended profile.
+      allow delete: if isAdmin();
+    }
+    match /updateRepairs/{id} {
+      allow create: if signedIn() && incoming().keys().hasOnly(['postId','updateId','byUid']) && incoming().byUid == uid()
+        && incoming().postId is string && incoming().updateId is string
+        && id == string(incoming().postId.toUtf8().size()) + '_' + incoming().postId + '_' + incoming().updateId
+        && get(/databases/$(database)/documents/posts/$(incoming().postId)/updates/$(incoming().updateId)).data.byUid == uid()
+        && !existsAfter(/databases/$(database)/documents/posts/$(incoming().postId)/updates/$(incoming().updateId));
+      allow read, delete: if maintenanceWorker();
+    }
+    match /postDeletions/{id} {
+      allow read: if signedIn() && (resource == null || resource.data.ownerId == uid() || resource.data.actorId == uid() || isMod() || maintenanceWorker());
+      allow create: if signedIn() && (postAt(id).ownerId == uid() || isMod())
+        && incoming().keys().hasOnly(['ownerId','actorId','photoIds','videoPath','createdAt','status'])
+        && incoming().ownerId == postAt(id).ownerId && incoming().actorId == uid()
+        && incoming().photoIds == postAt(id).get('photoIds', []) && incoming().videoPath == postAt(id).get('videoPath', '')
+        && incoming().status == 'pending' && notFuture(incoming().createdAt)
+        && postAfter(id).hidden == true;
+      allow update: if maintenanceWorker() && onlyChanging(['status']) && incoming().status == 'done';
+    }
+    match /lostAlertJobs/{id} {
+      allow read: if maintenanceWorker() || (signedIn() && resource.data.ownerId == uid());
+      allow create: if verified() && incoming().keys().hasOnly(['ownerId','status','cursor','createdAt'])
+        && incoming().ownerId == uid() && incoming().status == 'pending' && incoming().cursor == ''
+        && notFuture(incoming().createdAt) && postAfter(id).ownerId == uid() && postAfter(id).category == 'lost';
+      allow update: if maintenanceWorker() && onlyChanging(['status','cursor'])
+        && incoming().status in ['pending','done'] && optStr(incoming(), 'cursor', 128);
+    }
     match /posts/{postId} {
       // Hidden posts stay visible to their author and to moderators only.
-      allow get: if member() && (resource == null || resource.data.hidden == false || resource.data.ownerId == uid() || isMod());
-      allow list: if member() && (resource.data.hidden == false || resource.data.ownerId == uid() || isMod());
+      allow get: if member() && (resource == null || resource.data.hidden == false || resource.data.ownerId == uid() || isMod() || maintenanceWorker());
+      allow list: if member() && (resource.data.hidden == false || resource.data.ownerId == uid() || isMod() || maintenanceWorker());
       allow create: if verified()
-        && incoming().ownerId == uid()
+        && incoming().ownerId == uid() && !deletingPost(postId)
+        && incoming().status == 'open' && incoming().get('resolution', '') == '' && incoming().get('resolvedMatchId', '') == ''
         // Posts show the author's real username, never a made-up name.
         && incoming().ownerName == get(userPath()).data.username
         && incoming().hidden == false
-        && incoming().updatesCount == 0
+        && incoming().updatesCount == 0 && incoming().get('counterSourceId', '') == ''
         && validPost()
         && rateLimited();
-      allow update: if (isMod() && validPost())
-        || (verified() && resource.data.ownerId == uid() && ownerPostUpdateOk(changed()))
-        // Anyone adding a sighting moves the counter by exactly one, in the same batch as the update (which also
-        // stamps the writer's rate limit, so the counter can't be pumped on its own).
-        || (verified() && onlyChanging(['updatesCount', 'updatedAt'])
-            && ((incoming().updatesCount == resource.data.updatesCount + 1 && rateLimited())
-                // Removing an update (by its author or the post owner) moves it back down, never below zero.
-                || (incoming().updatesCount == resource.data.updatesCount - 1 && resource.data.updatesCount > 0)))
+      allow update: if (maintenanceWorker() && onlyChanging(['updatesCount','repairSourceId'])
+          && incoming().updatesCount is int && incoming().updatesCount >= 0
+          && get(/databases/$(database)/documents/updateRepairs/$(incoming().repairSourceId)).data.postId == postId
+          && !existsAfter(/databases/$(database)/documents/updateRepairs/$(incoming().repairSourceId)))
+        || (isMod() && validPost())
+        || (signedIn() && resource.data.ownerId == uid() && onlyChanging(['hidden']) && incoming().hidden == true
+          && existsAfter(/databases/$(database)/documents/postDeletions/$(postId)))
+        || (verified() && resource.data.ownerId == uid() && ownerPostUpdateOk(changed()) && reunionSourceOk(postId, changed()))
+        || (signedIn() && onlyChanging(['updatesCount', 'updatedAt', 'counterSourceId'])
+            && sourceStep('posts/' + postId + '/updates', 'postId', postId, 'byUid', 'updatesCount'))
         // The PC worker fills in the map-area codes and search words of posts written by older app versions
         // (recovery.py, backfill).
         || (aiWorker() && onlyChanging(['geoCells', 'searchTerms']) && geoCellsOk(incoming()) && searchTermsOk(incoming()));
-      allow delete: if signedIn() && (resource.data.ownerId == uid() || isMod());
+      allow delete: if signedIn() && (resource.data.ownerId == uid() || isMod() || (maintenanceWorker() && deletingPost(postId)));
 
       match /updates/{updateId} {
-        allow read: if member();
-        allow create: if verified() && incoming().byUid == uid() && incoming().postId == postId
-          && incoming().text.size() <= 1000 && rateLimited();
-        allow delete: if signedIn() && (resource.data.byUid == uid() || isMod()
-          || get(/databases/$(database)/documents/posts/$(postId)).data.ownerId == uid());
+        function parentVisible() {
+          let p = get(/databases/$(database)/documents/posts/$(postId)).data;
+          return p.hidden == false || p.ownerId == uid() || isMod();
+        }
+        allow read: if maintenanceWorker() || (signedIn() && (resource.data.byUid == uid() || (member() && parentVisible())));
+        allow create: if verified() && parentVisible() && !deletingPost(postId)
+          && incoming().byUid == uid() && incoming().postId == postId
+          && postAfter(postId).counterSourceId == updateId
+          && postAfter(postId).updatesCount == postAt(postId).get('updatesCount', 0) + 1
+          && incoming().keys().hasOnly(['postId','kind','text','photoId','lat','lng','neighborhood','byUid','byName','createdAt'])
+          && incoming().kind in ['sighting','progress','found_it'] && incoming().byName == get(userPath()).data.username
+          && incoming().text is string && incoming().text.size() <= 1000
+          && optStr(incoming(), 'photoId', 128) && optStr(incoming(), 'neighborhood', 64)
+          && communityPhoto(incoming().get('photoId', ''))
+          && incoming().lat is number && incoming().lat >= -90 && incoming().lat <= 90
+          && incoming().lng is number && incoming().lng >= -180 && incoming().lng <= 180
+          && notFuture(incoming().createdAt) && rateLimited();
+        allow delete: if (maintenanceWorker() && deletingPost(postId)) || (signedIn() && (resource.data.byUid == uid() || isMod()
+          || get(/databases/$(database)/documents/posts/$(postId)).data.ownerId == uid()));
       }
     }
 
     // Followed areas for lost-pet alerts. Readable by members so a poster can find who to alert.
     // The app now keeps the alert area's centre in users/{uid}/private/areaFollow and writes only the neighbourhood
-    // list here. lat/lng/radiusKm are still accepted for v0.0.9 phones; docs/security/LATER_RULES.md removes them once
-    // old versions are gone and tools/migrate/area-follow-privacy.mjs has moved the existing ones.
+    // list here. Older clients must upgrade before these rules are enabled; migrate existing centres first.
     match /areaFollows/{followerId} {
-      allow read: if verified();
+      allow read: if verified() || maintenanceWorker();
       allow create, update: if signedIn() && uid() == followerId
-        && incoming().keys().hasOnly(['neighborhoods', 'lat', 'lng', 'radiusKm', 'updatedAt'])
-        && incoming().neighborhoods is list && incoming().neighborhoods.size() <= 200;
+        && verified() && exists(userPath())
+        && incoming().keys().hasOnly(['neighborhoods', 'updatedAt'])
+        && areaNamesOk(incoming().neighborhoods) && notFuture(incoming().updatedAt);
       // An admin can strip a centre an old app version left behind (the neighbourhoods, and so the alerts, stay).
       allow update: if isAdmin() && changed().hasOnly(['lat', 'lng', 'radiusKm'])
         && !incoming().keys().hasAny(['lat', 'lng', 'radiusKm']);
@@ -628,14 +959,14 @@ service cloud.firestore {
 
     // Ownership-filtered collection-group query used by export and account cleanup.
     match /{path=**}/updates/{updateId} {
-      allow list: if signedIn() && resource.data.byUid == uid();
+      allow list: if maintenanceWorker() || (signedIn() && resource.data.byUid == uid());
     }
 
     // ---------- adoption requests: id = "{postId}_{requesterId}" ----------
     match /adoptionRequests/{requestId} {
       // A missing request can be looked up, so the app can show "not requested yet" without failing.
       allow get: if signedIn() && (resource == null || resource.data.requesterId == uid() || resource.data.ownerId == uid() || isMod());
-      allow list: if signedIn() && (resource.data.requesterId == uid() || resource.data.ownerId == uid() || isMod());
+      allow list: if maintenanceWorker() || (signedIn() && (resource.data.requesterId == uid() || resource.data.ownerId == uid() || isMod()));
       allow create: if verified()
         && incoming().requesterId == uid()
         && incoming().ownerId != uid()
@@ -644,15 +975,23 @@ service cloud.firestore {
         && incoming().keys().hasOnly(['postId', 'postName', 'postPhotoId', 'ownerId', 'requesterId', 'requesterName',
                                       'message', 'home', 'status', 'ownerNote', 'createdAt', 'decidedAt'])
         && ('' + incoming().get('postName', '') + incoming().get('postPhotoId', '') + incoming().get('requesterName', '') + incoming().get('message', '') + incoming().get('home', '') + incoming().get('ownerNote', '')).size() <= 3000
-        && get(/databases/$(database)/documents/posts/$(incoming().postId)).data.ownerId == incoming().ownerId;
+        && postAt(incoming().postId).ownerId == incoming().ownerId
+        && incoming().requesterName == get(userPath()).data.username && incoming().postName == postAt(incoming().postId).name
+        && notFuture(incoming().createdAt) && communityPhoto(incoming().get('postPhotoId', ''))
+        && postAt(incoming().postId).category == 'adoption' && postAt(incoming().postId).hidden == false
+        && postAt(incoming().postId).status == 'open' && postAt(incoming().postId).adoptionStatus == 'available' && !deletingPost(incoming().postId);
       allow update: if
         (signedIn() && resource.data.ownerId == uid()
           && onlyChanging(['status', 'ownerNote', 'decidedAt']) && optStr(incoming(), 'ownerNote', 1000)
+          && (incoming().status != 'approved' || (postAt(resource.data.postId).status == 'open'
+            && postAt(resource.data.postId).category == 'adoption' && postAt(resource.data.postId).hidden == false
+            && postAt(resource.data.postId).adoptionStatus == 'available' && postAfter(resource.data.postId).adoptionStatus == 'pending'
+            && !deletingPost(resource.data.postId)))
           && resource.data.status == 'pending' && incoming().status in ['approved', 'declined'])
         || (signedIn() && resource.data.requesterId == uid()
           && onlyChanging(['status']) && resource.data.status == 'pending' && incoming().status == 'withdrawn')
         || isMod();
-      allow delete: if signedIn() && (resource.data.requesterId == uid() || resource.data.ownerId == uid() || isMod());
+      allow delete: if (maintenanceWorker() && deletingPost(resource.data.postId)) || (signedIn() && (resource.data.requesterId == uid() || resource.data.ownerId == uid() || isMod()));
     }
 
     // ---------- pet sitting ----------
@@ -663,7 +1002,7 @@ service cloud.firestore {
                                'availability', 'rate', 'rateUnit', 'lat', 'lng', 'neighborhood', 'active', 'ratingSum',
                                'verified', 'ratingCount', 'lastReviewId', 'createdAt', 'updatedAt'])
         && ('' + d.get('name', '') + d.get('photoId', '') + d.get('headline', '') + d.get('description', '') + d.get('experience', '') + d.get('availability', '') + d.get('rateUnit', '') + d.get('neighborhood', '')).size() <= 5000
-        && optList(d, 'petTypes', 12) && optList(d, 'services', 12);
+        && communityPhoto(d.get('photoId', '')) && optList(d, 'petTypes', 12) && optList(d, 'services', 12);
     }
     match /sitters/{sitterId} {
       allow read: if member();
@@ -695,8 +1034,13 @@ service cloud.firestore {
                                       'endAt', 'notes', 'sitterNote', 'status', 'reviewed', 'createdAt', 'updatedAt'])
         && ('' + incoming().get('ownerName', '') + incoming().get('sitterName', '') + incoming().get('notes', '') + incoming().get('sitterNote', '')).size() <= 3000
         && optList(incoming(), 'petTypes', 12)
-        && exists(/databases/$(database)/documents/sitters/$(incoming().sitterId))
-        && rateLimited();
+        && get(/databases/$(database)/documents/sitters/$(incoming().sitterId)).data.active == true
+        && incoming().sitterName == get(/databases/$(database)/documents/sitters/$(incoming().sitterId)).data.name
+        && incoming().ownerName == get(userPath()).data.username
+        && incoming().petTypes.size() > 0 && incoming().petTypes.toSet().hasOnly(['cat','dog','bird','rabbit','other'])
+        && incoming().startAt is int && incoming().endAt is int && incoming().startAt >= 0 && incoming().startAt < incoming().endAt
+        && incoming().petCount is int && incoming().petCount >= 1 && incoming().petCount <= 20
+        && notFuture(incoming().createdAt) && rateLimited();
       allow update: if
         (signedIn() && resource.data.ownerId == uid() && onlyChanging(['ownerName','notes']) && incoming().ownerName == '' && incoming().notes == '')
         || (signedIn() && resource.data.sitterId == uid() && onlyChanging(['sitterName','sitterNote']) && incoming().sitterName == '' && incoming().sitterNote == '')
@@ -713,8 +1057,7 @@ service cloud.firestore {
         || (signedIn() && resource.data.ownerId == uid()
           && onlyChanging(['reviewed', 'updatedAt'])
           && resource.data.status == 'completed' && resource.data.reviewed == false && incoming().reviewed == true
-          && existsAfter(/databases/$(database)/documents/reviews/$(bookingId)))
-        || isMod();
+          && reviewAfter(bookingId).authorId == uid() && reviewAfter(bookingId).sitterId == resource.data.sitterId);
     }
 
     // One review per completed booking (the id is the booking id), written by the pet owner.
@@ -725,7 +1068,13 @@ service cloud.firestore {
       allow create: if verified()
         && incoming().authorId == uid()
         && incoming().rating is int && incoming().rating >= 1 && incoming().rating <= 5
-        && incoming().text.size() <= 800
+        && incoming().keys().hasOnly(['sitterId','authorId','authorName','rating','text','createdAt'])
+        && incoming().authorName == get(userPath()).data.username && notFuture(incoming().createdAt)
+        && incoming().text is string && incoming().text.size() <= 800
+        && booking().reviewed == false
+        && getAfter(/databases/$(database)/documents/bookings/$(bookingId)).data.reviewed == true
+        && (!exists(/databases/$(database)/documents/sitters/$(incoming().sitterId))
+          || getAfter(/databases/$(database)/documents/sitters/$(incoming().sitterId)).data.lastReviewId == bookingId)
         && booking().ownerId == uid()
         && booking().status == 'completed'
         && booking().sitterId == incoming().sitterId;
@@ -743,44 +1092,96 @@ service cloud.firestore {
         && incoming().members[0] < incoming().members[1]
         && chatId == incoming().members[0] + '_' + incoming().members[1]
         // Phase 9 size caps: only the app's fields, previews and names of chat size.
-        && incoming().keys().hasOnly(['members', 'names', 'photos', 'lastText', 'lastSender', 'lastAt', 'unread'])
+        && incoming().keys().hasOnly(['members', 'names', 'photos', 'lastText', 'lastSender', 'lastAt', 'lastMessageId', 'lastDeletedMessageId', 'unread'])
         && incoming().get('names', {}).keys().hasOnly(incoming().members)
         && incoming().get('photos', {}).keys().hasOnly(incoming().members)
         && incoming().get('unread', {}).keys().hasOnly(incoming().members)
-        && optStr(incoming(), 'lastText', 300);
+        && incoming().get('lastText', '') == '' && incoming().get('lastSender', '') == ''
+        && incoming().get('lastMessageId', '') == ''
+        && namesAuthentic(incoming());
       allow update: if signedIn() && uid() in resource.data.members
-        && onlyChanging(['lastText', 'lastSender', 'lastAt', 'unread', 'names', 'photos'])
+        && onlyChanging(['lastText', 'lastSender', 'lastAt', 'lastMessageId', 'lastDeletedMessageId', 'unread', 'names', 'photos'])
         && chatUpdateOk(changed(), incoming(), resource.data);
       allow delete: if isAdmin();
 
       // Phase 9: a member changes only their own name and photo, and previews stay short. Account deletion blanks the
       // name, photo and preview. (No time gap between messages: messages written offline are sent back to back when
       // the phone reconnects, and a gap would silently drop them; see docs/security/ABUSE_LIMITS.md.)
+      function namesAuthentic(d) {
+        return d.names.get(d.members[0], '') == get(/databases/$(database)/documents/users/$(d.members[0])).data.username
+          && d.names.get(d.members[1], '') == get(/databases/$(database)/documents/users/$(d.members[1])).data.username
+          && d.photos.get(d.members[0], '') == get(/databases/$(database)/documents/users/$(d.members[0])).data.get('photoId', '')
+          && d.photos.get(d.members[1], '') == get(/databases/$(database)/documents/users/$(d.members[1])).data.get('photoId', '');
+      }
+      function previewOf(m) {
+        return m.text != '' ? m.text[0:(m.text.size() < 120 ? m.text.size() : 120)] : m.get('imageId', '') != '' ? 'Photo'
+          : m.get('matchId', '') != '' ? ('Possible match: ' + m.get('postTitle', '')).trim() : 'Post: ' + m.get('postTitle', '');
+      }
+      function previewMatches(d) {
+        let m = getAfter(/databases/$(database)/documents/chats/$(chatId)/messages/$(d.lastMessageId)).data;
+        return d.lastSender == m.senderId && d.lastAt == m.createdAt && d.lastText == previewOf(m);
+      }
+      function coherentPreview(d, before) {
+        let removed = d.get('lastDeletedMessageId', '');
+        let oldPath = /databases/$(database)/documents/chats/$(chatId)/messages/$(removed);
+        let repairing = removed != '' && exists(oldPath) && get(oldPath).data.senderId == uid()
+          && !existsAfter(oldPath) && (before.get('lastMessageId', '') == removed
+            || (before.get('lastMessageId', '') == '' && before.lastSender == uid() && before.lastAt == get(oldPath).data.createdAt));
+        return (repairing && (d.get('lastMessageId', '') == ''
+            ? d.lastText == '' && d.lastSender == '' && d.lastAt == 0 : previewMatches(d)))
+          || (d.get('lastMessageId', '') != '' && d.lastSender == uid() && previewMatches(d)
+            && !exists(/databases/$(database)/documents/chats/$(chatId)/messages/$(d.lastMessageId)))
+          || (before.lastSender == uid() && d.lastSender == '' && d.lastText == '' && d.get('lastMessageId', '') == ''
+            && d.lastAt in [0, before.lastAt]);
+      }
+
+      function unreadOk(d, before) {
+        let other = before.members[0] == uid() ? before.members[1] : before.members[0];
+        return d.unread.keys().hasOnly(before.members) && d.unread[uid()] is int && d.unread[uid()] >= 0
+          && (d.unread[uid()] == before.unread[uid()] || (d.unread[uid()] == 0
+            && getAfter(/databases/$(database)/documents/userLimits/$(uid())).data.unreadChatId == chatId
+            && getAfter(/databases/$(database)/documents/userLimits/$(uid())).data.unreadCount == get(/databases/$(database)/documents/userLimits/$(uid())).data.unreadCount - before.unread[uid()]))
+          && d.unread[other] is int && d.unread[other] >= 0
+          && (d.unread[other] == before.unread[other] || (d.unread[other] == before.unread[other] + 1
+            && d.lastSender == uid() && !exists(/databases/$(database)/documents/chats/$(chatId)/messages/$(d.lastMessageId))
+            && existsAfter(/databases/$(database)/documents/chats/$(chatId)/messages/$(d.lastMessageId))));
+      }
       function chatUpdateOk(ch, d, before) {
-        return (!('lastText' in ch) || (d.lastText is string && d.lastText.size() <= 300))
-          && (!('lastSender' in ch) || d.lastSender in [uid(), ''])
+        return optStr(d, 'lastMessageId', 128) && optStr(d, 'lastDeletedMessageId', 128)
+          && (!('lastText' in ch) || (d.lastText is string && d.lastText.size() <= 300))
+          && (!ch.hasAny(['lastText','lastSender','lastAt','lastMessageId']) || coherentPreview(d, before))
           && (!('lastAt' in ch) || notFuture(d.lastAt))
           && (!('names' in ch) || (d.names.diff(before.get('names', {})).affectedKeys().hasOnly([uid()])
-              && d.names.get(uid(), '') is string && d.names.get(uid(), '').size() <= 40))
+              && d.names.get(uid(), '') in ['', get(userPath()).data.username]))
           && (!('photos' in ch) || (d.photos.diff(before.get('photos', {})).affectedKeys().hasOnly([uid()])
               && d.photos.get(uid(), '') is string && d.photos.get(uid(), '').size() <= 128))
-          && (!('unread' in ch) || d.unread.keys().hasOnly(before.members));
+          && (!('unread' in ch) || unreadOk(d, before));
       }
 
       match /messages/{messageId} {
         function chat() { return get(/databases/$(database)/documents/chats/$(chatId)).data; }
         function otherMember() { return chat().members[0] == uid() ? chat().members[1] : chat().members[0]; }
-        allow read: if signedIn() && uid() in chat().members;
+        allow read: if maintenanceWorker() || (signedIn() && uid() in chat().members);
         // Nobody can message a person who has blocked them.
         allow create: if verified()
           && incoming().senderId == uid()
           && uid() in chat().members
+          && getAfter(/databases/$(database)/documents/chats/$(chatId)).data.lastMessageId == messageId
+          && getAfter(/databases/$(database)/documents/userLimits/$(otherMember())).data.unreadMessageId == messageId
+          && getAfter(/databases/$(database)/documents/userLimits/$(otherMember())).data.unreadChatId == chatId
+          && getAfter(/databases/$(database)/documents/userLimits/$(otherMember())).data.unreadCount == get(/databases/$(database)/documents/userLimits/$(otherMember())).data.unreadCount + 1
           && incoming().keys().hasOnly(['senderId', 'text', 'imageId', 'postId', 'postTitle', 'postPhotoId', 'matchId', 'matchPhotoId', 'createdAt'])
           && incoming().text.size() <= 2000
           && optStr(incoming(), 'imageId', 128) && optStr(incoming(), 'postId', 128) && optStr(incoming(), 'postTitle', 80)
           && optStr(incoming(), 'postPhotoId', 128) && optStr(incoming(), 'matchId', 300) && optStr(incoming(), 'matchPhotoId', 128)
+          && communityPhoto(incoming().get('postPhotoId', '')) && communityPhoto(incoming().get('matchPhotoId', ''))
+          && (incoming().get('imageId', '') == '' || (incoming().imageId.matches('c_.*')
+            && getAfter(/databases/$(database)/documents/images/$(incoming().imageId)).data.chatId == chatId
+            && getAfter(/databases/$(database)/documents/images/$(incoming().imageId)).data.ownerId == uid()
+            && getAfter(/databases/$(database)/documents/images/$(incoming().imageId)).data.messageId == messageId))
           && notFuture(incoming().get('createdAt', 0))
-          && !exists(/databases/$(database)/documents/users/$(otherMember())/blocked/$(uid()));
+          && !exists(/databases/$(database)/documents/users/$(otherMember())/blocked/$(uid()))
+          && !exists(/databases/$(database)/documents/accountDeletions/$(otherMember()));
         allow delete: if signedIn() && (resource.data.senderId == uid() || isAdmin());
       }
     }
@@ -892,7 +1293,9 @@ service cloud.firestore {
     // so nobody can plant a fake vector to force a match.
     match /postEmbeddings/{postId} {
       allow read: if aiWorker() || isMod();
-      allow create, update: if aiWorker() && incoming().postId == postId
+      allow create, update: if aiWorker() && incoming().postId == postId && !deletingPost(postId)
+        && postAt(postId).ownerId == incoming().ownerId && postAt(postId).photoIds == incoming().photoIds
+        && postAt(postId).hidden == false
         && incoming().keys().hasOnly(['postId', 'ownerId', 'animalType', 'model', 'signature', 'photoIds', 'vectors', 'detected', 'animals', 'lowQuality', 'createdAt'])
         && incoming().vectors is list && incoming().vectors.size() <= 6;
       allow delete: if aiWorker() || isMod()
@@ -918,18 +1321,44 @@ service cloud.firestore {
     match /images/{imageId} {
       // Photos are fetched one by one by id. Listing them is only for your own (account deletion and export) or for
       // moderators, so nobody can page through every photo in the app.
-      allow get: if member();
+      allow get: if member() && (resource == null || resource.data.get('audience', '') == 'community'
+          || resource.data.ownerId == uid() || maintenanceWorker() || privateImageMember(resource.data));
       allow list: if (signedIn() && resource.data.ownerId == uid()) || isMod();
       // JPEG only (both apps re-encode every photo, which also drops its location data), a thumbnail (`{id}_t`, 360
       // px) at most 200 KB and a full photo under 1 MB.
       allow create: if verified()
-        && incoming().keys().hasOnly(['data', 'ownerId', 'createdAt'])
-        && incoming().ownerId == uid()
+        && incoming().keys().hasOnly(['data', 'ownerId', 'createdAt', 'audience', 'chatId', 'rootId', 'messageId'])
+        && incoming().ownerId == uid() && incoming().messageId == ''
+        && incoming().rootId is string && incoming().rootId.size() <= 128
+        && imageId in [incoming().rootId, incoming().rootId + '_t']
+        && getAfter(/databases/$(database)/documents/mediaUploads/$(incoming().rootId)).data.ownerId == uid()
+        && getAfter(/databases/$(database)/documents/mediaUploads/$(incoming().rootId)).data.audience == incoming().audience
+        && getAfter(/databases/$(database)/documents/mediaUploads/$(incoming().rootId)).data.chatId == incoming().chatId
+        && getAfter(/databases/$(database)/documents/mediaUploads/$(incoming().rootId)).data.status == 'staged'
+        && getAfter(/databases/$(database)/documents/mediaUploads/$(incoming().rootId)).data.expiresAt > request.time.toMillis()
+        && ((incoming().audience == 'community' && incoming().chatId == '' && !imageId.matches('c_.*'))
+          || (incoming().audience == 'chat' && imageId.matches('c_.*') && privateImageAudience(incoming())))
         && incoming().data is bytes
         && incoming().data.size() < (imageId.matches('.+_t') ? 200000 : 1000000)
         && incoming().data.toHexString().matches('(FFD8FF|ffd8ff).*')
         && notFuture(incoming().get('createdAt', 0));
-      allow delete: if signedIn() && (resource == null || resource.data.ownerId == uid() || isMod());
+      allow delete: if signedIn() && (resource == null || resource.data.ownerId == uid() || isMod() || maintenanceWorker());
+      allow update: if verified() && resource.data.ownerId == uid() && resource.data.audience == 'chat'
+        && resource.data.get('messageId', '') == '' && onlyChanging(['messageId'])
+        && incoming().messageId is string && incoming().messageId.size() <= 128
+        && getAfter(/databases/$(database)/documents/chats/$(resource.data.chatId)/messages/$(incoming().messageId)).data.senderId == uid()
+        && getAfter(/databases/$(database)/documents/chats/$(resource.data.chatId)/messages/$(incoming().messageId)).data.imageId == resource.data.rootId;
+      function privateImageMember(d) {
+        return privateImageAudience(d) && d.get('messageId', '') != ''
+          && get(/databases/$(database)/documents/chats/$(d.chatId)/messages/$(d.messageId)).data.imageId == d.rootId;
+      }
+      function privateImageAudience(d) {
+        let c = get(/databases/$(database)/documents/chats/$(d.chatId)).data;
+        let other = c.members[0] == uid() ? c.members[1] : c.members[0];
+        return d.get('audience', '') == 'chat' && uid() in c.members
+          && !exists(/databases/$(database)/documents/users/$(other)/blocked/$(uid()))
+          && !exists(/databases/$(database)/documents/users/$(uid())/blocked/$(other));
+      }
     }
   }
 }

@@ -59,7 +59,7 @@ class UserDataExportRepository(private val context:Context,private val db:Fireba
             for(field in fields) db.collection(collection).whereEqualTo(field,uid).pages().collect {page ->page.forEach {collected[it.id]=snapshot(it)}}
             records[collection]=collected.values.toList()
         }
-        for(collection in listOf(Col.NOTIFICATIONS,Col.FAVORITES,Col.BLOCKED)) records[collection]=user.collection(collection).get().await().documents.map(::snapshot)
+        for(collection in listOf(Col.NOTIFICATIONS,"notificationReceipts",Col.FAVORITES,Col.BLOCKED)) records[collection]=user.collection(collection).get().await().documents.map(::snapshot)
         val chats=db.collection(Col.CHATS).whereArrayContains("members",uid).get().await().documents
         records["chats"]=chats.map(::snapshot)
         records["messages"]=chats.flatMap { chat -> chat.reference.collection(Col.MESSAGES).get().await().documents.map { snapshot(it)+( "chatId" to chat.id) } }

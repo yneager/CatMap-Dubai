@@ -92,9 +92,24 @@ function matchDoc(p: Engine.Pairing, me: UserProfile, extra: Record<string, unkn
 
 export const MatchRepository = {
   mine: (uid: string) => listQuery('matches', where('members', 'array-contains', uid)),
+  forPostQuery: (uid: string, postId: string, side: 'lostPostId' | 'sightingPostId') =>
+    listQuery(
+      'matches',
+      where('members', 'array-contains', uid),
+      where(side, '==', postId),
+      orderBy('score', 'desc'),
+    ),
+  forPost: (uid: string, postId: string, side: 'lostPostId' | 'sightingPostId') =>
+    listQuery(
+      'matches',
+      where('members', 'array-contains', uid),
+      where(side, '==', postId),
+      orderBy('score', 'desc'),
+      limit(50),
+    ),
   matchFlow: (id: string) => ref(`matches/${id}`),
   /** The rules let either person delete a match once one of its posts is gone; not awaited, so it waits offline. */
-  drop: (m: PostMatch) =>
+  drop: (m: Pick<PostMatch, 'id'>) =>
     void deleteDoc(ref(`matches/${m.id}`)).catch((error) =>
       console.info('Match cleanup failed', error),
     ),
@@ -210,9 +225,11 @@ export const MatchRepository = {
       const chat = await read(`chats/${chatId}`, ChatFromDoc);
       const otherUid = chat?.members.find((u) => u !== me.uid) ?? other;
       const title = lost?.name ?? '';
+      const messageRef = doc(col(`chats/${chatId}/messages`));
+      const createdAt = Date.now();
       const b = writeBatch(database());
       b.set(
-        doc(col(`chats/${chatId}/messages`)),
+        messageRef,
         MessageToDoc({
           ...MessageDefaults,
           senderId: me.uid,
@@ -221,16 +238,22 @@ export const MatchRepository = {
           postPhotoId: lost?.photoIds[0] ?? '',
           matchId: m.id,
           matchPhotoId: sighting?.photoIds[0] ?? '',
-          createdAt: Date.now(),
+          createdAt,
         }),
       );
       b.update(ref(`chats/${chatId}`), {
         lastText: `Possible match: ${title}`.trim(),
         lastSender: me.uid,
-        lastAt: Date.now(),
+        lastMessageId: messageRef.id,
+        lastAt: createdAt,
         [`unread.${otherUid}`]: increment(1),
         [`names.${me.uid}`]: me.username,
         [`photos.${me.uid}`]: me.photoId,
+      });
+      b.update(ref(`userLimits/${otherUid}`), {
+        unreadCount: increment(1),
+        unreadChatId: chatId,
+        unreadMessageId: messageRef.id,
       });
       await b.commit();
     }
@@ -245,6 +268,7 @@ export const MatchRepository = {
       { name: lost?.name ?? '', type: m.animalType, user: me.username },
       `chat/${chatId}`,
       `mi_${m.id}`,
+      m.id,
     );
     return chatId;
   },
@@ -285,6 +309,7 @@ export const MatchRepository = {
         { name: post.name, type: post.animalType },
         `post/${post.id}`,
         `ru_${credited.id}`,
+        credited.id,
       );
     return true;
   },

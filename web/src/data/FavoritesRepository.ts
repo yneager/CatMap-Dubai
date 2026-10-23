@@ -1,10 +1,9 @@
-import { orderBy, limit, setDoc, deleteDoc } from 'firebase/firestore';
-import { ref, listQuery } from './Firestore';
+import { orderBy, limit } from 'firebase/firestore';
+import { listQuery } from './Firestore';
+import { setPrivateSlot } from './PrivateSlots';
 export const FavoritesRepository = {
   favorites: (uid: string) =>
     listQuery(`users/${uid}/favorites`, orderBy('savedAt', 'desc'), limit(500)),
   set: (uid: string, postId: string, saved: boolean) =>
-    saved
-      ? setDoc(ref(`users/${uid}/favorites/${postId}`), { postId, savedAt: Date.now() })
-      : deleteDoc(ref(`users/${uid}/favorites/${postId}`)),
+    setPrivateSlot(uid, 'favorites', postId, saved ? { postId, savedAt: Date.now() } : null),
 };

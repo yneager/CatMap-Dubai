@@ -9,6 +9,7 @@ import {
   type WriteBatch,
 } from 'firebase/firestore';
 import { database } from '../firebase';
+import { ImageRepository } from './ImageRepository';
 import { ref, read, listQuery, list, AppException } from './Firestore';
 import { UserProfileFromDoc, type UserProfile } from './model';
 import { newlyEarned } from '../gamification/Badges';
@@ -41,6 +42,7 @@ export const UserRepository = {
     bio: string,
     photoId: string,
   ) => {
+    await ImageRepository.retain([photoId]);
     const name = username.trim();
     UserRepository.validateUsername(name);
     const changing = name.toLowerCase() !== current.username.toLowerCase();

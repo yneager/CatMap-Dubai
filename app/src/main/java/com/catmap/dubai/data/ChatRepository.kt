@@ -24,8 +24,10 @@ class ChatRepository(
 
     fun chatId(a: String, b: String) = if (a < b) "${a}_$b" else "${b}_$a"
 
+    fun chatsQuery(uid: String): Query = chats.whereArrayContains("members", uid).orderBy("lastAt", Query.Direction.DESCENDING)
+
     fun chatsFor(uid: String): Flow<List<Chat>> =
-        chats.whereArrayContains("members", uid).listFlow<Chat>().map { l -> l.sortedByDescending { it.lastAt } }
+        chatsQuery(uid).limit(50).listFlow<Chat>().map { l -> l.sortedByDescending { it.lastAt } }
 
     fun chatFlow(id: String): Flow<Chat?> = chats.document(id).objectFlow()
 
@@ -64,8 +66,10 @@ class ChatRepository(
     suspend fun send(chat: Chat, me: UserProfile, text: String, imageId: String = "", post: Post? = null) {
         val clean = text.trim().take(2000)
         if (clean.isEmpty() && imageId.isEmpty() && post == null) return
+        MediaLease.retain(db, listOf(imageId))
         val other = chat.other(me.uid)
         val messageRef = chats.document(chat.id).collection(Col.MESSAGES).document()
+        val createdAt = now()
         val preview = when {
             clean.isNotEmpty() -> clean.take(120)
             imageId.isNotEmpty() -> "Photo"
@@ -77,19 +81,24 @@ class ChatRepository(
                 Message(
                     senderId = me.uid, text = clean, imageId = imageId,
                     postId = post?.id.orEmpty(), postTitle = post?.name.orEmpty(), postPhotoId = post?.photoIds?.firstOrNull().orEmpty(),
-                    createdAt = now(),
+                    createdAt = createdAt,
                 ),
             )
             b.update(
                 chats.document(chat.id),
                 mapOf(
-                    "lastText" to preview, "lastSender" to me.uid, "lastAt" to now(),
+                    "lastText" to preview, "lastSender" to me.uid, "lastAt" to createdAt, "lastMessageId" to messageRef.id,
                     "unread.$other" to FieldValue.increment(1),
                     "names.${me.uid}" to me.username, "photos.${me.uid}" to me.photoId,
                 ),
             )
+            if (imageId.isNotBlank()) {
+                b.update(db.collection(Col.IMAGES).document(imageId), "messageId", messageRef.id)
+                b.update(db.collection(Col.IMAGES).document("${imageId}_t"), "messageId", messageRef.id)
+            }
+            b.update(db.collection("userLimits").document(other), mapOf("unreadCount" to FieldValue.increment(1), "unreadChatId" to chat.id, "unreadMessageId" to messageRef.id))
         }.await()
-        notifications.send(listOf(other), NotifType.MESSAGE, mapOf("user" to me.username, "text" to preview), "chat/${chat.id}", dedupeKey = "msg_${chat.id}")
+        notifications.send(listOf(other), NotifType.MESSAGE, mapOf("user" to me.username, "text" to preview), "chat/${chat.id}", dedupeKey = "msg_${chat.id}_${messageRef.id}", sourceId = messageRef.id)
     }
 
     /** Whether this chat already has the card of [matchId] (so a match is introduced once per chat). */
@@ -102,51 +111,76 @@ class ChatRepository(
         val other = chat.other(me.uid)
         val title = lost?.name.orEmpty()
         val messageRef = chats.document(chatId).collection(Col.MESSAGES).document()
+        val createdAt = now()
         db.runBatch { b ->
             b.set(
                 messageRef,
                 Message(
                     senderId = me.uid, postId = lost?.id.orEmpty(), postTitle = title,
                     postPhotoId = lost?.photoIds?.firstOrNull().orEmpty(), matchId = matchId,
-                    matchPhotoId = sighting?.photoIds?.firstOrNull().orEmpty(), createdAt = now(),
+                    matchPhotoId = sighting?.photoIds?.firstOrNull().orEmpty(), createdAt = createdAt,
                 ),
             )
             b.update(
                 chats.document(chatId),
                 mapOf(
-                    "lastText" to "Possible match: $title".trim(), "lastSender" to me.uid, "lastAt" to now(),
+                    "lastText" to "Possible match: $title".trim(), "lastSender" to me.uid, "lastAt" to createdAt, "lastMessageId" to messageRef.id,
                     "unread.$other" to FieldValue.increment(1), "names.${me.uid}" to me.username, "photos.${me.uid}" to me.photoId,
                 ),
             )
+            b.update(db.collection("userLimits").document(other), mapOf("unreadCount" to FieldValue.increment(1), "unreadChatId" to chatId, "unreadMessageId" to messageRef.id))
         }.await()
     }
 
     suspend fun markRead(chatId: String, uid: String) {
-        runCatching { chats.document(chatId).update("unread.$uid", 0L).await() }
+        runCatching { db.runTransaction { tx ->
+            val chat = tx.get(chats.document(chatId))
+            val count = (chat.get("unread") as? Map<*, *>)?.get(uid) as? Number ?: 0L
+            if (count.toLong() > 0) {
+                tx.update(chat.reference, "unread.$uid", 0L)
+                tx.update(db.collection("userLimits").document(uid), mapOf("unreadCount" to FieldValue.increment(-count.toLong()), "unreadChatId" to chatId))
+            }
+        }.await() }.onFailure { android.util.Log.i("CatMap", "Read marker will retry", it) }
         notifications.dismiss(uid, "msg_$chatId")
+        runCatching { notifications.readChat(uid, chatId) }.onFailure { android.util.Log.i("CatMap", "Chat read markers will retry", it) }
     }
+    fun unreadCount(uid: String): Flow<Long> = db.collection("userLimits").document(uid).snapshotFlow()
+        .map { it.getLong("unreadCount") ?: 0L }
 
     suspend fun deleteMessage(chatId: String, message: Message, uid: String) {
         val chatRef = chats.document(chatId)
         val messages = chatRef.collection(Col.MESSAGES)
-        val before = runCatching { chatRef.get(Source.SERVER).await() }.getOrNull()
-        val newest = runCatching {
-            messages.orderBy("createdAt", Query.Direction.DESCENDING).limit(2).get(Source.SERVER).await().safeObjects<Message>()
-        }.getOrDefault(emptyList())
-        messages.document(message.id).delete().await()
+        var attempt = 0
+        while (true) {
+            val newest = messages.orderBy("createdAt", Query.Direction.DESCENDING).limit(2).get(Source.SERVER).await().documents
+            try {
+                db.runTransaction { tx ->
+                val fresh = tx.get(chatRef)
+                val target = tx.get(messages.document(message.id))
+                check(!target.exists() || target.getString("senderId") == uid) { "Message owner mismatch" }
+                val lastId = fresh.getString("lastMessageId").orEmpty()
+                val isLast = if (lastId.isNotEmpty()) lastId == message.id else newest.firstOrNull()?.id == message.id &&
+                    fresh.getString("lastSender") == uid && fresh.getLong("lastAt") == message.createdAt
+                val candidate = if (isLast) newest.firstOrNull { it.id != message.id } else null
+                val previous = candidate?.let {
+                    val checked = tx.get(it.reference)
+                    check(checked.exists()) { "retry-message-predecessor" }
+                    checked.toObject(Message::class.java)?.apply { id = checked.id }
+                }
+                tx.delete(messages.document(message.id))
+                if (isLast) {
+                    tx.update(chatRef, mapOf("lastText" to previous?.let(::preview).orEmpty(),
+                        "lastMessageId" to previous?.id.orEmpty(), "lastDeletedMessageId" to message.id,
+                        "lastSender" to previous?.senderId.orEmpty(), "lastAt" to (previous?.createdAt ?: 0L)))
+                }
+                }.await()
+                break
+            } catch (error: Exception) {
+                if (generateSequence<Throwable>(error) { it.cause }.none { it.message == "retry-message-predecessor" } || attempt++ >= 4) throw error
+            }
+        }
         if (message.imageId.isNotBlank()) runCatching { images.delete(message.imageId) }
             .onFailure { android.util.Log.i("CatMap", "Message image cleanup failed", it) }
-        if (before?.getString("lastSender") != uid || newest.firstOrNull()?.id != message.id) return
-        // Updating only the preview satisfies chatUpdateOk; keep unread counts and ordering intact.
-        runCatching {
-            db.runTransaction { tx ->
-                val fresh = tx.get(chatRef)
-                if (fresh.getLong("lastAt") == before.getLong("lastAt") && fresh.getString("lastSender") == uid &&
-                    fresh.getString("lastText") == before.getString("lastText")) {
-                    tx.update(chatRef, "lastText", newest.getOrNull(1)?.let(::preview).orEmpty())
-                }
-            }.await()
-        }.onFailure { android.util.Log.i("CatMap", "Message preview cleanup failed", it) }
     }
 
     private fun preview(message: Message): String = when {
@@ -163,11 +197,12 @@ class ChatRepository(
     fun blocked(uid: String): Flow<Set<String>> = blockedCol(uid).listFlow<BlockEntry>().map { l -> l.map { it.id }.toSet() }
 
     suspend fun block(me: String, other: String) {
-        blockedCol(me).document(other).set(BlockEntry(at = now())).await()
+        PrivateSlots(db).set(me, Col.BLOCKED, other, mapOf("at" to now()))
+        images.clearCache()
     }
 
     suspend fun unblock(me: String, other: String) {
-        blockedCol(me).document(other).delete().await()
+        PrivateSlots(db).set(me, Col.BLOCKED, other, null)
     }
 
     companion object {

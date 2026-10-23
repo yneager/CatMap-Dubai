@@ -137,6 +137,7 @@ class CatRepository(
 
     /** Saves a sighting (and a new cat if needed). Returns the cat id. */
     suspend fun submitSighting(draft: SightingDraft, me: UserProfile, privacyLevel: String, shareExact: Boolean): String {
+        MediaLease.retain(db, draft.photoIds)
         val created = now()
         val sightingRef = sightings.document()
         val (publicLat, publicLng) = LocationPrivacy.fuzz(draft.lat, draft.lng, privacyLevel, sightingRef.id)
@@ -168,6 +169,7 @@ class CatRepository(
                     firstSeen = draft.seenAt,
                     lastSeen = draft.seenAt,
                     sightingCount = 1,
+                    counterSourceId = sightingRef.id,
                     lat = publicLat,
                     lng = publicLng,
                     neighborhood = hood,
@@ -184,6 +186,7 @@ class CatRepository(
         } else {
             val updates = mutableMapOf<String, Any>(
                 "sightingCount" to FieldValue.increment(1),
+                "counterSourceId" to sightingRef.id,
                 "contributors" to FieldValue.arrayUnion(me.uid),
                 "neighborhoods" to FieldValue.arrayUnion(hood),
                 "updatedAt" to created,
@@ -266,7 +269,7 @@ class CatRepository(
                 existing.followers - me.uid,
                 NotifType.FOLLOWED_CAT,
                 mapOf("cat" to catName, "user" to me.username, "area" to hood),
-                "cat/${catRef.id}",
+                "cat/${catRef.id}", sourceId = sightingRef.id,
             )
         }
         return catRef.id
@@ -318,7 +321,7 @@ class CatRepository(
         db.runBatch { b ->
             b.delete(sightings.document(sighting.id))
             b.delete(db.collection(Col.PRIVATE_LOCATIONS).document(sighting.id))
-            b.update(catRef(sighting.catId), mapOf("sightingCount" to FieldValue.increment(-1), "updatedAt" to now()))
+            b.update(catRef(sighting.catId), mapOf("sightingCount" to FieldValue.increment(-1), "counterSourceId" to sighting.id, "updatedAt" to now()))
             users.addStats(b, sighting.userId, mapOf(Stats.SIGHTINGS to -1L), -Points.SIGHTING)
         }.await()
     }
@@ -346,9 +349,10 @@ class CatRepository(
             .map { l -> l.sortedByDescending { it.at } }
 
     suspend fun addMedicalRecord(cat: Cat, type: String, note: String, by: UserProfile) {
+        val record = db.collection(Col.MEDICAL).document()
         db.runBatch { b ->
             b.set(
-                db.collection(Col.MEDICAL).document(),
+                record,
                 MedicalRecord(catId = cat.id, type = type, note = note.trim(), byUid = by.uid, byName = by.username, at = now()),
             )
             if (type == MedicalType.TNR_CONFIRMED.key) {
@@ -358,7 +362,7 @@ class CatRepository(
                 )
             }
         }.await()
-        notifications.send(cat.followers - by.uid, NotifType.FOLLOWED_CAT, mapOf("cat" to cat.name, "user" to by.username, "area" to "medical"), "cat/${cat.id}")
+        notifications.send(cat.followers - by.uid, NotifType.FOLLOWED_CAT, mapOf("cat" to cat.name, "user" to by.username, "area" to "medical"), "cat/${cat.id}", sourceId = record.id)
     }
 
     // ---- Duplicate profiles ----

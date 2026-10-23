@@ -19,6 +19,7 @@ import { DemoAccounts, DemoVault } from './DemoAccounts';
 import { wipeAndReload } from './LocalWipe';
 async function createProfile(user: User, username: string, displayName: string, role = 'user') {
   const b = writeBatch(database());
+  b.set(ref(`userLimits/${user.uid}`), { favorites: 0, blocked: 0, unreadCount: 0 });
   b.set(ref(`usernames/${username.toLowerCase()}`), { uid: user.uid });
   b.set(
     users.ref(user.uid),
@@ -35,7 +36,8 @@ async function createProfile(user: User, username: string, displayName: string, 
     createdAt: Date.now(),
   });
   await b.commit();
-  await NotificationRepository.send([user.uid], 'welcome', { user: username });
+  if (user.emailVerified)
+    await NotificationRepository.send([user.uid], 'welcome', { user: username });
 }
 export const AuthRepository = {
   register: async (email: string, password: string, username: string, displayName: string) => {
@@ -53,7 +55,13 @@ export const AuthRepository = {
     await sendEmailVerification(user).catch(() => {});
   },
   ensureProfile: async (user: User) => {
-    if (await users.profile(user.uid)) return;
+    const profile = await users.profile(user.uid);
+    if (profile) {
+      if (user.emailVerified)
+        await NotificationRepository.send([user.uid], 'welcome', { user: profile.username });
+      return;
+    }
+    if (await read(`accountDeletions/${user.uid}`, (_id, data) => data)) return;
     const base =
       (user.email ?? 'cat')
         .split('@')[0]
@@ -97,7 +105,12 @@ export const AuthRepository = {
     if (!user) return false;
     await reload(user);
     if (authentication().currentUser?.uid !== user.uid) return false;
-    if (user.emailVerified) await user.getIdToken(true);
+    if (user.emailVerified) {
+      await user.getIdToken(true);
+      const profile = await users.profile(user.uid);
+      if (profile)
+        await NotificationRepository.send([user.uid], 'welcome', { user: profile.username });
+    }
     return user.emailVerified;
   },
   resendVerification: () => {
@@ -105,8 +118,11 @@ export const AuthRepository = {
     return user ? sendEmailVerification(user) : Promise.resolve();
   },
   sendPasswordReset: async (email: string) => {
-    try { await sendPasswordResetEmail(authentication(), email.trim()); }
-    catch (error) { if ((error as { code?: string }).code !== 'auth/user-not-found') throw error; }
+    try {
+      await sendPasswordResetEmail(authentication(), email.trim());
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'auth/user-not-found') throw error;
+    }
   },
   logout: async () => {
     localStorage.setItem('catmap_pending_wipe', '1');

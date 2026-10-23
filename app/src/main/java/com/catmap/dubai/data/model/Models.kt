@@ -73,6 +73,7 @@ data class Cat(
     var firstSeen: Long = 0,
     var lastSeen: Long = 0,
     var sightingCount: Long = 0,
+    var counterSourceId: String = "",
     /** Last known position, already blurred for privacy. */
     var lat: Double = 0.0,
     var lng: Double = 0.0,
@@ -266,6 +267,7 @@ data class AppNotification(
     var params: Map<String, String> = emptyMap(),
     var route: String = "",
     var fromUid: String = "",
+    var sourceId: String = "",
     var read: Boolean = false,
     var createdAt: Long = 0,
 )

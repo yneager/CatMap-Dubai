@@ -16,7 +16,12 @@ import {
   terminate,
 } from 'firebase/firestore';
 import { config } from './config';
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
+import {
+  initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
+  getToken,
+  type AppCheck,
+} from 'firebase/app-check';
 import { clearDeviceData } from './data/DeviceWipe';
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth } from 'firebase/auth';
@@ -26,6 +31,7 @@ interface Clients {
   auth: Auth | null;
   db: Firestore | null;
   storageWired: boolean;
+  appCheck?: AppCheck;
 }
 const clientsKey = Symbol.for('catmap.firebase.clients');
 const clientRegistry = globalThis as unknown as Record<symbol, Clients | undefined>;
@@ -60,8 +66,9 @@ const app = configured
         : real,
     ))
   : null;
+let appCheck = shared?.appCheck;
 if (app && !shared && !existingApp && !config.emulators && import.meta.env.VITE_RECAPTCHA_SITE_KEY)
-  initializeAppCheck(app, {
+  appCheck = initializeAppCheck(app, {
     provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
     isTokenAutoRefreshEnabled: true,
   });
@@ -89,7 +96,7 @@ if (config.emulators && auth && db && !shared && !existingApp) {
     Number(import.meta.env.VITE_FIRESTORE_EMULATOR_PORT || 8080),
   );
 }
-const clients: Clients = shared ?? { app, auth, db, storageWired: false };
+const clients: Clients = shared ?? { app, auth, db, appCheck, storageWired: false };
 clientRegistry[clientsKey] = clients;
 // A crashed/interrupted logout finishes before the first query or account screen.
 if (
@@ -141,4 +148,7 @@ export function database() {
 export function authentication() {
   if (!auth) throw new Error('Firebase setup required');
   return auth;
+}
+export async function appCheckToken() {
+  return appCheck ? (await getToken(appCheck, false)).token : '';
 }

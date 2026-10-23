@@ -1,5 +1,6 @@
 import {
   collectionGroup,
+  increment,
   query,
   where,
   getDocs,
@@ -9,6 +10,8 @@ import {
   deleteDoc,
 } from 'firebase/firestore';
 import { VideoRepository } from './VideoRepository';
+import { journalPostDeletion } from './DeletionJournal';
+import { PostFromDoc } from './model';
 import { database } from '../firebase';
 import { ref, listQuery, deleteDocuments } from './Firestore';
 async function matchingPaths(path: string, field: string, uid: string) {
@@ -28,36 +31,40 @@ export const CommunityAccountCleanup = {
         if (source.exists()) {
           tx.delete(d.ref);
           if (p.exists())
-            tx.update(parent, { updatesCount: Math.max(0, (p.data().updatesCount ?? 0) - 1) });
+            tx.update(parent, {
+              updatesCount: Math.max(0, (p.data().updatesCount ?? 0) - 1),
+              counterSourceId: d.id,
+            });
         }
+      }).catch(async (error: unknown) => {
+        if ((error as { code?: string }).code !== 'permission-denied') throw error;
+        // A hidden parent need not be read to remove an authored child. Its count is repaired by the worker.
+        const batch = writeBatch(database());
+        batch.delete(d.ref);
+        const postId = d.ref.path.split('/')[1];
+        batch.set(
+          ref(`updateRepairs/${new TextEncoder().encode(postId).length}_${postId}_${d.id}`),
+          { postId, updateId: d.id, byUid: uid },
+        );
+        await batch.commit();
       });
     }
     const posts = await getDocs(listQuery('posts', where('ownerId', '==', uid)));
     for (const post of posts.docs) {
+      await journalPostDeletion(PostFromDoc(post.id, post.data()));
       const path = post.ref.path;
-      await deleteDocuments(
-        (await getDocs(listQuery(path + '/updates'))).docs.map((d) => d.ref.path),
-      );
+      // Keep child photo references in the durable job until the maintenance worker removes them.
       await deleteDocuments([path]);
     }
     // Matches may be deleted only after their posts are gone.
-    await getDocs(listQuery('matches', where('members', 'array-contains', uid)))
-      .then((snap) =>
-        Promise.allSettled(
-          snap.docs.map((d) =>
-            deleteDoc(d.ref).catch((error) => console.info('Account match cleanup failed', error)),
-          ),
-        ),
-      )
-      .catch((error) => console.info('Account match cleanup failed', error));
-    await Promise.allSettled(
-      posts.docs.map(async (post) => {
-        await deleteDocuments([`postEmbeddings/${post.id}`]).catch((error) =>
-          console.info('Embedding cleanup failed', error),
-        );
-        await VideoRepository.delete(post.data().videoPath ?? '').catch((error) =>
-          console.info('Account video cleanup failed', error),
-        );
+    await getDocs(listQuery('matches', where('members', 'array-contains', uid))).then((snap) =>
+      Promise.all(snap.docs.map((d) => deleteDoc(d.ref))),
+    );
+    const manifests = await getDocs(listQuery('postDeletions', where('ownerId', '==', uid)));
+    await Promise.all(
+      manifests.docs.map(async (post) => {
+        await deleteDocuments([`postEmbeddings/${post.id}`]);
+        await VideoRepository.deleteRequired(post.data().videoPath ?? '');
       }),
     );
     for (const field of ['requesterId', 'ownerId'])
@@ -73,16 +80,26 @@ export const CommunityAccountCleanup = {
     const chats = await getDocs(listQuery('chats', where('members', 'array-contains', uid)));
     for (const chat of chats.docs) {
       await deleteDocuments(await matchingPaths(chat.ref.path + '/messages', 'senderId', uid));
-      const data: Record<string, unknown> = {
-        [`names.${uid}`]: '',
-        [`photos.${uid}`]: '',
-        [`unread.${uid}`]: 0,
-      };
-      if (chat.data().lastSender === uid) Object.assign(data, { lastText: '', lastSender: '' });
-      await updateDoc(chat.ref, data);
+      await runTransaction(database(), async (tx) => {
+        const fresh = await tx.get(chat.ref);
+        const count = Number(fresh.data()?.unread?.[uid] ?? 0);
+        const data: Record<string, unknown> = {
+          [`names.${uid}`]: '',
+          [`photos.${uid}`]: '',
+          [`unread.${uid}`]: 0,
+        };
+        if (fresh.data()?.lastSender === uid)
+          Object.assign(data, { lastText: '', lastSender: '', lastMessageId: '' });
+        tx.update(chat.ref, data);
+        if (count)
+          tx.update(ref(`userLimits/${uid}`), {
+            unreadCount: increment(-count),
+            unreadChatId: chat.id,
+          });
+      });
     }
     await deleteDocuments([`sitters/${uid}`, `areaFollows/${uid}`]);
-    for (const path of ['favorites', 'blocked', 'private']) {
+    for (const path of ['favorites', 'blocked', 'private', 'notificationReceipts']) {
       const docs = await getDocs(listQuery(`users/${uid}/${path}`));
       for (let i = 0; i < docs.docs.length; i += 200) {
         const b = writeBatch(database());

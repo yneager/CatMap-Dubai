@@ -124,6 +124,10 @@
       "type": "Long",
       "documentId": false
     },
+    "counterSourceId": {
+      "type": "String",
+      "documentId": false
+    },
     "hidden": {
       "type": "Boolean",
       "documentId": false
@@ -578,6 +582,14 @@
       "type": "String",
       "documentId": false
     },
+    "lastMessageId": {
+      "type": "String",
+      "documentId": false
+    },
+    "lastDeletedMessageId": {
+      "type": "String",
+      "documentId": false
+    },
     "lastAt": {
       "type": "Long",
       "documentId": false
@@ -810,6 +822,10 @@
     },
     "sightingCount": {
       "type": "Long",
+      "documentId": false
+    },
+    "counterSourceId": {
+      "type": "String",
       "documentId": false
     },
     "lat": {
@@ -1435,6 +1451,10 @@
       "documentId": false
     },
     "fromUid": {
+      "type": "String",
+      "documentId": false
+    },
+    "sourceId": {
       "type": "String",
       "documentId": false
     },

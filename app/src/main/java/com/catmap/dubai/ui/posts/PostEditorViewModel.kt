@@ -477,7 +477,6 @@ class PostEditorViewModel(
             photos.clear()
             photos.addAll(ids.map { FormPhoto.Remote(it) })
             val uploadedVideo = videoUri?.let { container.videos.upload(me.uid, it) }
-            if (uploadedVideo != null && videoPath.isNotBlank()) container.videos.delete(videoPath)
             val finalVideo = uploadedVideo ?: videoPath
             videoUri = null
             videoPath = finalVideo
@@ -505,6 +504,7 @@ class PostEditorViewModel(
                 container.posts.update(current, draft, me)
                 current.id
             }
+            current?.videoPath?.takeIf { it.isNotBlank() && it != finalVideo }?.let { container.videos.delete(it) }
             removedRemote.forEach { runCatching { container.images.delete(it) } }
             removedRemote.clear()
             if (postId == null) {

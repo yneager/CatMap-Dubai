@@ -151,6 +151,7 @@ data class Post(
     var vaccinated: Boolean = false,
     var neutered: Boolean = false,
     var updatesCount: Long = 0,
+    var counterSourceId: String = "",
     var hidden: Boolean = false,
     /** Lower-case words used by search. */
     var keywords: List<String> = emptyList(),
@@ -326,6 +327,8 @@ data class Chat(
     var photos: Map<String, String> = emptyMap(),
     var lastText: String = "",
     var lastSender: String = "",
+    var lastMessageId: String = "",
+    var lastDeletedMessageId: String = "",
     var lastAt: Long = 0,
     var unread: Map<String, Long> = emptyMap(),
 ) {

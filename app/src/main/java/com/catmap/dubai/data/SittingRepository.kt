@@ -9,6 +9,15 @@ import com.catmap.dubai.data.model.UserProfile
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 
@@ -16,6 +25,7 @@ class SittingRepository(
     private val db: FirebaseFirestore,
     private val notifications: NotificationRepository,
     private val moderation: ModerationRepository,
+    private val scope: CoroutineScope,
 ) {
     private val sitters = db.collection(Col.SITTERS)
     private val bookings = db.collection(Col.BOOKINGS)
@@ -27,7 +37,23 @@ class SittingRepository(
     /** Every sitter profile for moderators, read a page at a time. */
     fun allSittersQuery(): Query = sitters.orderBy(com.google.firebase.firestore.FieldPath.documentId())
 
-    fun sitterFlow(uid: String): Flow<SitterProfile?> = sitters.document(uid).objectFlow()
+    private data class SharedSitter(val scope: CoroutineScope, val values: SharedFlow<SitterProfile?>, var refs: Int = 0)
+    private val sitterStreams = HashMap<String, SharedSitter>()
+    fun sitterFlow(uid: String): Flow<SitterProfile?> = flow {
+        val owner = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+        val key = "$owner/$uid"
+        val entry = synchronized(sitterStreams) {
+            sitterStreams.getOrPut(key) {
+                val child = CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job]))
+                SharedSitter(child, sitters.document(uid).objectFlow<SitterProfile>().shareIn(child, SharingStarted.WhileSubscribed(0), 1))
+            }.also { it.refs++ }
+        }
+        try { emitAll(entry.values) }
+        finally { synchronized(sitterStreams) {
+            entry.refs--
+            if (entry.refs == 0) { sitterStreams.remove(key); entry.scope.cancel() }
+        } }
+    }
 
     suspend fun setVerified(sitter: SitterProfile, verified: Boolean, admin: UserProfile) {
         sitters.document(sitter.uid).update(mapOf("verified" to verified, "updatedAt" to now())).await()
@@ -64,18 +90,21 @@ class SittingRepository(
 
     // ---------- bookings ----------
 
+    fun bookingsQuery(uid: String, asSitter: Boolean): Query = bookings.whereEqualTo(if (asSitter) "sitterId" else "ownerId", uid).orderBy("createdAt", Query.Direction.DESCENDING)
+    fun reviewsQuery(uid: String): Query = reviews.whereEqualTo("sitterId", uid).orderBy("createdAt", Query.Direction.DESCENDING)
+
     fun asOwner(uid: String): Flow<List<Booking>> =
-        bookings.whereEqualTo("ownerId", uid).listFlow<Booking>().map { l -> l.sortedByDescending { it.createdAt } }
+        bookingsQuery(uid, false).limit(50).listFlow<Booking>().map { l -> l.sortedByDescending { it.createdAt } }
 
     fun asSitter(uid: String): Flow<List<Booking>> =
-        bookings.whereEqualTo("sitterId", uid).listFlow<Booking>().map { l -> l.sortedByDescending { it.createdAt } }
+        bookingsQuery(uid, true).limit(50).listFlow<Booking>().map { l -> l.sortedByDescending { it.createdAt } }
 
 
     fun bookingFlow(id: String): Flow<Booking?> = bookings.document(id).objectFlow()
 
     suspend fun requestBooking(sitter: SitterProfile, petTypes: List<String>, petCount: Long, startAt: Long, endAt: Long, notes: String, me: UserProfile): String {
         if (sitter.uid == me.uid) throw AppException(R.string.err_own_listing)
-        if (endAt < startAt) throw AppException(R.string.err_dates)
+        if (endAt <= startAt) throw AppException(R.string.err_dates)
         val ref = bookings.document()
         db.runBatch { b ->
             b.set(
@@ -88,7 +117,7 @@ class SittingRepository(
             )
             b.update(db.collection(Col.USERS).document(me.uid), "lastPostAt", com.google.firebase.firestore.FieldValue.serverTimestamp())
         }.await()
-        notifications.send(listOf(sitter.uid), NotifType.BOOKING_REQUEST, mapOf("user" to me.username), "bookings?tab=sitter")
+        notifications.send(listOf(sitter.uid), NotifType.BOOKING_REQUEST, mapOf("user" to me.username), "bookings?tab=sitter", sourceId = ref.id)
         return ref.id
     }
 
@@ -98,13 +127,13 @@ class SittingRepository(
         bookings.document(booking.id).update(updates).await()
         val other = if (me.uid == booking.sitterId) booking.ownerId else booking.sitterId
         val route = if (other == booking.sitterId) "bookings?tab=sitter" else "bookings"
-        notifications.send(listOf(other), NotifType.BOOKING_UPDATE, mapOf("user" to me.username, "status" to status.key), route)
+        notifications.send(listOf(other), NotifType.BOOKING_UPDATE, mapOf("user" to me.username, "status" to status.key), route, sourceId = booking.id)
     }
 
     // ---------- reviews ----------
 
     fun reviewsFor(sitterId: String): Flow<List<Review>> =
-        reviews.whereEqualTo("sitterId", sitterId).listFlow<Review>().map { l -> l.sortedByDescending { it.createdAt } }
+        reviewsQuery(sitterId).limit(50).listFlow<Review>().map { l -> l.sortedByDescending { it.createdAt } }
 
     /** One review per completed booking; the sitter's average is updated in the same batch. */
     suspend fun review(booking: Booking, rating: Int, text: String, me: UserProfile) {
@@ -128,6 +157,6 @@ class SittingRepository(
             }
             tx.update(bookings.document(booking.id), mapOf("reviewed" to true, "updatedAt" to now()))
         }.await()
-        notifications.send(listOf(booking.sitterId), NotifType.REVIEW, mapOf("user" to me.username, "rating" to rating.toString()), "sitter/${booking.sitterId}")
+        notifications.send(listOf(booking.sitterId), NotifType.REVIEW, mapOf("user" to me.username, "rating" to rating.toString()), "sitter/${booking.sitterId}", sourceId = booking.id)
     }
 }

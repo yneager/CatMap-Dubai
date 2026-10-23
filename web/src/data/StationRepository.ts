@@ -1,4 +1,6 @@
 import {
+  orderBy,
+  limit,
   doc,
   where,
   setDoc,
@@ -100,8 +102,14 @@ export const StationRepository = {
     await b.commit();
     await moderation.log(me, 'stations_seeded', 'station', '', String(samples.length), '');
   },
-  checkins: (id: string) => listQuery('checkins', where('stationId', '==', id)),
-  maintenanceFor: (id: string) => listQuery('maintenance', where('stationId', '==', id)),
+  checkinsQuery: (id: string) =>
+    listQuery('checkins', where('stationId', '==', id), orderBy('at', 'desc')),
+  checkins: (id: string) =>
+    listQuery('checkins', where('stationId', '==', id), orderBy('at', 'desc'), limit(50)),
+  maintenanceQuery: (id: string) =>
+    listQuery('maintenance', where('stationId', '==', id), orderBy('createdAt', 'desc')),
+  maintenanceFor: (id: string) =>
+    listQuery('maintenance', where('stationId', '==', id), orderBy('createdAt', 'desc'), limit(50)),
   openMaintenance: () => listQuery('maintenance', where('status', 'in', ['open', 'in_progress'])),
   checkIn: async (
     s: FeedingStation,
@@ -121,8 +129,9 @@ export const StationRepository = {
         }).format(at),
       );
     const b = writeBatch(database());
+    const checkinRef = doc(col('checkins'));
     b.set(
-      doc(col('checkins')),
+      checkinRef,
       StationCheckinToDoc({
         ...StationCheckinDefaults,
         stationId: s.id,
@@ -139,6 +148,7 @@ export const StationRepository = {
     );
     b.update(ref(`stations/${s.id}`), {
       checkinCount: increment(1),
+      counterSourceId: checkinRef.id,
       lastCheckinAt: at,
       lastCheckinBy: me.username,
     });

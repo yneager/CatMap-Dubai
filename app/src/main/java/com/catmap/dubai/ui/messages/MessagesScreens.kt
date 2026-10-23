@@ -116,7 +116,8 @@ import kotlinx.coroutines.withContext
 fun MessagesScreen(nav: NavHostController) {
     val container = LocalContainer.current
     val uid = container.session.uid ?: return
-    val chats by remember(uid) { container.chats.chatsFor(uid) }.collectAsStateWithLifecycle(null)
+    val chatHistory = com.catmap.dubai.ui.components.rememberLiveHistory<Chat>(uid, container.chats.chatsQuery(uid), id = { it.id })
+    val chats = if (chatHistory.page.loaded) chatHistory.page.items else null
     val blocked by remember(uid) { container.chats.blocked(uid) }.collectAsStateWithLifecycle(emptySet())
     Scaffold(topBar = { AppTopBar(stringResource(R.string.tab_messages), actions = { NotificationBell(nav) }) }) { padding ->
         val list = chats?.filter { it.lastText.isNotBlank() || it.lastSender.isNotBlank() }
@@ -128,6 +129,7 @@ fun MessagesScreen(nav: NavHostController) {
                     ChatRow(chat, uid, chat.other(uid) in blocked, Modifier.animateItem()) { nav.navigate(Routes.chat(chat.id)) }
                 }
             }
+            item { com.catmap.dubai.ui.components.HistoryMore(chatHistory) }
         }
     }
 }
@@ -250,7 +252,7 @@ fun ChatScreen(nav: NavHostController, chatId: String, sharePostId: String?) {
             sending = true
             runCatching {
                 val processed = withContext(Dispatchers.Default) { ImageUtils.process(context, uri) }
-                container.images.upload(uid, processed)
+                container.images.upload(uid, processed, chatId)
             }.onSuccess { send(it) }.onFailure { snackbar.showSnackbar(it.userMessage(context)) }
             sending = false
         }

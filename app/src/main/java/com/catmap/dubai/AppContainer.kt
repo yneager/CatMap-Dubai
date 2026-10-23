@@ -115,7 +115,7 @@ class AppContainer(context: Context) {
     /** The map's posts and cats: the area on screen, changes since the last sync, and a saved copy. */
     val map by lazy { com.catmap.dubai.data.MapRepository(db, appContext, scope) }
     val adoption by lazy { AdoptionRepository(db, notifications) }
-    val sitting by lazy { SittingRepository(db, notifications, moderation) }
+    val sitting by lazy { SittingRepository(db, notifications, moderation, scope) }
     val chats by lazy { ChatRepository(db, users, notifications, images) }
     val favorites by lazy { FavoritesRepository(db) }
     val admin by lazy { AdminRepository(db, moderation, notifications) }

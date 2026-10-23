@@ -34,6 +34,7 @@ class UserRepository(private val db: FirebaseFirestore, private val notification
         !db.collection(Col.USERNAMES).document(username.trim().lowercase()).get().await().exists()
 
     suspend fun updateProfile(current: UserProfile, username: String, displayName: String, bio: String, photoId: String) {
+        MediaLease.retain(db, listOf(photoId))
         val newName = username.trim()
         validateUsername(newName)
         val changingName = !newName.equals(current.username, ignoreCase = true)

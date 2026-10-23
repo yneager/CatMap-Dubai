@@ -32,6 +32,7 @@ export interface Post {
   vaccinated: boolean;
   neutered: boolean;
   updatesCount: number;
+  counterSourceId: string;
   hidden: boolean;
   keywords: string[];
   createdAt: number;
@@ -77,6 +78,7 @@ export const PostDefaults: Post = {
   vaccinated: false,
   neutered: false,
   updatesCount: 0,
+  counterSourceId: "",
   hidden: false,
   keywords: [],
   createdAt: 0,
@@ -123,6 +125,7 @@ export function PostFromDoc(id: string, data: Record<string, unknown>): Post {
     vaccinated: typeof data.vaccinated === "boolean" ? data.vaccinated : false,
     neutered: typeof data.neutered === "boolean" ? data.neutered : false,
     updatesCount: typeof data.updatesCount === "number" && Number.isFinite(data.updatesCount) ? data.updatesCount : 0,
+    counterSourceId: typeof data.counterSourceId === "string" ? data.counterSourceId : "",
     hidden: typeof data.hidden === "boolean" ? data.hidden : false,
     keywords: Array.isArray(data.keywords) ? data.keywords.filter((v): v is string => typeof v === "string") : [],
     createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
@@ -169,6 +172,7 @@ export function PostToDoc(value: Post): Record<string, unknown> {
     vaccinated: value.vaccinated,
     neutered: value.neutered,
     updatesCount: Math.round(value.updatesCount),
+    counterSourceId: value.counterSourceId,
     hidden: value.hidden,
     keywords: value.keywords,
     createdAt: Math.round(value.createdAt),
@@ -624,6 +628,8 @@ export interface Chat {
   photos: Record<string, string>;
   lastText: string;
   lastSender: string;
+  lastMessageId: string;
+  lastDeletedMessageId: string;
   lastAt: number;
   unread: Record<string, number>;
 }
@@ -634,6 +640,8 @@ export const ChatDefaults: Chat = {
   photos: {},
   lastText: "",
   lastSender: "",
+  lastMessageId: "",
+  lastDeletedMessageId: "",
   lastAt: 0,
   unread: {},
 };
@@ -645,6 +653,8 @@ export function ChatFromDoc(id: string, data: Record<string, unknown>): Chat {
     photos: data.photos && typeof data.photos === "object" && !Array.isArray(data.photos) ? Object.fromEntries(Object.entries(data.photos).filter(([, v]) => typeof v === "string")) as Record<string, string> : {},
     lastText: typeof data.lastText === "string" ? data.lastText : "",
     lastSender: typeof data.lastSender === "string" ? data.lastSender : "",
+    lastMessageId: typeof data.lastMessageId === "string" ? data.lastMessageId : "",
+    lastDeletedMessageId: typeof data.lastDeletedMessageId === "string" ? data.lastDeletedMessageId : "",
     lastAt: typeof data.lastAt === "number" && Number.isFinite(data.lastAt) ? data.lastAt : 0,
     unread: data.unread && typeof data.unread === "object" && !Array.isArray(data.unread) ? Object.fromEntries(Object.entries(data.unread).filter(([, v]) => typeof v === "number" && Number.isFinite(v))) as Record<string, number> : {},
   };
@@ -656,6 +666,8 @@ export function ChatToDoc(value: Chat): Record<string, unknown> {
     photos: value.photos,
     lastText: value.lastText,
     lastSender: value.lastSender,
+    lastMessageId: value.lastMessageId,
+    lastDeletedMessageId: value.lastDeletedMessageId,
     lastAt: Math.round(value.lastAt),
     unread: Object.fromEntries(Object.entries(value.unread).map(([k,v])=>[k,Math.round(v)])),
   };
@@ -864,6 +876,7 @@ export interface Cat {
   firstSeen: number;
   lastSeen: number;
   sightingCount: number;
+  counterSourceId: string;
   lat: number;
   lng: number;
   neighborhood: string;
@@ -899,6 +912,7 @@ export const CatDefaults: Cat = {
   firstSeen: 0,
   lastSeen: 0,
   sightingCount: 0,
+  counterSourceId: "",
   lat: 0.0,
   lng: 0.0,
   neighborhood: "",
@@ -935,6 +949,7 @@ export function CatFromDoc(id: string, data: Record<string, unknown>): Cat {
     firstSeen: typeof data.firstSeen === "number" && Number.isFinite(data.firstSeen) ? data.firstSeen : 0,
     lastSeen: typeof data.lastSeen === "number" && Number.isFinite(data.lastSeen) ? data.lastSeen : 0,
     sightingCount: typeof data.sightingCount === "number" && Number.isFinite(data.sightingCount) ? data.sightingCount : 0,
+    counterSourceId: typeof data.counterSourceId === "string" ? data.counterSourceId : "",
     lat: typeof data.lat === "number" && Number.isFinite(data.lat) ? data.lat : 0.0,
     lng: typeof data.lng === "number" && Number.isFinite(data.lng) ? data.lng : 0.0,
     neighborhood: typeof data.neighborhood === "string" ? data.neighborhood : "",
@@ -971,6 +986,7 @@ export function CatToDoc(value: Cat): Record<string, unknown> {
     firstSeen: Math.round(value.firstSeen),
     lastSeen: Math.round(value.lastSeen),
     sightingCount: Math.round(value.sightingCount),
+    counterSourceId: value.counterSourceId,
     lat: value.lat,
     lng: value.lng,
     neighborhood: value.neighborhood,
@@ -1632,6 +1648,7 @@ export interface AppNotification {
   params: Record<string, string>;
   route: string;
   fromUid: string;
+  sourceId: string;
   read: boolean;
   createdAt: number;
 }
@@ -1641,6 +1658,7 @@ export const AppNotificationDefaults: AppNotification = {
   params: {},
   route: "",
   fromUid: "",
+  sourceId: "",
   read: false,
   createdAt: 0,
 };
@@ -1651,6 +1669,7 @@ export function AppNotificationFromDoc(id: string, data: Record<string, unknown>
     params: data.params && typeof data.params === "object" && !Array.isArray(data.params) ? Object.fromEntries(Object.entries(data.params).filter(([, v]) => typeof v === "string")) as Record<string, string> : {},
     route: typeof data.route === "string" ? data.route : "",
     fromUid: typeof data.fromUid === "string" ? data.fromUid : "",
+    sourceId: typeof data.sourceId === "string" ? data.sourceId : "",
     read: typeof data.read === "boolean" ? data.read : false,
     createdAt: typeof data.createdAt === "number" && Number.isFinite(data.createdAt) ? data.createdAt : 0,
   };
@@ -1661,6 +1680,7 @@ export function AppNotificationToDoc(value: AppNotification): Record<string, unk
     params: value.params,
     route: value.route,
     fromUid: value.fromUid,
+    sourceId: value.sourceId,
     read: value.read,
     createdAt: Math.round(value.createdAt),
   };

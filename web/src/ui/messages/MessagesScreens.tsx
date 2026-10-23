@@ -2,6 +2,7 @@ import { ReportButton } from '../components/ReportButton';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useApp, useList, useDoc, useAction } from '../../state';
+import { useHistory, HistoryMore } from '../../data/useHistory';
 import { ChatRepository } from '../../data/ChatRepository';
 import { UserRepository } from '../../data/UserRepository';
 import { ImageRepository } from '../../data/ImageRepository';
@@ -28,7 +29,7 @@ export default function MessagesScreens() {
   const location = useLocation(),
     { id = '', uid: otherUid = '' } = useParams(),
     navigate = useNavigate(),
-    { profile, chats } = useApp(),
+    { profile } = useApp(),
     action = useAction(),
     [text, setText] = useState(''),
     [newChat, setNewChat] = useState(false),
@@ -36,6 +37,13 @@ export default function MessagesScreens() {
   const endRef = useRef<HTMLDivElement>(null);
   const uid = profile?.uid ?? '',
     isChat = location.pathname.startsWith('/chat/');
+  const chatHistory = useHistory(
+    () => (!isChat && uid ? ChatRepository.chatsQuery(uid) : null),
+    ChatFromDoc,
+    'chat-history-' + uid + '-' + isChat,
+    'chats',
+  );
+  const chats = chatHistory.items;
   const chat = useDoc(
       () => (isChat ? ChatRepository.chatFlow(id) : null),
       ChatFromDoc,
@@ -125,6 +133,7 @@ export default function MessagesScreens() {
           ) : (
             <EmptyState text={t('no_chats')} />
           )}
+          <HistoryMore history={chatHistory} />
         </div>
         {newChat && (
           <Dialog title={t('message')} onClose={() => setNewChat(false)}>
@@ -258,7 +267,11 @@ export default function MessagesScreens() {
                 const file = e.target.files?.[0];
                 if (file)
                   void action.run(async () => {
-                    const imageId = await ImageRepository.upload(uid, await processPhoto(file));
+                    const imageId = await ImageRepository.upload(
+                      uid,
+                      await processPhoto(file),
+                      chat.id,
+                    );
                     await ChatRepository.send(chat, profile!, '', imageId);
                   });
               }}
