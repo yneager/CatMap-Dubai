@@ -1,5 +1,6 @@
 package com.catmap.dubai.data
 
+import com.catmap.dubai.data.model.ContentReport
 import com.catmap.dubai.data.model.AdoptionStatus
 import com.catmap.dubai.data.model.AreaFollow
 import com.catmap.dubai.data.model.Post
@@ -62,6 +63,7 @@ class PostRepository(
     private val users: UserRepository,
     private val notifications: NotificationRepository,
     private val moderation: ModerationRepository,
+    private val videos: VideoRepository,
 ) {
     private val posts = db.collection(Col.POSTS)
     private val areas = db.collection(Col.AREA_FOLLOWS)
@@ -233,6 +235,7 @@ class PostRepository(
         val updates = ref(post.id).collection(Col.UPDATES).get().await().documents
         updates.chunked(400).forEach { chunk -> db.runBatch { b -> chunk.forEach { b.delete(it.reference) } }.await() }
         ref(post.id).delete().await()
+        runCatching { videos.delete(post.videoPath) }.onFailure { android.util.Log.i("CatMap", "Post video cleanup failed", it) }
         runCatching { db.collection(Col.POST_EMBEDDINGS).document(post.id).delete().await() }
             .onFailure { android.util.Log.i("CatMap", "Embedding cleanup failed", it) }
         runCatching {
@@ -263,6 +266,13 @@ class PostRepository(
 
     suspend fun moderatorDelete(post: Post, moderator: UserProfile, images: ImageRepository, note: String) {
         delete(post, images)
+        runCatching {
+            db.collection(Col.REPORTS).whereEqualTo("targetType", "post").whereEqualTo("targetId", post.id)
+                .whereEqualTo("status", "open").get().await().safeObjects<ContentReport>().forEach { report ->
+                    runCatching { moderation.closeReport(report, "resolved", note.ifBlank { "post deleted" }, moderator) }
+                        .onFailure { android.util.Log.i("CatMap", "Post report cleanup failed", it) }
+                }
+        }.onFailure { android.util.Log.i("CatMap", "Post report lookup failed", it) }
         moderation.log(moderator, "post_deleted", "post", post.id, post.name.ifBlank { post.category }, note)
         notifications.send(
             listOf(post.ownerId), NotifType.MODERATION,

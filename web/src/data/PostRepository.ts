@@ -12,9 +12,11 @@ import {
   getDocs,
   getDocFromServer,
 } from 'firebase/firestore';
+import { VideoRepository } from './VideoRepository';
 import { database } from '../firebase';
 import { col, ref, listQuery, list, read, deleteDocuments } from './Firestore';
 import {
+  ContentReportFromDoc,
   PostDefaults,
   PostFromDoc,
   PostMatchFromDoc,
@@ -261,6 +263,7 @@ export const PostRepository = {
     const updates = await list(listQuery(`posts/${p.id}/updates`), PostUpdateFromDoc);
     await deleteDocuments(updates.map((u) => `posts/${p.id}/updates/${u.id}`));
     await deleteDoc(ref(`posts/${p.id}`));
+    await VideoRepository.delete(p.videoPath).catch((error) => console.info('Post video cleanup failed', error));
     await deleteDoc(ref(`postEmbeddings/${p.id}`)).catch((error) => console.info('Embedding cleanup failed', error));
     await getDocs(listQuery('adoptionRequests', where('ownerId', '==', p.ownerId), where('postId', '==', p.id)))
       .then((snap) => Promise.allSettled(snap.docs.map((d) => deleteDoc(d.ref))))
@@ -299,6 +302,12 @@ export const PostRepository = {
   },
   moderatorDelete: async (p: Post, me: UserProfile, note = '') => {
     await PostRepository.delete(p);
+    const reports = await list(listQuery('contentReports', where('targetType', '==', 'post'),
+      where('targetId', '==', p.id), where('status', '==', 'open')), ContentReportFromDoc)
+      .catch((error) => { console.info('Post report lookup failed', error); return []; });
+    await Promise.allSettled(reports.map((report) =>
+      ModerationRepository.closeReport(report, 'resolved', note || 'post deleted', me)
+        .catch((error) => console.info('Post report cleanup failed', error))));
     await ModerationRepository.log(me, 'post_deleted', 'post', p.id, p.name || p.category, note);
     await notifications.send([p.ownerId], 'moderation', {
       target: 'post',

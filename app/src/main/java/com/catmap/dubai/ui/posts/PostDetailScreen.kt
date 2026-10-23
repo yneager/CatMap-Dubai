@@ -457,7 +457,6 @@ private fun PostDetail(nav: NavHostController, post: Post) {
             onConfirm = {
                 runner.run(R.string.deleted, onSuccess = { nav.popBackStack() }) {
                     container.posts.delete(post, container.images)
-                    container.videos.delete(post.videoPath)
                 }
             },
             onDismiss = { dialog = null },

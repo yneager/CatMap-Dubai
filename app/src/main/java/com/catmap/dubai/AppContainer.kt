@@ -108,7 +108,7 @@ class AppContainer(context: Context) {
     val cats by lazy { CatRepository(db, users, notifications, moderation) }
     val rescues by lazy { RescueRepository(db, users, notifications, moderation) }
     val stations by lazy { StationRepository(db, users, notifications, moderation) }
-    val posts by lazy { PostRepository(db, users, notifications, moderation) }
+    val posts by lazy { PostRepository(db, users, notifications, moderation, videos) }
     val helpDirectory by lazy { HelpDirectoryRepository(db) }
     val dataExport by lazy { UserDataExportRepository(appContext,db) }
     val analytics by lazy { AdminAnalyticsRepository(db) }
