@@ -43,3 +43,12 @@ docs/MAJOR_UPDATE_REPORT.md
 tools/rulestest/phase1-findings.mjs
 # Local test and audit output.
 test-results/
+
+# Worker runtime inputs and downloads are never source artifacts.
+/tools/worker/worker.local.json
+/tools/worker/google-services.json
+/tools/worker/models/
+/tools/worker/.venv/
+/tools/worker/*.bak
+/tools/worker/*.local.*
+/.ci-worker/

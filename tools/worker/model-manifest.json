@@ -1,0 +1,28 @@
+{
+  "open-noodle/pet-recognition-base": {
+    "revision": "fa30eb7785ceb764d5c2840c4585fb89821be385",
+    "sha256": {
+      "recognition/model.onnx": "8691f5f6d0cebbd1602d21def63a34f7a58f78e08b3d4914cb81adcc2efd83f8"
+    }
+  },
+  "Xenova/detr-resnet-50": {
+    "revision": "8be7ab59ff663484ee9ba2e8d8f267330d5ad03e",
+    "sha256": {
+      "onnx/model.onnx": "5dffb3205e68b0be1686eea283ecf87e7592d3dceed5dfc83249f7303e9e95e8"
+    }
+  },
+  "Xenova/clip-vit-base-patch32": {
+    "revision": "d15189d7028b43f1d3e65039190477f6af591c2a",
+    "sha256": {
+      "onnx/vision_model.onnx": "fd6e1402a588279d1723c7534d4bcba5bc0b14b47dfab0e46f8c47b8270d7d40",
+      "onnx/text_model.onnx": "3f6571f5bad13a97c469c1622e1cfc4d9aef78b79fdbfcff804ca357bfada8cc",
+      "tokenizer.json": "f7f3b7af117d467b58374797691a6438d3e6b9e9cef800dfd5dced7f697a90cd"
+    }
+  },
+  "open-noodle/pet-recognition-large": {
+    "revision": "cff7cf1559cb99596273f26f1eaae117327d8eb1",
+    "sha256": {
+      "recognition/model.onnx": "e98f18a65e1a1192137e77e41ebae7b150ac3a6930298690016cd316e1c2a8c2"
+    }
+  }
+}
