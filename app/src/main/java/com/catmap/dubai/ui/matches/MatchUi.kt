@@ -235,6 +235,7 @@ fun PostMatchesSection(nav: NavHostController, post: Post) {
 fun MatchCard(match: PostMatch, viewerIsOwner: Boolean, onClick: () -> Unit) {
     val lost = rememberPost(match.lostPostId)
     val sighting = rememberPost(match.sightingPostId)
+    val found = lost?.status == PostStatus.REUNITED.key && lost.resolvedMatchId != match.id
     val other = if (viewerIsOwner) sighting else lost
     val headline = if (viewerIsOwner) stringResource(R.string.match_seen_near, Dubai.nameOf(sighting?.neighborhood).ifBlank { "-" })
     else stringResource(R.string.match_found_headline, animalName(lost)) + " — " + stringResource(R.string.match_lost_near, Dubai.nameOf(lost?.neighborhood).ifBlank { "-" })
@@ -247,7 +248,7 @@ fun MatchCard(match: PostMatch, viewerIsOwner: Boolean, onClick: () -> Unit) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SideBySide(lost, sighting, height = 110)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TierPill(match)
+                if (found) Text(stringResource(R.string.match_owner_found_animal)) else TierPill(match)
                 Spacer(Modifier.width(8.dp))
                 Text(headline, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, maxLines = 2)
             }

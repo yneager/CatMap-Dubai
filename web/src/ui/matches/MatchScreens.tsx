@@ -110,6 +110,7 @@ function SideBySide({
 function MatchCard({ m, viewerIsOwner }: { m: PostMatch; viewerIsOwner: boolean }) {
   const lost = usePost(m.lostPostId),
     sighting = usePost(m.sightingPostId);
+  const found = lost?.status === 'reunited' && lost.resolvedMatchId !== m.id;
   const other = viewerIsOwner ? sighting : lost;
   const headline = viewerIsOwner
     ? t('match_seen_near', Dubai.nameOf(sighting?.neighborhood ?? '') || '-')
@@ -121,7 +122,7 @@ function MatchCard({ m, viewerIsOwner }: { m: PostMatch; viewerIsOwner: boolean 
     <Link className="card match-card" to={'/match/' + m.id}>
       <SideBySide lost={lost} sighting={sighting} />
       <div className="row">
-        <StatusPill group="MatchTier" value={m.tier} />
+        {found ? <span>{t('match_owner_found_animal')}</span> : <StatusPill group="MatchTier" value={m.tier} />}
         <strong>{headline}</strong>
       </div>
       <p className="small muted">
@@ -497,6 +498,7 @@ export default function MatchReviewScreen() {
       sighting ? dateTime(sighting.lastSeenAt || sighting.createdAt) : '',
     ],
   ];
+  const found = lost?.status === 'reunited' && lost.resolvedMatchId !== m.id;
   const answer = answerLine(m, isOwner);
   const openPhoto = (photo: string) => navigate('/photo/' + photo);
   return (
@@ -504,7 +506,7 @@ export default function MatchReviewScreen() {
       <AppTopBar title={t('match_review_title')} />
       <div className="screen match-review">
         <div className="row">
-          <StatusPill group="MatchTier" value={m.tier} />
+          {found ? <span>{t('match_owner_found_animal')}</span> : <StatusPill group="MatchTier" value={m.tier} />}
           <h2>{t('match_found_headline', animalName(lost))}</h2>
         </div>
         <SideBySide lost={lost} sighting={sighting} onOpen={openPhoto} />
@@ -592,7 +594,7 @@ export default function MatchReviewScreen() {
             )}
           </div>
         )}
-        {isReporter && (
+        {isReporter && !found && (
           <div className="column">
             <button
               className="primary"

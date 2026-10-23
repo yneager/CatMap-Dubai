@@ -94,6 +94,7 @@ private fun MatchReview(nav: NavHostController, match: PostMatch) {
     val uid = container.session.uid.orEmpty()
     val lost by remember(match.lostPostId) { container.posts.postFlow(match.lostPostId) }.collectAsStateWithLifecycle(null)
     val sighting by remember(match.sightingPostId) { container.posts.postFlow(match.sightingPostId) }.collectAsStateWithLifecycle(null)
+    val found = lost?.status == PostStatus.REUNITED.key && lost?.resolvedMatchId != match.id
     val isOwner = uid == match.lostOwnerId
     val isReporter = uid == match.sightingOwnerId
     val isMod = isModeratorRole(me?.role)
@@ -111,7 +112,7 @@ private fun MatchReview(nav: NavHostController, match: PostMatch) {
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TierPill(match)
+                    if (found) Text(stringResource(R.string.match_owner_found_animal)) else TierPill(match)
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.match_found_headline, animalName(l)), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 }
@@ -161,7 +162,7 @@ private fun MatchReview(nav: NavHostController, match: PostMatch) {
                     if (match.ownerState != "new") TextButton(onClick = { runner.run { container.matches.setOwnerState(match, "new") } }) { Text(stringResource(R.string.match_undo)) }
                 }
             }
-            if (isReporter) item {
+            if (isReporter && !found) item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { runner.run(R.string.match_told_owner) { container.matches.setReporterState(match, "confirmed") } }, enabled = !runner.busy && match.reporterState != "confirmed", modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Outlined.CheckCircle, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.match_action_same))
