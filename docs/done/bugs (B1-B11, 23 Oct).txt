@@ -1,0 +1,356 @@
+CatMap Dubai - bugs to fix (found 23 Oct 2026 by Claude)
+=======================================================
+
+All of these are the same kind of bug as the one fixed in commit 1a0e5a5: when something is deleted or hidden, the
+things that point at it are left behind, so people see broken cards, errors, or buttons that fail. That commit made
+the app hide and delete a "possible match" whose post was deleted (MatchRepository.forPost on Android,
+usePostMatches on the web). Read that commit first (`git show 1a0e5a5`): it is the pattern to copy.
+
+Every bug is in both apps unless it says otherwise: Android (app/src/main/java/com/catmap/dubai/...) and web
+(web/src/...). The web app must behave the same as Android. The PC AI worker lives in a separate folder,
+C:\Users\mohammad\Desktop\cat-server, which is NOT in git.
+
+The second half of this file (PART 2) tells Codex how to set up, run, test and report.
+
+
+PART 1 - THE BUGS
+=================
+
+---------------------------------------------------------------------------------------------------------------
+B1. A hidden post gives an error (Android) or loads forever (web) instead of "removed"        [HIGH]
+---------------------------------------------------------------------------------------------------------------
+What people see:
+  When a moderator hides a post, everyone except its owner and moderators is refused when reading it (firestore.rules,
+  match /posts/{postId}: "allow get" needs hidden == false, the owner, or a moderator). Anything that still links to
+  it breaks:
+  - A "possible match" card for the hidden post shows a grey paw and the app shows a permission error message
+    plus the "retry" banner.
+  - Opening the match (match review screen) does the same.
+  - Opening an old alert, a chat post card, or a link to the hidden post: Android shows the permission error; the
+    web post page stays on the loading spinner forever (useLive in web/src/state.tsx only reports the error and
+    never sets a value).
+Why:
+  Android: PostRepository.postFlow uses objectFlow() (data/Firestore.kt), which sends PERMISSION_DENIED to
+  AppErrors.awaitListenerRetry. Web: useLive's error callback. MatchRepository.forPost / usePostMatches treat
+  "refused" as "still there" (PostRepository.exists returns true when refused), so the card stays.
+How to fix:
+  1. Android: give posts their own flow that turns PERMISSION_DENIED into null ("not available"), for example in
+     PostRepository.postFlow: snapshotFlow().map { it.safeObject<Post>() } with a .catch that emits null when the
+     error is a FirebaseFirestoreException with code PERMISSION_DENIED and rethrows anything else, then the usual
+     .retryWhen. PostDetailScreen and MatchReviewScreen then show their existing "removed"/"unavailable" message.
+  2. Web: same idea for post documents. Either an option on useDoc/useLive that maps a permission-denied error to
+     null, or a usePostDoc hook used by web/src/ui/posts/PostDetailScreen.tsx and usePost in
+     web/src/ui/matches/MatchScreens.tsx. Do NOT swallow permission errors for every listener; only post documents.
+  3. Matches: make the "does the other post exist" check return three answers: gone, hidden (refused), there.
+     Android: replace PostRepository.exists with something like `suspend fun availability(id): PostAvailability`
+     (GONE when the server says it doesn't exist, HIDDEN when PERMISSION_DENIED, THERE otherwise, and THERE when
+     offline). Web: the same in PostRepository.ts. In forPost / usePostMatches / orphaned():
+     - GONE   -> hide the card and delete the match (as now);
+     - HIDDEN -> hide the card but do NOT delete the match (a moderator may unhide the post);
+     - THERE  -> show it.
+How to test:
+  Emulator, two normal users A and B plus a moderator. A posts a lost cat, B posts a sighting of it, make sure a
+  match exists (the phone makes one while the PC worker is off). Moderator hides A's lost post. As B: open B's
+  sighting -> no error, no match card. Open the match from B's alert -> "match unavailable", no error. Open A's
+  post link -> "removed" message (web: no endless spinner). Moderator unhides -> the card comes back for B.
+
+---------------------------------------------------------------------------------------------------------------
+B2. Adoption requests stay after their listing is deleted                                      [HIGH]
+---------------------------------------------------------------------------------------------------------------
+What people see:
+  A person deletes their adoption listing (or a moderator does). The requests for it stay in "Adoption requests":
+  the owner still sees Approve/Decline, and Approve fails with an error because AdoptionRepository.decide updates
+  the deleted post in the same batch. The requester's request stays "pending" forever.
+Why:
+  PostRepository.delete (Android data/PostRepository.kt, web data/PostRepository.ts) deletes updates, the post and
+  photos (and now matches), but not adoptionRequests. Only account deletion removes them.
+How to fix:
+  1. In PostRepository.delete (both apps), after the post is deleted, delete the requests for it:
+     adoptionRequests where ownerId == post.ownerId and postId == post.id (two equality filters, no new index
+     needed). The rules allow the owner and moderators to delete them. Wrap in runCatching / catch like the match
+     cleanup, so a failure here never fails the post delete.
+  2. For requests left from before this fix: in the Adoption requests screen (Android ui/adoption/AdoptionScreens.kt,
+     web ui/adoption/AdoptionScreens.tsx), check the listing of each request once (same three-answer check as B1).
+     If the listing is GONE: show "This listing was removed", hide Approve/Decline/Withdraw, and delete the request
+     (both people are allowed to). New string: add to tools/strings/strings_i.py and the web strings (see PART 2).
+  3. Optional, ask nobody: nothing else. Do not add a new notification type.
+How to test:
+  User B requests to adopt A's listing. A deletes the listing. A's received list and B's sent list no longer show
+  it (and the adoptionRequests document is gone, checked through the emulator REST address in PART 2). Also test a request created before the fix:
+  create the request, delete only the post document through the emulator REST address, open both lists.
+
+---------------------------------------------------------------------------------------------------------------
+B3. The AI photo data of deleted posts is kept forever                                         [HIGH - privacy]
+---------------------------------------------------------------------------------------------------------------
+What people see:
+  Nothing on screen, but every lost/sighting post gets a postEmbeddings/{postId} document (photo vectors, written by
+  the PC worker). Deleting the post never deletes it. They pile up, the worker reads ALL of them at every start
+  (cat-server/recovery.py load_embeddings) and keeps them in memory, so reads and memory grow forever, and photo
+  data of deleted posts is kept after the person deleted it.
+Why:
+  Neither app deletes postEmbeddings. The worker's on_posts drops a REMOVED post from self.posts but not from
+  self.galleries, and never deletes the document. (REMOVED also happens when a post is hidden or leaves the time
+  window, so the worker must check that the post is really gone before deleting.)
+How to fix:
+  1. Apps: in PostRepository.delete (both), after the post is deleted, delete postEmbeddings/{post.id} (add a
+     Col constant on Android). The rules already allow it once the post doesn't exist. Ignore failures.
+  2. Account deletion: in CommunityAccountCleanup.clean (Android data/CommunityAccountCleanup.kt, web
+     data/CommunityAccountCleanup.ts), delete postEmbeddings/{id} for every post it deletes.
+  3. Worker (cat-server/recovery.py, not in git - copy the file to recovery.py.bak before editing):
+     - in on_posts, for a REMOVED change: also self.galleries.pop(id); then (on the worker thread, not inside the
+       listener callback) check posts/{id}; if it does not exist, delete postEmbeddings/{id};
+     - in load_embeddings: collect the ids, read the posts with db.get_all in chunks, and delete embeddings whose
+       post does not exist instead of loading them.
+     - add a case to cat-server/tests/test_recovery_e2e.py: a post with an embedding is deleted -> the embedding is
+       deleted and the gallery is gone.
+How to test:
+  Apps: create a post, put a postEmbeddings document with the same id in the emulator (or let the worker make one),
+  delete the post in the app, check the document is gone. Worker: run test_recovery_e2e.py (PART 2).
+
+---------------------------------------------------------------------------------------------------------------
+B4. Deleting an account leaves its matches, AI photo data and videos behind                    [MEDIUM]
+---------------------------------------------------------------------------------------------------------------
+What people see:
+  After person A deletes their account, people who had a match with A's posts keep a match card until they open
+  that post (commit 1a0e5a5 cleans it then). The match documents still hold A's user id (members, lostOwnerId,
+  sightingOwnerId) although the account is gone. A's postEmbeddings stay (B3). If videos are on (Blaze only), A's
+  post videos stay in Storage.
+Why:
+  CommunityAccountCleanup.clean (both apps) deletes A's posts directly with post.reference.delete(), skipping
+  everything PostRepository.delete now does.
+How to fix:
+  In CommunityAccountCleanup.clean (both apps), AFTER the posts loop:
+  - delete every match where members array-contains uid (allowed: one of the two posts in each of A's matches is
+    A's post, which is now deleted);
+  - delete postEmbeddings for each deleted post (B3);
+  - delete each post's video with VideoRepository.delete(post.videoPath) (it does nothing when videos are off).
+  Keep the order: posts first, then matches (the rules only allow deleting a match once a post is gone).
+  Web: data/CommunityAccountCleanup.ts and data/AccountDeletion.ts.
+How to test:
+  Emulator: A (lost post) and B (sighting) with a match. Delete A's account in the app. Through the emulator REST address, the
+  match and A's postEmbeddings are gone; B's sighting page shows no match and no error.
+
+---------------------------------------------------------------------------------------------------------------
+B5. A moderator's delete leaves the video and the open reports about the post                  [MEDIUM]
+---------------------------------------------------------------------------------------------------------------
+What people see:
+  - The owner's own delete removes the post video (Android PostDetailScreen "delete" dialog calls
+    container.videos.delete), but PostRepository.moderatorDelete doesn't, on either app. With videos on, the
+    file stays in Storage.
+  - Content reports about the deleted post stay "open" in the moderator queue (admin dashboard count and the
+    reports list); opening one leads to a removed post.
+How to fix:
+  1. Move the video delete into the shared delete path: Android PostRepository.delete gets a VideoRepository (or
+     moderatorDelete and the owner dialog both call it); web PostRepository.delete calls VideoRepository.delete.
+     Then remove the duplicate call from the Android dialog so it isn't done twice.
+  2. In moderatorDelete (both apps): close the open reports about this post: contentReports where targetType ==
+     "post", targetId == post.id, status == "open" -> ModerationRepository.closeReport(report, "resolved",
+     "post deleted" or the moderator's note, moderator). Moderators are allowed to update reports. Note that
+     closeReport also tells the reporter - that is wanted.
+How to test:
+  User B reports A's post. Moderator deletes it from the admin list and, separately, from the post page. The report
+  leaves the open list and B gets the "report resolved" alert. Video: only with -Pcatmap.blaze=true (skip if videos
+  are off and say so).
+
+---------------------------------------------------------------------------------------------------------------
+B6. Web: deleting your own post never deletes its video                                        [LOW, web only]
+---------------------------------------------------------------------------------------------------------------
+  web/src/ui/posts/PostDetailScreen.tsx calls PostRepository.delete(post) only; Android also deletes the video.
+  Fixed by B5 step 1 (video delete inside PostRepository.delete). Only matters when videos are on (Blaze).
+
+---------------------------------------------------------------------------------------------------------------
+B7. Saved posts that were deleted are never removed from Favourites                            [LOW - cost]
+---------------------------------------------------------------------------------------------------------------
+What people see:
+  The Favourites screen hides deleted posts (byIds drops them), but the favourite documents stay forever, and
+  every visit reads each dead post again (one document read each, up to 500).
+How to fix:
+  Android ui/posts/PostLists.kt FavoritesScreen, web ui/posts/PostLists.tsx: for saved ids that byIds did not
+  return, check availability (B1) and delete users/{uid}/favorites/{id} only when the post is GONE (never when
+  HIDDEN - it may come back). Do it once per screen visit, after the list is shown.
+How to test:
+  Save a post, delete it (as its owner, from another account), open Favourites: it isn't shown, and its favourite
+  document is gone afterwards. Save a post that a moderator hides: it isn't shown but its favourite stays.
+
+---------------------------------------------------------------------------------------------------------------
+B8. Deleting a chat message leaves its text in the chat list, and its photo                    [LOW]
+---------------------------------------------------------------------------------------------------------------
+What people see:
+  Delete the newest message in a chat: the chat list still shows it as the last message (chats.lastText). If it
+  was a photo, the photo document stays in images (it is the sender's photo).
+Why:
+  ChatRepository.deleteMessage (Android data/ChatRepository.kt, web data/ChatRepository.ts) deletes only the
+  message document.
+How to fix:
+  - If the message has an imageId, also ImageRepository.delete(imageId) (the sender owns it; ignore failures).
+  - If the deleted message was the chat's latest one (chat.lastSender == me and message.createdAt is the newest
+    loaded message), update the chat's lastText to the previous message's preview, or to "" if none. Read
+    chatUpdateOk in firestore.rules first: the update must pass it. If the rules refuse this change, change the
+    rules carefully and add checks to tools/rulestest/test.mjs (allowed and refused cases). The rules file has a
+    budget of 1,000 expressions per request - keep it small.
+How to test:
+  Send two messages, delete the second: the chat list shows the first. Send a photo, delete it: the images
+  document is gone.
+
+---------------------------------------------------------------------------------------------------------------
+B9. Deleting a feeding station leaves its open maintenance reports in the admin queue          [LOW]
+---------------------------------------------------------------------------------------------------------------
+  StationRepository.delete (both apps) deletes only the station. Open maintenance reports for it stay in the admin
+  queue and its count (StationRepository.openMaintenance). Fix: in delete, mark the station's open maintenance
+  reports as resolved with updateMaintenance (admins may update them), then delete the station. Leave check-ins
+  alone (they are people's history). Make sure any screen that opens a check-in's or report's station shows a
+  normal "removed" message when the station is gone, not an error.
+  Test: report a problem at a station, admin deletes the station, the report leaves the open queue.
+
+---------------------------------------------------------------------------------------------------------------
+B10. A sitter removed by a moderator leaves owners' bookings "requested"/"accepted"            [LOW]
+---------------------------------------------------------------------------------------------------------------
+  SittingRepository.moderatorRemove deletes sitters/{uid} only. Moderators may not change bookings (rules), but
+  the owner may cancel requested/accepted bookings. Fix (both apps, UI only): on the owner's bookings screen,
+  when the sitter profile no longer exists, show "This sitter is no longer listed" next to the booking and keep
+  the Cancel button visible. No rules change. New string as in PART 2.
+  Test: owner books sitter S, moderator removes S, the owner sees the note and can cancel.
+
+---------------------------------------------------------------------------------------------------------------
+B11. After a lost pet is marked reunited, its other matches still say "Possible match"         [LOW]
+---------------------------------------------------------------------------------------------------------------
+  Only the credited match gets ownerState "reunited"; other people whose sightings matched the same lost report
+  still see "Possible match" for an animal that is home. Fix (both apps, UI only, in the match card and the match
+  review): when the lost post's status is "reunited" and this match is not the credited one, show "The owner
+  found their animal" instead of the tier pill and hide the answer buttons. Don't delete anything. New string.
+  Test: two sightings matched to one lost report; owner marks reunited through sighting 1; sighting 2's reporter
+  sees the new text.
+
+---------------------------------------------------------------------------------------------------------------
+For the owner to decide (Codex: do NOT change these)
+---------------------------------------------------------------------------------------------------------------
+D1. Deleting a sighting keeps its photos in the cat's gallery (CatRepository.deleteSighting). That may be wanted
+    (the cat profile is shared) or not (it is the person's photo). Account deletion does remove them.
+D2. 148 strings are still English in the Arabic app (marked "# TODO-AR": 100 in tools/strings/strings_i.py, 48 in
+    tools/strings/strings_web.py), for example "Possible matches" on a post. That is translation work, not a bug
+    fix, and needs a native speaker's check.
+
+
+PART 2 - FOR CODEX: HOW TO SET UP, OPEN, TEST AND REPORT
+========================================================
+
+Hard rules (the owner's; never break them)
+------------------------------------------
+- Do not push, tag, release or change the GitHub repo. Commits stay local. The branch already has two local
+  commits that are not pushed (5b532cc and 1a0e5a5); leave them as they are.
+- Never touch production Firebase (project catmap-dubai): no deploys, no account creation, no reading or writing
+  real data. Use only the local emulators (projects named demo-*). A staging build WITHOUT
+  -Pcatmap.emulatorHost talks to production - never install one.
+- Never open, print, copy, change or regenerate: keystore.properties, release-keys\, *.jks,
+  app\google-services.json, tools\seed\demo-accounts.local.json, test-accounts.local.txt,
+  cat-server\worker.local.json. Never print any password.
+- The repo is public: no passwords, keys or private notes in committed files.
+- PowerShell scripts (.ps1) are blocked on this PC; run commands directly, use npx.cmd / npm.cmd.
+- If a command is refused or a tool can't be reached (npm registry, emulator download), do not work around it:
+  write it down in your report and carry on with what you can test.
+- Free plan only: don't turn on Blaze features except to test videos locally, and say so.
+- Git identity for commits: mohammad <mohammed.duae@gmail.com>.
+
+Where things are
+----------------
+- Android app: app\  (Kotlin, Jetpack Compose). Repositories in app\src\main\java\com\catmap\dubai\data,
+  screens in ...\ui.
+- Web app: web\  (React, Vite, TypeScript). Same structure: web\src\data, web\src\ui.
+- Database rules: firestore.rules; tests: tools\rulestest\test.mjs (486 checks today).
+- Strings: tools\strings\ (Android) - add new strings to tools\strings\strings_i.py with the Arabic column equal to
+  English and a "# TODO-AR" comment, then run: python tools/strings/build_strings.py .
+  Web strings: web\src\i18n\en.json and ar.json, plus tools\strings\strings_web.py; run
+  npm.cmd run strings:check in web\ to confirm both apps agree.
+- PC AI worker: C:\Users\mohammad\Desktop\cat-server (Python, not in git; back up any file before editing it).
+- Notes for the next person: HANDOFF.md (add a short section at the top when you finish).
+
+One-time setup (PowerShell, from C:\Users\mohammad\Desktop\cat)
+----------------------------------------------------------------
+  $env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
+  $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+Java is not on PATH otherwise; every Gradle and Firebase emulator command needs this.
+
+Build and unit-test Android
+---------------------------
+  python tools/strings/build_strings.py .
+  .\gradlew.bat --no-parallel --max-workers=1 :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+  .\gradlew.bat --stop
+Always run the --stop line afterwards (the daemons hold about 6 GB of memory). If you changed how a screen looks
+on purpose, also run :app:verifyRoborazziDebug and only re-record with :app:recordRoborazziDebug for intended
+changes.
+
+Open the Android app on the emulator (local data only)
+------------------------------------------------------
+Window 1 - start the local Firebase emulators with the demo data:
+  npx.cmd -y firebase-tools@latest emulators:start --only auth,firestore,storage --project demo-catmap --import ./.emulator-data
+  (The emulator's web UI is switched off in firebase.json - leave it off. To look at or change documents directly,
+  e.g. to delete only a post document, use the emulator's REST address with the header
+  "Authorization: Bearer owner", which skips the rules:
+    curl.exe -H "Authorization: Bearer owner" "http://127.0.0.1:8080/v1/projects/demo-catmap/databases/(default)/documents/posts/<id>"
+    curl.exe -X DELETE -H "Authorization: Bearer owner" "http://127.0.0.1:8080/v1/projects/demo-catmap/databases/(default)/documents/posts/<id>"
+  )
+Window 2 - start an Android emulator from Android Studio's Device Manager, then install the app pointed at the
+local emulators:
+  .\gradlew.bat :app:installStaging "-Pcatmap.versionName=2.0.9" "-Pcatmap.emulatorHost=10.0.2.2"
+  (-Pcatmap.emulatorHost=10.0.2.2 is required, otherwise the app talks to production.)
+Sign in with the local demo accounts (usernames admin, demo_ali, demo_mohammad, demo_anirudh, demo_hassan; email
+<username>@demo.catmap.test). Their passwords are in a file you must not open; ask the owner to sign in for you
+if you need an account you can't create. You can also register new test accounts on the emulator: they exist only
+locally. A moderator: sign in as the local "admin" account and use the app's own role change (admin screens),
+or set users/{uid}.role = "moderator" through the emulator REST address above - only on the emulator.
+Do not export the emulator data over .emulator-data at the end (stop with Ctrl+C and answer no to export, or
+start without --export-on-exit).
+
+Open and test the web app
+-------------------------
+Quick checks (in web\):
+  npm.cmd run lint
+  npm.cmd run typecheck
+  npm.cmd test
+  npm.cmd run strings:check
+Run it against the same local emulators (window 1 above), in web\:
+  npm.cmd run dev:emulators
+  then open http://127.0.0.1:5173 (the address Vite prints).
+Full browser tests (Playwright, Chromium + WebKit) use their own isolated emulators - follow web\README.md,
+section "Isolated suite for repeatable checks" exactly (ports 9098/8180/9198, project demo-catmap-web-test).
+If the Firestore emulator runs out of memory, set $env:JAVA_TOOL_OPTIONS='-Xmx2048m' before starting it.
+Add e2e checks for B1 and B2 at least, in a new spec file such as web\e2e\leftovers.spec.ts, using the helpers
+in web\e2e\major-update.spec.ts as a model (it creates posts and matches directly in the emulator).
+
+Rules tests (needed if you touch firestore.rules; run them anyway at the end)
+------------------------------------------------------------------------------
+  npx.cmd -y firebase-tools@latest emulators:exec --config firebase.rules-test.json --only firestore --project demo-catmap-rules-test "npm --prefix tools/rulestest test"
+Every rules change needs allowed AND refused cases in tools\rulestest\test.mjs.
+
+PC worker tests (for B3)
+------------------------
+From C:\Users\mohammad\Desktop\cat:
+  npx.cmd -y firebase-tools@latest emulators:exec --config firebase.rules-test.json --only firestore --project demo-catmap-recovery "..\cat-server\.venv\Scripts\python.exe ..\cat-server\tests\test_recovery_e2e.py"
+And the quick ones, from C:\Users\mohammad\Desktop\cat-server (pytest is not installed; don't install it - run
+each file directly):
+  .venv\Scripts\python.exe tests\test_geocells.py
+  .venv\Scripts\python.exe tests\test_searchterms.py
+  .venv\Scripts\python.exe tests\test_matching.py
+  .venv\Scripts\python.exe tests\test_fingerprint.py
+
+How to work through the list
+----------------------------
+1. Read `git show 1a0e5a5` first - it is the model fix.
+2. Fix in this order: B1, B2, B3, B4, B5 (+B6), B7, B8, B9, B10, B11. Do Android and web together for each bug,
+   so they never drift apart.
+3. Keep each fix small and in the style of the surrounding code (same comment style: a short "why" comment, no
+   noise). Cleanup must never make the main action fail: wrap leftover deletes so errors are logged and ignored.
+4. Never delete something just because it couldn't be read: only when the server says it doesn't exist (offline
+   and "permission denied" are not "gone").
+5. After each bug: Android unit tests + web lint/typecheck/unit tests. At the end: the full list above, the rules
+   suite, the web e2e suite, and a manual run on the Android emulator of each "How to test".
+6. One local commit per bug (or per two small ones), message like "Delete adoption requests with their listing".
+   No push.
+
+When you finish: the report
+---------------------------
+Write "work done.txt" in C:\Users\mohammad\Desktop\cat with, for each bug: what you changed (files), how you
+tested it and the result (numbers: tests passed/failed), and anything you could not test and why (copy the exact
+error). List every command that was refused. List any file you changed in cat-server (not in git). Claude will
+review it with the review-codex-work skill before anything is released, so be exact - "should work" is not a
+test result.

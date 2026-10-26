@@ -389,7 +389,6 @@ class PostRepository(
 
     companion object {
         const val MAX_PHOTOS = 6
-        const val MATCH_RADIUS_KM = 5.0
         const val DUPLICATE_RADIUS_KM = 3.0
         const val UPDATES_WINDOW = 30L
         /** Newest posts asked per map cell by [near]: duplicates and same-animal checks only need recent ones. */

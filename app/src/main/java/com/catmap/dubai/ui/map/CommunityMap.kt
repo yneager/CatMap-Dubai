@@ -101,11 +101,6 @@ class MapController {
         map?.animateCamera(CameraUpdateFactory.zoomBy(delta), 300)
     }
 
-    fun resetNorth() {
-        val m = map ?: return
-        m.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(m.cameraPosition).bearing(0.0).build()), 400)
-    }
-
     fun tilt(degrees: Double) {
         map?.easeCamera(CameraUpdateFactory.tiltTo(degrees), 700)
     }
@@ -131,7 +126,6 @@ private class MapHolder(context: Context) {
     var style: Style? = null
         get() = field?.takeIf { it.isFullyLoaded }
     var features: List<MapFeature> = emptyList()
-    var selectedScale = 1f
     var pulse: ValueAnimator? = null
     var bounce: ValueAnimator? = null
 }

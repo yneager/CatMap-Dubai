@@ -149,9 +149,6 @@ class AuthRepository(
         }
     }
 
-    /** True when the signed-in account is one of the demo accounts. */
-    fun isDemoAccount(): Boolean = DemoAccounts.isDemoEmail(auth.currentUser?.email)
-
     /** Recovers from a registration that created the account but not the profile. */
     private suspend fun ensureProfile(user: FirebaseUser) {
         val existing=users.ref(user.uid).get().await()

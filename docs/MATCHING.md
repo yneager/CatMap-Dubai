@@ -1,7 +1,8 @@
 # Lost → Sighting → AI match → Chat → Reunion
 
 How CatMap connects a lost pet with the people who see it. Android, the web/iPhone app and the PC worker share the
-same Firestore documents and the same rules. AI evaluation: `docs/AI_EVALUATION.md`.
+same Firestore documents and the same rules. AI evaluation: `docs/AI_EVALUATION.md`. The separate, experimental photo
+review of nearby cat profiles on a new sighting is in `docs/MATCHING_REVIEW_V1.md`.
 
 ## 1. The journey
 

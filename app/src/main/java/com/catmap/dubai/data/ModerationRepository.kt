@@ -65,8 +65,6 @@ class ModerationRepository(private val db: FirebaseFirestore, private val notifi
 
     // ---- Volunteers ----
 
-    fun applicationFlow(uid: String): Flow<VolunteerApplication?> = apps.document(uid).objectFlow()
-
     fun pendingApplications(): Flow<List<VolunteerApplication>> =
         apps.whereEqualTo("status", "pending").listFlow<VolunteerApplication>().map { l -> l.sortedBy { it.createdAt } }
 

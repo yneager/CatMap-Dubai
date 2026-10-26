@@ -497,11 +497,6 @@ fun Pill(text: String, modifier: Modifier = Modifier, color: Color = MaterialThe
     }
 }
 
-val ScreenPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-
-@Composable
-fun VSpace(h: Dp) = Spacer(Modifier.height(h))
-
 // ---------- Time ----------
 
 fun relativeTime(millis: Long): String =

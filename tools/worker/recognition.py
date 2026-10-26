@@ -90,8 +90,6 @@ class Model:
     """pet-recognition-base: 224x224 RGB, ImageNet normalisation, 512-d unit vectors."""
 
     def __init__(self, cpu: bool):
-        from huggingface_hub import hf_hub_download
-
         path = pinned_download(MODEL_REPO, MODEL_FILE)
         self.session = ort.InferenceSession(path, providers=providers(cpu))
         self.run_lock = threading.Lock() # DirectML permits only one Run per session at a time.
@@ -142,8 +140,6 @@ class Detector:
     """DETR ResNet-50. No non-maximum suppression is needed: DETR predicts each object once."""
 
     def __init__(self, cpu: bool, size: int = 800):
-        from huggingface_hub import hf_hub_download
-
         path = pinned_download(DETECTOR_REPO, "onnx/model.onnx")
         self.session = ort.InferenceSession(path, providers=providers(cpu))
         self.provider = self.session.get_providers()[0]
@@ -179,7 +175,7 @@ class Crop:
 
     @property
     def low_quality(self) -> bool:
-        return self.small or self.sharpness < BLURRY
+        return bool(self.small or self.sharpness < BLURRY)
 
 
 BLURRY = 60.0

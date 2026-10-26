@@ -103,9 +103,6 @@ class CatRepository(
     fun searchQuery(word: String): Query =
         cats.whereArrayContainsAny("searchTerms", SearchTerms.query(word)).orderBy("lastSeen", Query.Direction.DESCENDING)
 
-    fun catsCreatedBy(uid: String): Flow<List<Cat>> =
-        cats.whereEqualTo("createdBy", uid).listFlow<Cat>().map { l -> l.sortedByDescending { it.lastSeen } }
-
     fun catsContributedBy(uid: String): Flow<List<Cat>> =
         cats.whereArrayContains("contributors", uid).listFlow<Cat>()
             .map { l -> l.filter { it.mergedInto.isEmpty() }.sortedByDescending { it.lastSeen } }

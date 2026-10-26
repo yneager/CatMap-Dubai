@@ -71,6 +71,5 @@ class VideoRepository(private val context: Context) {
 
     companion object {
         const val MAX_BYTES = 30L * 1024 * 1024
-        const val MAX_SECONDS = 30
     }
 }

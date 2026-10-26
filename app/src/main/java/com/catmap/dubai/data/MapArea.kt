@@ -105,9 +105,6 @@ data class MapArea(
         return copy(cats = next, seen = stamps)
     }
 
-    /** The listener missed too much (it hit its limit): every cell is asked for again when it is next on screen. */
-    fun withStaleCells(): MapArea = copy(cells = emptyMap())
-
     /** Forgets what wasn't confirmed for a week and cells asked for long ago, so the saved copy can't grow forever. */
     fun pruned(now: Long): MapArea {
         val fresh = seen.filterValues { now - it < KEEP_MS }

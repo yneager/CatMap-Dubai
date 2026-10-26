@@ -1,5 +1,4 @@
 """matching.py: the shared cases file is up to date, and the rules keep their promises."""
-import json
 import subprocess
 import sys
 from pathlib import Path

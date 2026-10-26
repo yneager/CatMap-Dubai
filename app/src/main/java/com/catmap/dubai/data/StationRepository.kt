@@ -112,9 +112,6 @@ class StationRepository(
         }.await()
     }
 
-    fun maintenanceFor(stationId: String): Flow<List<MaintenanceReport>> =
-        maintenanceQuery(stationId).limit(50).listFlow<MaintenanceReport>().map { l -> l.sortedByDescending { it.createdAt } }
-
     fun openMaintenance(): Flow<List<MaintenanceReport>> =
         maintenance.whereIn("status", listOf(MaintenanceStatus.OPEN.key, MaintenanceStatus.IN_PROGRESS.key))
             .listFlow<MaintenanceReport>().map { l -> l.sortedBy { it.createdAt } }

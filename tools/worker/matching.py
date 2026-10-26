@@ -22,7 +22,7 @@ SPEC_VERSION = 1
 TIERS = ["strong", "possible", "weak", "none"]
 
 # Similarity of pet-recognition-base embeddings (half the best photo pair, half the averaged photos), per species.
-# Measured, not guessed (eval/REPORT.md, cat/docs/MATCHING.md):
+# Measured, not guessed (cat/docs/AI_EVALUATION.md, cat/docs/MATCHING.md):
 #   strong   = reached by only 0.1 % of *different* animals of the same breed (Oxford-IIIT Pet look-alikes),
 #   possible = reached by 5 % of those look-alikes,
 #   weak     = reached by 1 % of different animals of other breeds.

@@ -78,10 +78,6 @@ class SittingRepository(
         }
     }
 
-    suspend fun setActive(uid: String, active: Boolean) {
-        sitters.document(uid).update(mapOf("active" to active, "updatedAt" to now())).await()
-    }
-
     suspend fun moderatorRemove(sitter: SitterProfile, moderator: UserProfile, note: String) {
         sitters.document(sitter.uid).delete().await()
         moderation.log(moderator, "sitter_removed", "sitter", sitter.uid, sitter.name, note)
@@ -93,14 +89,9 @@ class SittingRepository(
     fun bookingsQuery(uid: String, asSitter: Boolean): Query = bookings.whereEqualTo(if (asSitter) "sitterId" else "ownerId", uid).orderBy("createdAt", Query.Direction.DESCENDING)
     fun reviewsQuery(uid: String): Query = reviews.whereEqualTo("sitterId", uid).orderBy("createdAt", Query.Direction.DESCENDING)
 
-    fun asOwner(uid: String): Flow<List<Booking>> =
-        bookingsQuery(uid, false).limit(50).listFlow<Booking>().map { l -> l.sortedByDescending { it.createdAt } }
-
     fun asSitter(uid: String): Flow<List<Booking>> =
         bookingsQuery(uid, true).limit(50).listFlow<Booking>().map { l -> l.sortedByDescending { it.createdAt } }
 
-
-    fun bookingFlow(id: String): Flow<Booking?> = bookings.document(id).objectFlow()
 
     suspend fun requestBooking(sitter: SitterProfile, petTypes: List<String>, petCount: Long, startAt: Long, endAt: Long, notes: String, me: UserProfile): String {
         if (sitter.uid == me.uid) throw AppException(R.string.err_own_listing)
@@ -131,9 +122,6 @@ class SittingRepository(
     }
 
     // ---------- reviews ----------
-
-    fun reviewsFor(sitterId: String): Flow<List<Review>> =
-        reviewsQuery(sitterId).limit(50).listFlow<Review>().map { l -> l.sortedByDescending { it.createdAt } }
 
     /** One review per completed booking; the sitter's average is updated in the same batch. */
     suspend fun review(booking: Booking, rating: Int, text: String, me: UserProfile) {

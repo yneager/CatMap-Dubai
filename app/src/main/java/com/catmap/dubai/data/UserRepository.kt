@@ -103,12 +103,6 @@ class UserRepository(private val db: FirebaseFirestore, private val notification
         }
     }
 
-    suspend fun setRole(uid: String, role: String, volunteerStatus: String? = null) {
-        val updates = mutableMapOf<String, Any>("role" to role)
-        if (volunteerStatus != null) updates["volunteerStatus"] = volunteerStatus
-        ref(uid).update(updates).await()
-    }
-
     companion object {
         private val USERNAME_PATTERN = Regex("^[A-Za-z0-9_.]{3,20}$")
 
