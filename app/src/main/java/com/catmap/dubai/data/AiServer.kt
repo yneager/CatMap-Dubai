@@ -11,6 +11,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
@@ -26,16 +28,35 @@ import java.util.UUID
  */
 class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth) {
     data class Match(val id: String, val similarity: Double, val verdict: String)
-    data class Health(val model: String, val provider: String, val same: Double, val maybe: Double, val lastSeen: Long) {
+    data class Health(
+        val model: String, val provider: String, val same: Double, val maybe: Double, val lastSeen: Long,
+        /** Job kinds beyond compare/check/embed that this PC answers, e.g. [REVIEW_PROTOCOL]. */
+        val capabilities: List<String> = emptyList(),
+    ) {
         override fun toString() = "$model · $provider"
     }
+
+    /**
+     * Photo review (docs/MATCHING_REVIEW_V1.md): cats in the order the PC ranked them, best first, with the photo ids
+     * it compared. There is deliberately no score or verdict: the model isn't reliable enough to say "same cat", so the
+     * order is only something to look through, and the person decides.
+     */
+    data class ReviewResult(val ranked: List<ReviewedCat>, val unavailable: List<Unavailable>)
+    data class ReviewedCat(val id: String, val photoIds: List<String>)
+    /** A cat the PC couldn't compare: too_few_photos, same_photo_as_query, photo_unreadable, hidden or missing. */
+    data class Unavailable(val id: String, val reason: String)
+
+    /** One job at a time per phone: `aiJobs/{uid}` holds a single job, and a new one would replace a pending one. */
+    private val jobLock = Mutex()
 
     /** The PC's status when it is online and has checked in recently, otherwise null (offline). */
     suspend fun health(): Health? = runCatching {
         val d = db.collection(Col.CONFIG).document("aiWorker").get().await()
         val seen = d.getTimestamp("lastSeen")?.toDate()?.time ?: return null
         if (d.getBoolean("online") != true || System.currentTimeMillis() - seen > ONLINE_WINDOW_MS) return null
-        Health(d.getString("model").orEmpty(), d.getString("provider").orEmpty(), d.getDouble("same") ?: 0.75, d.getDouble("maybe") ?: 0.6, seen)
+        @Suppress("UNCHECKED_CAST")
+        val capabilities = (d.get("capabilities") as? List<Any?>).orEmpty().filterIsInstance<String>()
+        Health(d.getString("model").orEmpty(), d.getString("provider").orEmpty(), d.getDouble("same") ?: 0.75, d.getDouble("maybe") ?: 0.6, seen, capabilities)
     }.getOrNull()
 
     /** When the PC last checked in (for the admin status screen), or null if it never has. */
@@ -103,6 +124,28 @@ class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth
 
     data class CheckResult(val photos: List<PhotoVerdict>?, val matches: List<Match>, val compared: Boolean)
 
+    /**
+     * Photo review of up to [MAX_REVIEW_CATS] cat profiles for [query] (the photo's 360 px thumbnail, the same bytes the
+     * app uploads as `{id}_t`). The PC reads the cats' photos itself. Null when the PC is off, doesn't offer photo
+     * review, is too slow or refuses: that means "not reviewed", never "no match".
+     */
+    suspend fun review(query: ByteArray, catIds: List<String>, labels: List<String>): ReviewResult? {
+        if (catIds.isEmpty() || catIds.size > MAX_REVIEW_CATS || query.size > MAX_QUERY_BYTES) return null
+        if (health()?.capabilities?.contains(REVIEW_PROTOCOL) != true) return null
+        val done = run(
+            mapOf(
+                "kind" to "review",
+                "query" to Blob.fromBytes(query),
+                "images" to emptyList<Blob>(),
+                "photos" to emptyList<Blob>(),
+                "ids" to catIds,
+                "labels" to labels.take(MAX_REVIEW_CATS).map { it.take(60) },
+            ),
+            REVIEW_TIMEOUT_MS,
+        ) ?: return null
+        return parseReview(done.get("review"), catIds)
+    }
+
     /** Embeddings (unit vectors) for up to 16 crops, for the Recognition test. Null on any failure. */
     suspend fun embed(crops: List<Bitmap>): List<List<Double>>? {
         val done = run(mapOf("kind" to "embed", "images" to crops.take(16).map { Blob.fromBytes(cropJpeg(it)) }, "ids" to emptyList<String>())) ?: return null
@@ -112,16 +155,16 @@ class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth
     }
 
     /** Writes the job and waits for the PC's answer to this request. */
-    private suspend fun run(fields: Map<String, Any>): DocumentSnapshot? {
-        val uid = auth.currentUser?.uid ?: return null
+    private suspend fun run(fields: Map<String, Any>, timeoutMs: Long = TIMEOUT_MS): DocumentSnapshot? = jobLock.withLock {
+        val uid = auth.currentUser?.uid ?: return@withLock null
         val requestId = UUID.randomUUID().toString()
         val ref = db.collection(Col.AI_JOBS).document(uid)
-        return runCatching {
+        runCatching {
             // The rules allow one new job a second per person; wait out a job that was just sent.
             val previous = runCatching { ref.get().await().getTimestamp("createdAt") }.getOrNull()
             previous?.let { val wait = 1_200 - (Timestamp.now().toDate().time - it.toDate().time); if (wait > 0) kotlinx.coroutines.delay(wait) }
             ref.set(fields + mapOf("uid" to uid, "status" to "pending", "requestId" to requestId, "createdAt" to FieldValue.serverTimestamp())).await()
-            withTimeoutOrNull(TIMEOUT_MS) {
+            withTimeoutOrNull(timeoutMs) {
                 callbackFlow {
                     val reg = ref.addSnapshotListener { snap, error ->
                         if (error != null) close(error) else if (snap != null) trySend(snap)
@@ -154,5 +197,28 @@ class AiServer(private val db: FirebaseFirestore, private val auth: FirebaseAuth
         /** The PC refreshes its status every 5 minutes; a little longer than that means it crashed. */
         const val ONLINE_WINDOW_MS = 390_000L
         const val TIMEOUT_MS = 15_000L
+        const val REVIEW_PROTOCOL = "review-v1"
+        const val MAX_REVIEW_CATS = 8
+        /** The rules' cap on a job's photo. */
+        const val MAX_QUERY_BYTES = 150_000
+        /** A PC without a GPU took about 8 s for 33 photos in the research; reading the photos adds a little. */
+        const val REVIEW_TIMEOUT_MS = 25_000L
+
+        /** The PC's `review` answer, or null if it isn't one; only cats that were asked about are kept. */
+        fun parseReview(value: Any?, asked: List<String>): ReviewResult? {
+            val map = value as? Map<*, *> ?: return null
+            if (map["protocol"] != REVIEW_PROTOCOL) return null
+            val ranked = (map["ranked"] as? List<*>).orEmpty().mapNotNull { r ->
+                val m = r as? Map<*, *> ?: return@mapNotNull null
+                val id = (m["id"] as? String)?.takeIf { it in asked } ?: return@mapNotNull null
+                ReviewedCat(id, (m["photoIds"] as? List<*>).orEmpty().filterIsInstance<String>().take(4))
+            }.distinctBy { it.id }.filter { it.photoIds.size >= 2 }
+            val unavailable = (map["unavailable"] as? List<*>).orEmpty().mapNotNull { u ->
+                val m = u as? Map<*, *> ?: return@mapNotNull null
+                val id = (m["id"] as? String)?.takeIf { it in asked } ?: return@mapNotNull null
+                Unavailable(id, m["reason"] as? String ?: "")
+            }
+            return ReviewResult(ranked, unavailable)
+        }
     }
 }

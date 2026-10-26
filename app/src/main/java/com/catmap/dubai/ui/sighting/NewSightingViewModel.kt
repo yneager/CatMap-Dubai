@@ -14,6 +14,7 @@ import com.catmap.dubai.R
 import com.catmap.dubai.ai.BreedHint
 import com.catmap.dubai.ai.CatAnalysis
 import com.catmap.dubai.ai.Similarity
+import com.catmap.dubai.data.AiServer
 import com.catmap.dubai.data.AppException
 import com.catmap.dubai.data.Dubai
 import com.catmap.dubai.data.LocationPrivacy
@@ -28,6 +29,7 @@ import com.catmap.dubai.data.model.CoatColor
 import com.catmap.dubai.data.model.CoatPattern
 import com.catmap.dubai.data.model.EarTip
 import com.catmap.dubai.data.model.HealthTag
+import com.catmap.dubai.data.model.isModeratorRole
 import com.catmap.dubai.data.model.labeledFrom
 import com.catmap.dubai.data.userMessage
 import com.catmap.dubai.util.ImageUtils
@@ -48,6 +50,9 @@ data class CatMatch(
     val distanceKm: Double?,
     val strength: Similarity.Strength = Similarity.Strength.POSSIBLE,
 )
+
+/** A nearby cat the AI server ranked for photo review, with the photos it compared (no score: the person decides). */
+data class ReviewCandidate(val cat: Cat, val photoIds: List<String>, val distanceKm: Double)
 
 /** Combined result of the on-device analysis over all photos. */
 data class CombinedAnalysis(
@@ -78,6 +83,15 @@ class NewSightingViewModel(private val container: AppContainer, presetCatId: Str
     var matching by mutableStateOf(false)
         private set
     var matchesSearched by mutableStateOf(false)
+        private set
+    /** Photo review (docs/MATCHING_REVIEW_V1.md): null until the AI server has ranked the nearby cats. */
+    var review by mutableStateOf<List<ReviewCandidate>?>(null)
+        private set
+    var reviewUnavailable by mutableIntStateOf(0)
+        private set
+    var reviewing by mutableStateOf(false)
+        private set
+    var reviewFailed by mutableStateOf(false)
         private set
     val rejected = mutableStateListOf<String>()
     var confirmed by mutableStateOf<Cat?>(null)
@@ -121,6 +135,8 @@ class NewSightingViewModel(private val container: AppContainer, presetCatId: Str
     private var nextKey = 0L
     private var matchJob: Job? = null
     private var matchVersion = 0
+    private var reviewJob: Job? = null
+    private var reviewKey: String? = null
     private val uploadedPhotos = mutableMapOf<Pair<String, Long>, String>()
 
     val target: Cat? get() = presetCat ?: confirmed
@@ -201,7 +217,7 @@ class NewSightingViewModel(private val container: AppContainer, presetCatId: Str
         matchJob?.cancel()
         matching = false
         if (presetCat != null) return
-        val a = analysis ?: run { matches = emptyList(); matchesSearched = false; return }
+        val a = analysis ?: run { matches = emptyList(); matchesSearched = false; startReview(emptyList(), null); return }
         matchJob = viewModelScope.launch {
             matching = true
             matchesSearched = false
@@ -226,12 +242,60 @@ class NewSightingViewModel(private val container: AppContainer, presetCatId: Str
                 }
                 matches = ranked.mapIndexed { i, m -> m.copy(strength = Similarity.strength(m.breakdown.total, ranked.getOrNull(if (i == 0) 1 else 0)?.breakdown?.total)) }
                 matchesSearched = true
+                startReview(cats, here)
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 matches = emptyList()
                 error = e.userMessage(container.appContext)
             } finally { if (version == matchVersion) matching = false }
         }
+    }
+
+    /**
+     * Asks the AI server to rank the [AiServer.MAX_REVIEW_CATS] nearest cats with at least two photos, by distance
+     * only, so the colour score can't hide the right cat (the research's "nearest 8" test). Runs once per first photo
+     * and place; moderators only, with the Settings switch on. Until it answers, or if it can't, the on-device
+     * suggestions stay.
+     */
+    private fun startReview(cats: List<Cat>, here: Pair<Double, Double>?) {
+        val first = photos.firstOrNull()
+        val key = if (here != null && first != null) "${first.key}|${here.first}|${here.second}" else null
+        if (key != null && key == reviewKey) return
+        reviewJob?.cancel()
+        reviewKey = null
+        review = null
+        reviewUnavailable = 0
+        reviewing = false
+        reviewFailed = false
+        if (key == null) return
+        reviewJob = viewModelScope.launch {
+            if (!container.settings.current().photoReview || !isModeratorRole(container.session.profile.value?.role)) return@launch
+            reviewKey = key
+            val nearby = cats.asSequence()
+                .filter { !it.hidden && it.mergedInto.isEmpty() && it.photoIds.distinct().size >= 2 }
+                .map { it to distanceKm(here!!.first, here.second, it.lat, it.lng) }
+                .filter { (_, d) -> d.isFinite() }
+                .sortedBy { it.second }.take(AiServer.MAX_REVIEW_CATS).toList()
+            if (nearby.isEmpty()) return@launch
+            reviewing = true
+            try {
+                val result = container.aiServer.review(first!!.photo.thumb, nearby.map { it.first.id }, nearby.map { it.first.name })
+                if (result == null) {
+                    reviewFailed = true
+                } else {
+                    val byId = nearby.associateBy { it.first.id }
+                    review = result.ranked.mapNotNull { r -> byId[r.id]?.let { (cat, d) -> ReviewCandidate(cat, r.photoIds, d) } }
+                    reviewUnavailable = result.unavailable.size
+                }
+            } finally {
+                reviewing = false
+            }
+        }
+    }
+
+    /** "None of these": every reviewed cat is ruled out, so the sighting becomes a new cat. */
+    fun rejectAllReviewed() {
+        review.orEmpty().forEach { reject(it.cat) }
     }
 
     fun confirm(cat: Cat) {
@@ -316,7 +380,7 @@ class NewSightingViewModel(private val container: AppContainer, presetCatId: Str
                     notes = notes,
                     matchScore = confirmed?.let { c -> matches.firstOrNull { it.cat.id == c.id }?.breakdown?.total } ?: 0.0,
                     // What the person was shown and ruled out, kept for measuring recognition later.
-                    suggestedCatIds = matches.map { it.cat.id },
+                    suggestedCatIds = review?.map { it.cat.id } ?: matches.map { it.cat.id },
                     rejectedCatIds = rejected.toList(),
                     aiSummary = a?.let { "${it.coat.key}:${it.pattern.key}:${"%.2f".format(java.util.Locale.US, it.coatConfidence)}" } ?: "",
                 )

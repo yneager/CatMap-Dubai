@@ -1,10 +1,11 @@
 import { ReportButton } from '../components/ReportButton';
 import EditSighting from './EditSighting';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useApp, useDoc, useAction, useSettings } from '../../state';
 import { CatRepository, type SightingDraft } from '../../data/CatRepository';
-import { SightingFromDoc, type PrivateLocation } from '../../data/model';
+import { SightingFromDoc, type Cat, type PrivateLocation } from '../../data/model';
+import { AiServer, MAX_REVIEW_CATS } from '../../data/AiServer';
 import { enums } from '../../data/model/Enums';
 import { ImageRepository } from '../../data/ImageRepository';
 import { LocationRepository } from '../../data/LocationRepository';
@@ -127,6 +128,62 @@ function NewSighting() {
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
   const visibleCandidates = candidates.filter((c) => !draft.rejectedCatIds.includes(c.cat.id));
+  // Photo review (docs/MATCHING_REVIEW_V1.md, NewSightingViewModel.startReview): the AI server ranks the nearest cats
+  // with two or more photos, by distance only. Moderators with the switch on; once per first photo and place.
+  const [review, setReview] = useState<{ cat: Cat; photoIds: string[]; distance: number }[] | null>(null),
+    [reviewing, setReviewing] = useState(false),
+    [reviewFailed, setReviewFailed] = useState(false),
+    [reviewUnavailable, setReviewUnavailable] = useState(0),
+    [zoom, setZoom] = useState<string | null>(null);
+  const reviewInputs = useRef({ cats, first: photos[0], lat: draft.lat, lng: draft.lng });
+  useEffect(() => {
+    reviewInputs.current = { cats, first: photos[0], lat: draft.lat, lng: draft.lng };
+  });
+  const mod = !!profile && ['moderator', 'admin'].includes(profile.role);
+  const reviewKey =
+    !preset && mod && settings.photoReview && photos[0] && (draft.lat || draft.lng) && cats
+      ? photos[0].url + '|' + positionKey
+      : '';
+  useEffect(() => {
+    setReview(null);
+    setReviewing(false);
+    setReviewFailed(false);
+    setReviewUnavailable(0);
+    const { cats, first, lat, lng } = reviewInputs.current;
+    if (!reviewKey || !cats || !first) return;
+    const nearby = cats
+      .filter((c) => !c.hidden && !c.mergedInto && new Set(c.photoIds).size >= 2)
+      .map((cat) => ({ cat, distance: distanceKm(cat.lat, cat.lng, lat, lng) }))
+      .filter((c) => Number.isFinite(c.distance))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, MAX_REVIEW_CATS);
+    if (!nearby.length) return;
+    const controller = new AbortController();
+    setReviewing(true);
+    void AiServer.review(
+      first.data.thumb,
+      nearby.map((c) => c.cat.id),
+      nearby.map((c) => c.cat.name),
+      controller.signal,
+    ).then((result) => {
+      if (controller.signal.aborted) return;
+      setReviewing(false);
+      if (!result) {
+        setReviewFailed(true);
+        return;
+      }
+      const byId = new Map(nearby.map((c) => [c.cat.id, c]));
+      setReview(
+        result.ranked.flatMap((r) => {
+          const c = byId.get(r.id);
+          return c ? [{ ...c, photoIds: r.photoIds }] : [];
+        }),
+      );
+      setReviewUnavailable(result.unavailable.length);
+    });
+    return () => controller.abort();
+  }, [reviewKey]);
+  const visibleReview = (review ?? []).filter((c) => !draft.rejectedCatIds.includes(c.cat.id));
   const pick = async (files: FileList | null) => {
     if (!files) return;
     setProcessing(true);
@@ -168,7 +225,7 @@ function NewSighting() {
         {
           ...draft,
           photoIds: ids,
-          suggestedCatIds: candidates.map((c) => c.cat.id),
+          suggestedCatIds: (review ?? candidates).map((c) => c.cat.id),
           matchScore: draft.existingCat
             ? (candidates.find((c) => c.cat.id === draft.existingCat?.id)?.score ?? 0)
             : 0,
@@ -226,8 +283,68 @@ function NewSighting() {
               {t('coat_color')}: {t('coat_' + draft.coatColor)} · {t('pattern')}:{' '}
               {t('pattern_' + draft.pattern)}
             </p>
+            {reviewing && <p className="small muted">{t('photo_review_checking')}</p>}
+            {reviewFailed && <p className="small muted">{t('photo_review_failed')}</p>}
             {draft.existingCat ? (
               <p>{t('will_add_to', draft.existingCat.name)}</p>
+            ) : review ? (
+              // No percentages or "likely" labels: the model can't name a cat reliably, so the person decides.
+              <>
+                <SectionHeader>{t('photo_review_title')}</SectionHeader>
+                <p className="small">{t('photo_review_hint')}</p>
+                {visibleReview.length ? (
+                  visibleReview.map((c) => (
+                    <article className="card" key={c.cat.id}>
+                      <div className="row">
+                        <strong>{c.cat.name}</strong>
+                        <span>{t('km_away', c.distance.toFixed(1))}</span>
+                      </div>
+                      <div className="row">
+                        {c.photoIds.map((id) => (
+                          <Photo key={id} id={id} alt={c.cat.name} onClick={() => setZoom(id)} />
+                        ))}
+                      </div>
+                      <div className="row">
+                        <button className="primary" onClick={() => change({ existingCat: c.cat })}>
+                          {t('photo_review_this_cat')}
+                        </button>
+                        <button
+                          className="outlined"
+                          onClick={() =>
+                            change({ rejectedCatIds: toggle(draft.rejectedCatIds, c.cat.id) })
+                          }
+                        >
+                          {t('not_this_cat')}
+                        </button>
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <EmptyState text={t(review.length ? 'all_matches_rejected' : 'no_matches')} />
+                )}
+                {visibleReview.length > 0 && (
+                  <button
+                    className="outlined"
+                    onClick={() =>
+                      change({
+                        rejectedCatIds: [
+                          ...new Set([...draft.rejectedCatIds, ...review.map((c) => c.cat.id)]),
+                        ],
+                      })
+                    }
+                  >
+                    {t('photo_review_none')}
+                  </button>
+                )}
+                {reviewUnavailable > 0 && (
+                  <p className="small muted">{t('photo_review_unavailable', reviewUnavailable)}</p>
+                )}
+                {zoom && (
+                  <Dialog title={t('photo_review_title')} onClose={() => setZoom(null)}>
+                    <Photo id={zoom} thumb={false} />
+                  </Dialog>
+                )}
+              </>
             ) : visibleCandidates.length ? (
               visibleCandidates.map((c, i) => (
                 <article className="card" key={c.cat.id}>

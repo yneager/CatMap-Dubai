@@ -18,6 +18,7 @@ posts or users unless the owner separately grants the optional catmapMaintenance
 
     start.cmd                  (double-click; first run installs everything and downloads the models, ~950 MB)
     python server.py --emulator  local Firebase emulators, for testing
+    start.cmd --review         also answer photo review jobs (review.py; deploy the photo review rules first)
 """
 from __future__ import annotations
 
@@ -84,7 +85,7 @@ OBJECT_PROMPTS = [
 ]
 
 # Verdict thresholds on cosine similarity for the "already on the map?" check: the measured "strong" and "possible"
-# levels of matching.py (eval/REPORT.md). SAME_THRESHOLD / MAYBE_THRESHOLD override them for experiments.
+# levels of matching.py (cat/docs/AI_EVALUATION.md). SAME_THRESHOLD / MAYBE_THRESHOLD override them for experiments.
 SAME = float(os.environ.get("SAME_THRESHOLD", str(matching.EMBED_STRONG)))
 MAYBE = float(os.environ.get("MAYBE_THRESHOLD", str(matching.EMBED_POSSIBLE)))
 HEARTBEAT_SECONDS = 300.0  # crash safeguard only; the app also reports online/offline when it opens and closes
@@ -103,7 +104,6 @@ class Classifier:
 
     def __init__(self, cpu: bool):
         import hashlib
-        from huggingface_hub import hf_hub_download
 
         get = lambda f: pinned_download(CLIP_REPO, f)
         wanted = ["CPUExecutionProvider"] if cpu else ["DmlExecutionProvider", "CPUExecutionProvider"]
@@ -234,8 +234,11 @@ class Firestore:
 class Worker:
     """Listens for pending jobs and answers them one at a time on its own thread."""
 
-    def __init__(self, model: Model, classifier: Classifier, fs: Firestore, events: queue.Queue, recognizer: Recognizer | None = None):
+    def __init__(self, model: Model, classifier: Classifier, fs: Firestore, events: queue.Queue, recognizer: Recognizer | None = None,
+                 reviewer=None):
         self.model, self.classifier, self.fs, self.events = model, classifier, fs, events
+        # Photo review (review.py), only with --review. Phones send review jobs only when the heartbeat lists it.
+        self.reviewer = reviewer
         self.recovery = Recovery(fs.client, recognizer, events, fs.uid) if recognizer is not None else None
         storage_delete = None
         if fs.emulator and os.environ.get("FIREBASE_STORAGE_EMULATOR_HOST"):
@@ -259,10 +262,13 @@ class Worker:
     # Heartbeat: written when the app starts and stops, and every few minutes in case the PC crashes.
     def heartbeat(self, online: bool):
         from google.cloud import firestore
-        self.fs.client.document("config/aiWorker").set({
-            "online": online, "lastSeen": firestore.SERVER_TIMESTAMP, "model": MODEL_NAME,
-            "provider": self.model.provider, "same": SAME, "maybe": MAYBE,
-        })
+        status = {"online": online, "lastSeen": firestore.SERVER_TIMESTAMP, "model": MODEL_NAME,
+                  "provider": self.model.provider, "same": SAME, "maybe": MAYBE}
+        # Only with --review: rules from before photo review refuse the extra key, so a plain start stays compatible.
+        if self.reviewer is not None:
+            from review import PROTOCOL
+            status["capabilities"] = [PROTOCOL]
+        self.fs.client.document("config/aiWorker").set(status)
 
     def listen(self):
         from google.cloud.firestore_v1.base_query import FieldFilter
@@ -393,6 +399,29 @@ class Worker:
             self.names[uid] = (snap.to_dict() or {}).get("username") or uid[:8]
         return self.names[uid]
 
+    def read_cats(self, ids: list[str]) -> dict:
+        refs = [self.fs.client.document(f"cats/{i}") for i in ids]
+        return {s.id: (s.to_dict() if s.exists else None) for s in self.fs.client.get_all(refs)}
+
+    def read_images(self, ids: list[str]) -> dict:
+        # One batched read; a photo that is gone or can't be read is simply left out of that cat's photos. The rules
+        # refuse a whole batch for one photo the worker may not read (an older photo without an audience), so a
+        # refused batch is read again one photo at a time.
+        from google.api_core.exceptions import PermissionDenied
+        def data(s):
+            value = (s.to_dict() or {}).get("data") if s.exists else None
+            return bytes(value) if isinstance(value, (bytes, bytearray)) else None
+        out = {}
+        for start in range(0, len(ids), 100):
+            refs = [self.fs.client.document(f"images/{i}") for i in ids[start:start + 100]]
+            try:
+                out.update({s.id: data(s) for s in self.fs.client.get_all(refs)})
+            except PermissionDenied:
+                for ref in refs:
+                    try: out[ref.id] = data(ref.get())
+                    except PermissionDenied: out[ref.id] = None
+        return out
+
     def compare(self, query: bytes, images: list[bytes], ids: list[str]) -> list[dict]:
         vectors = self.model.embed([query] + images)
         sims = (vectors[1:] @ vectors[0]).tolist() if images else []
@@ -419,6 +448,16 @@ class Worker:
                 vectors = self.model.embed(images) if images else np.zeros((0, 512))
                 out = {"status": "done", "embeddings": [{"v": [round(float(x), 5) for x in v]} for v in vectors]}
                 self.events.put(("embed", {"who": who, "count": len(images)}))
+            elif kind == "review":
+                # The phone sends only its photo and cat ids; the cats' photos are read here, by id.
+                if self.reviewer is None:
+                    raise ValueError("photo review isn't switched on here")
+                if images or photos:
+                    raise ValueError("a review job carries no other photos")
+                review, previews = self.reviewer.review(query, ids, self.read_cats, self.read_images)
+                out = {"status": "done", "review": review}
+                self.events.put(("review", {"who": who, "query": query, "review": review, "previews": previews,
+                                             "labels": dict(zip(ids, labels)), "ms": int((time.time() - started) * 1000)}))
             elif kind == "check":
                 # A new post's photos: what each one shows, and (street animals) whether the first one matches a
                 # nearby street animal already on the map. One job, so the phone waits for one answer.
@@ -438,7 +477,9 @@ class Worker:
         except Exception as e:
             out = {"status": "error", "error": str(e)[:200]}
             self.events.put(("log", f"Job from {who} failed: {e}"))
-        out.update({"model": MODEL_NAME if kind != "check" else f"{CLIP_NAME} + {MODEL_NAME}", "provider": self.model.provider, "ms": int((time.time() - started) * 1000),
+        model_name = {"check": f"{CLIP_NAME} + {MODEL_NAME}", "review": "review-candidate-v1"}.get(kind, MODEL_NAME)
+        provider = self.reviewer.provider if kind == "review" and self.reviewer is not None else self.model.provider
+        out.update({"model": model_name, "provider": provider, "ms": int((time.time() - started) * 1000),
                     "doneAt": firestore.SERVER_TIMESTAMP, "answeredRequestId": request_id})
         # Inference runs outside the transaction. Commit only if this is still the current
         # pending request; retries re-read the live document rather than overwrite a replacement.
@@ -570,6 +611,30 @@ class App:
         match = "" if best is None else f"; best match {best['verdict']} ({best['similarity'] * 100:.0f}%)"
         self.add_log(f"@{e['who']}: {names}{match}, {e['ms']} ms")
 
+    def show_review(self, e: dict):
+        """A sighting's photo and the nearby cats in the order sent back. No verdicts: the person decides."""
+        for w in self.job.winfo_children():
+            w.destroy()
+        self.photos.clear()
+        review = e["review"]
+        self.job_title.config(text=f"Photo review for @{e['who']}: {len(review['ranked'])} cat(s) ranked, "
+                                   f"{len(review['unavailable'])} unavailable ({e['ms']} ms)")
+        left = tk.Frame(self.job, bg="#FFFFFF")
+        left.pack(side="left", padx=12, pady=12)
+        tk.Label(left, image=self.thumb(e["query"], 200), bg="#FFFFFF").pack()
+        tk.Label(left, text="New photo", bg="#FFFFFF", font=("Segoe UI", 9, "bold")).pack()
+        for place, r in enumerate(review["ranked"], 1):
+            cell = tk.Frame(self.job, bg="#FFFFFF")
+            cell.pack(side="left", padx=6, pady=12)
+            preview = e["previews"].get(r["id"])
+            if preview:
+                tk.Label(cell, image=self.thumb(preview, 110), bg="#FFFFFF").pack()
+            name = e["labels"].get(r["id"]) or r["id"][:10]
+            tk.Label(cell, text=f"{place}. {name}", bg="#FFFFFF", font=("Segoe UI", 9, "bold")).pack()
+            tk.Label(cell, text=f"{len(r['photoIds'])} photos, score {r['score']:.2f}", bg="#FFFFFF", font=("Segoe UI", 8)).pack()
+        reasons = ", ".join(f"{u['id'][:8]}: {u['reason']}" for u in review["unavailable"])
+        self.add_log(f"@{e['who']}: review of {len(review['ranked'])} cat(s){'; ' + reasons if reasons else ''}, {e['ms']} ms")
+
     def show_match(self, e: dict):
         """A lost report and a sighting scored by the background matcher, in the activity log."""
         r, lost, s = e["result"], e["lost"], e["sighting"]
@@ -593,6 +658,9 @@ class App:
                     self.pop_up()
                 elif kind == "check":
                     self.show_check(e)
+                    self.pop_up()
+                elif kind == "review":
+                    self.show_review(e)
                     self.pop_up()
                 elif kind == "embed":
                     self.add_log(f"@{e['who']}: Recognition test, embedded {e['count']} photo(s)")
@@ -641,6 +709,8 @@ def main():
     p.add_argument("--emulator", action="store_true", help="use the local Firebase emulators (testing)")
     p.add_argument("--cpu", action="store_true", help="don't use the GPU")
     p.add_argument("--no-matching", action="store_true", help="don't run the background lost/sighting matcher")
+    p.add_argument("--review", action="store_true",
+                   help="answer photo review jobs (experimental; deploy the photo review rules first)")
     args = p.parse_args()
     root = tk.Tk()
     root.withdraw()
@@ -660,7 +730,16 @@ def main():
         sys.exit(1)
     events: queue.Queue = queue.Queue()
     logging.getLogger("google").addHandler(ForwardErrors(events))
-    worker = Worker(model, classifier, fs, events, recognizer)
+    reviewer = None
+    if args.review:
+        # A missing or altered bundle only switches photo review off; everything else still starts.
+        try:
+            from review import Reviewer
+            reviewer = Reviewer(args.cpu)
+            events.put(("log", f"Photo review on ({reviewer.space}, {reviewer.provider})."))
+        except Exception as e:
+            events.put(("log", f"Photo review is off: {e}"))
+    worker = Worker(model, classifier, fs, events, recognizer, reviewer)
     App(root, worker, events)
     root.deiconify()
     worker.start()

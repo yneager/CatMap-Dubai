@@ -19,6 +19,14 @@
       "tokenizer.json": "f7f3b7af117d467b58374797691a6438d3e6b9e9cef800dfd5dced7f697a90cd"
     }
   },
+  "catmap/review-candidate-v1": {
+    "revision": "local bundle tools/matching_candidate/artifacts/review_candidate_v1 (not on Hugging Face)",
+    "sha256": {
+      "native_backbone.onnx": "22db08cce96653d9c2db5375c8faa4b4789056a9bb09cd6abaff6a79665eac93",
+      "transforms.npz": "10d7da15d085dc4030a41c05c2e7ccd7a4b4b8f05664e3fd530ee5dc5c1977b3",
+      "review_candidate.py": "278414b68cbd808a7ea3c04659398ef10f05c7f25f57b5e0bec41d1dcd6270cb"
+    }
+  },
   "open-noodle/pet-recognition-large": {
     "revision": "cff7cf1559cb99596273f26f1eaae117327d8eb1",
     "sha256": {

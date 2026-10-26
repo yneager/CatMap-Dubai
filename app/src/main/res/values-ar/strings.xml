@@ -1271,6 +1271,16 @@
     <string name="analytics_matches">اقتراحات التطابق</string>
     <string name="analytics_matches_body">اقتُرح %1$d (قوي %2$d، محتمل %3$d، ضعيف %4$d). قال المالكون «قد يكون حيواني» %5$d مرة و«ليس حيواني» %6$d مرة.</string>
     <string name="analytics_reunions_body">حالات العودة: %1$d، منها عبر مشاهدة على CatMap: %2$d (أكّدها المُبلِّغ: %3$d، تحقّق منها مشرف: %4$d).</string>
+    <string name="settings_experimental">Experimental</string>
+    <string name="photo_review_setting">Photo review on new sightings</string>
+    <string name="photo_review_setting_hint">When the AI server supports it, nearby cats are sorted by how alike their photos look, for you to check by eye. Only moderators see this.</string>
+    <string name="photo_review_title">Review these photos</string>
+    <string name="photo_review_hint">Sorted by how alike the photos look. You decide.</string>
+    <string name="photo_review_checking">The AI server is comparing the photos…</string>
+    <string name="photo_review_this_cat">This is the cat</string>
+    <string name="photo_review_none">None of these: it\'s a new cat</string>
+    <string name="photo_review_unavailable">Nearby cats without enough photos to compare: %1$d</string>
+    <string name="photo_review_failed">Photo review is unavailable right now, so these suggestions come from colours on this phone.</string>
     <plurals name="unread_notifications">
         <item quantity="zero">لا توجد إشعارات غير مقروءة</item>
         <item quantity="one">إشعار واحد غير مقروء</item>

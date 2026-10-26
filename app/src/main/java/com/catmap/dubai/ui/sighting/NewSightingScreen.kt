@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -94,6 +95,7 @@ import com.catmap.dubai.ui.components.LocalBitmap
 import com.catmap.dubai.ui.components.LocalContainer
 import com.catmap.dubai.ui.components.LocalIsDark
 import com.catmap.dubai.ui.components.LocalSnackbar
+import com.catmap.dubai.ui.components.RemoteImage
 import com.catmap.dubai.ui.components.SectionHeader
 import com.catmap.dubai.ui.components.dateTime
 import com.catmap.dubai.ui.map.MiniMap
@@ -189,7 +191,7 @@ fun NewSightingScreen(nav: NavHostController, presetCatId: String?) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 when (vm.step) {
                     0 -> PhotosStep(vm)
-                    1 -> AiStep(vm)
+                    1 -> AiStep(vm, onPhoto = { nav.navigate(Routes.photo(it)) })
                     2 -> DetailsStep(vm)
                     else -> LocationStep(vm, onPick = { nav.navigate(Routes.pickLocation(vm.lat, vm.lng)) })
                 }
@@ -256,7 +258,7 @@ private fun PhotosStep(vm: NewSightingViewModel) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AiStep(vm: NewSightingViewModel) {
+private fun AiStep(vm: NewSightingViewModel, onPhoto: (String) -> Unit) {
     val a = vm.analysis
     if (a == null) {
         Text(stringResource(if (vm.photos.isEmpty()) R.string.ai_needs_photo else R.string.analyzing_photos))
@@ -291,9 +293,16 @@ private fun AiStep(vm: NewSightingViewModel) {
         return
     }
 
-    SectionHeader(stringResource(R.string.possible_matches)) {
-        if (vm.matching) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+    val reviewed = vm.review
+    if (reviewed != null) {
+        PhotoReview(vm, reviewed, onPhoto)
+        return
     }
+    SectionHeader(stringResource(R.string.possible_matches)) {
+        if (vm.matching || vm.reviewing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+    }
+    if (vm.reviewing) Text(stringResource(R.string.photo_review_checking), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (vm.reviewFailed) Text(stringResource(R.string.photo_review_failed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Text(stringResource(R.string.matches_hint), style = MaterialTheme.typography.bodySmall)
     if (vm.analysis?.severalSubjects == true) {
         Text(stringResource(R.string.several_subjects_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
@@ -349,6 +358,56 @@ private fun AiStep(vm: NewSightingViewModel) {
                 }
             }
         }
+    }
+    Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceContainerHigh)) {
+        Text(
+            stringResource(if (vm.confirmed == null) R.string.will_create_new else R.string.will_add_to, vm.confirmed?.name ?: ""),
+            Modifier.padding(12.dp),
+        )
+    }
+}
+
+/**
+ * Photo review (docs/MATCHING_REVIEW_V1.md): the AI server's order of nearby cats with the photos it compared. No
+ * percentages or "likely" labels: the model isn't reliable enough to name a cat, so the person decides by eye.
+ */
+@Composable
+private fun PhotoReview(vm: NewSightingViewModel, reviewed: List<ReviewCandidate>, onPhoto: (String) -> Unit) {
+    SectionHeader(stringResource(R.string.photo_review_title))
+    Text(stringResource(R.string.photo_review_hint), style = MaterialTheme.typography.bodySmall)
+    val visible = reviewed.filter { it.cat.id !in vm.rejected }
+    if (visible.isEmpty()) {
+        Text(stringResource(if (reviewed.isEmpty()) R.string.no_matches else R.string.all_matches_rejected), style = MaterialTheme.typography.bodyMedium)
+    }
+    visible.forEach { candidate ->
+        val cat = candidate.cat
+        val selected = vm.confirmed?.id == cat.id
+        Card(Modifier.fillMaxWidth(), border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(cat.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(Dubai.nameOf(cat.neighborhood) + " · " + stringResource(R.string.km_away, "%.1f".format(candidate.distanceKm)), style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    candidate.photoIds.forEach { id ->
+                        RemoteImage(id, Modifier.size(72.dp).clip(RoundedCornerShape(10.dp)).clickable(onClickLabel = cat.name) { onPhoto(id) }, contentDescription = cat.name)
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (selected) {
+                        AssistChip(onClick = { vm.clearConfirmation() }, label = { Text(stringResource(R.string.confirmed_same_cat)) },
+                            leadingIcon = { Icon(Icons.Default.CheckCircle, null, Modifier.size(18.dp)) })
+                    } else {
+                        Button(onClick = { vm.confirm(cat) }) { Text(stringResource(R.string.photo_review_this_cat)) }
+                    }
+                    OutlinedButton(onClick = { vm.reject(cat) }) { Text(stringResource(R.string.not_this_cat)) }
+                }
+            }
+        }
+    }
+    if (visible.isNotEmpty()) {
+        OutlinedButton(onClick = { vm.rejectAllReviewed() }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.photo_review_none)) }
+    }
+    if (vm.reviewUnavailable > 0) {
+        Text(stringResource(R.string.photo_review_unavailable, vm.reviewUnavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     Card(colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceContainerHigh)) {
         Text(

@@ -80,6 +80,7 @@ import com.catmap.dubai.ui.components.AppTopBar
 import com.catmap.dubai.ui.components.ConfirmDialog
 import com.catmap.dubai.ui.components.EmptyState
 import com.catmap.dubai.ui.components.LocalContainer
+import com.catmap.dubai.data.model.isModeratorRole
 import com.catmap.dubai.ui.components.SectionHeader
 import com.catmap.dubai.ui.components.relativeTime
 import com.catmap.dubai.ui.components.rememberRunner
@@ -261,6 +262,12 @@ fun SettingsScreen(nav: NavHostController) {
             Text(stringResource(R.string.metadata_always_removed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             DemoAccountSwitcher(nav)
+
+            if (isModeratorRole(me?.role)) {
+                SectionHeader(stringResource(R.string.settings_experimental))
+                SwitchRow(stringResource(R.string.photo_review_setting), settings.photoReview) { on -> scope.launch { container.settings.setPhotoReview(on) } }
+                Text(stringResource(R.string.photo_review_setting_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
 
             SectionHeader(stringResource(R.string.account))
             TextButton(enabled=!runner.busy,onClick={

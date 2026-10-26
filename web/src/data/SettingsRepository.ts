@@ -52,6 +52,8 @@ export const settingsDefaults = {
   skippedVersion: '',
   lastUpdateCheck: 0,
   installHintDismissed: false,
+  /** Photo review on new sightings (docs/MATCHING_REVIEW_V1.md); offered to moderators only, off by default. */
+  photoReview: false,
 };
 export type AppSettings = typeof settingsDefaults;
 let value: AppSettings = structuredClone(settingsDefaults);

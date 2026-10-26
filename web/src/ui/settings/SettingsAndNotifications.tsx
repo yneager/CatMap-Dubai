@@ -300,6 +300,17 @@ function Settings() {
             }
           />
         )}
+        {profile && ['moderator', 'admin'].includes(profile.role) && (
+          <>
+            <SectionHeader>{t('settings_experimental')}</SectionHeader>
+            <Switch
+              label={t('photo_review_setting')}
+              checked={settings.photoReview}
+              onChange={(photoReview) => void set({ photoReview })}
+            />
+            <p className="small muted">{t('photo_review_setting_hint')}</p>
+          </>
+        )}
         {DemoAccounts.isDemoEmail(user?.email) && demoSaved && (
           <>
             <SectionHeader>{t('demo_accounts')}</SectionHeader>
