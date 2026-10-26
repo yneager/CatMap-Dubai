@@ -5,29 +5,18 @@
 **State:**
 
 * Everything local is green (counts in the next section).
-* `main` has 19 unpushed commits (up to `e3b2e9b`) plus a large **uncommitted** working tree: 51 modified files and
-  12 new ones. The tree contains:
-  * photo review v1 (below);
-  * the rules-budget, check-in and web/Android fixes (next section);
-  * the 26 Oct clean-up.
+* `main` has 23 unpushed local commits. The last four (`ddb6197`..`750d985`, committed 26 Oct at the owner's request)
+  hold the rules budget, the e2e fixes, photo review v1 and the clean-up. Left untracked on purpose, until the owner
+  says they may go public: `docs/done/work done (bugs and extras, 23 Oct).txt`, the two `CLAUDE_CAT_MATCHING_*`
+  files in `docs/done/`, and `tools/matching_candidate/`.
 * Nothing is pushed, deployed or released. Production still runs v0.1.0, with its rules.
 
 **Next steps, in order** (the owner decides each; never push, deploy or touch production without being told):
 
-1. **Commits** (only when the owner asks). Suggested local commits, one each:
-   * (a) rules budget + check-in rule + `tools/rulestest/test.mjs` + `budget.mjs`;
-   * (b) the web/Android fixes found by e2e (map `style.load`, start-up tasks after the profile, idempotent chat
-     open, match tie-break) + the e2e test fixes;
-   * (c) photo review v1: `tools/worker/review.py`, `server.py`, `model-manifest.json`, the worker tests, the rules
-     for `review` and `capabilities`, Android and web `AiServer` + sighting UI + Settings switch, `strings_k.py`,
-     `docs/MATCHING_REVIEW_V1.md`, `PhotoReviewTest.kt`;
-   * (d) clean-up: dead Kotlin code, worker imports and comments, `docs/MATCHING.md`, the `docs/done/` moves.
-
-   Run `python tools/security/secretscan.py . --worktree` before committing.
-   * **Ask the owner first** whether `docs/done/work done (bugs and extras, 23 Oct).txt` and the Codex matching
-     handoff may go public. They mention private audit paths, and the repo is public.
-   * `tools/matching_candidate/` holds research scripts with absolute paths to this PC. Its `artifacts/` (the
-     335 MB model) is git-ignored. Commit at most the README and scripts, if the owner wants them public.
+1. **Commits: done** (four local commits, see State). Still to decide: whether the untracked `docs/done/` notes and
+   `tools/matching_candidate/` (README and scripts only; `artifacts/` is the 335 MB model) may go public. They mention
+   private audit paths or paths on this PC, and the repo is public. Run
+   `python tools/security/secretscan.py . --worktree` (and history mode) before any push.
 2. **Before any release**, read `docs/SCHEMA_TRANSITION.md`. The 23 Oct schema (capacity slots in `userLimits`,
    unread totals, source-bound counters, canonical usernames) needs the reviewed backfill for **existing production
    users**. Without it, old accounts can't, for example, remove saved posts or get unread counts right: the e2e had
@@ -162,7 +151,7 @@ The owner asked to fix the release blockers found earlier today (section below) 
 * **Not run:** CI on GitHub (nothing pushed), manual Android interruption/offline checks, a real iPhone, and
   anything against production.
 
-**Not committed. Nothing pushed, deployed or released.**
+**Committed locally on 26 Oct (`ddb6197`..`750d985`). Nothing pushed, deployed or released.**
 
 ## 26 October 2026 - photo review v1, clean-up, release check (Claude)
 
