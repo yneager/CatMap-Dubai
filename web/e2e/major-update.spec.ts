@@ -51,7 +51,7 @@ test('lost and street posts carry Android geoCells and searchTerms accepted by t
 /** A map spot only the map spec uses (Jebel Ali), away from the posts other specs make near the centre. */
 const SPOT = { lat: 24.9866, lng: 55.0612 };
 
-test('map area pins survive reopening with zero repeated cell queries; Explore reads cursor pages', async ({
+test('map area pins load per viewport cell and survive reopening; Explore reads cursor pages', async ({
   page,
 }) => {
   const a = await account(),
@@ -103,22 +103,34 @@ test('map area pins survive reopening with zero repeated cell queries; Explore r
     // A small box: at most four fine cells, so each cell's share of the per-screen budget (300 / cells) covers all 55
     // posts. A larger box splits the budget further and, as designed, shows the newest posts of each cell first.
     const box = { south: spot.lat - 0.002, west: spot.lng - 0.003, north: spot.lat + 0.002, east: spot.lng + 0.003 };
+    // Viewport-scoped listeners (R13): the area is asked for 400 ms after the camera settles, live.
+    const pinsNow = () => ids.filter((id) => id in map.get().posts).length;
+    const until = async (ok: () => boolean) => {
+      for (let i = 0; i < 100 && !ok(); i++) await new Promise((r) => setTimeout(r, 100));
+    };
     await map.viewport(box);
+    await until(() => pinsNow() >= ids.length);
     await map.flush();
     const cold = map.metrics(),
-      pins = ids.filter((id) => id in map.get().posts).length;
+      pins = pinsNow();
     map.stop();
     map.resetMetrics();
+    // Reopening shows the saved copy at once, before any answer from the server.
     await map.start(uid);
+    const savedPins = pinsNow();
     await map.viewport(box);
+    await until(() => map.metrics().areaQueries > 0);
     await map.flush();
     const warm = map.metrics();
     map.stop();
-    return { cold, warm, pins };
+    return { cold, warm, pins, savedPins };
   }, { uid: a.uid, spot: SPOT, ids });
   expect(measured.pins).toBeGreaterThanOrEqual(55);
+  expect(measured.savedPins).toBeGreaterThanOrEqual(55);
+  // At most six cells, a posts and a cats listener each.
   expect(measured.cold.areaQueries).toBeGreaterThan(0);
-  expect(measured.warm.areaQueries).toBe(0);
+  expect(measured.cold.areaQueries).toBeLessThanOrEqual(12);
+  expect(measured.warm.areaQueries).toBeLessThanOrEqual(12);
   console.log('Round3 actual map query/read counters: ' + JSON.stringify(measured));
   await page.evaluate(async () => {
     const { PagerMetrics } = await import('/src/data/Pager.ts' /* @vite-ignore */);

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { account, login } from './helpers';
+import { account, login, readStatusAs, registered } from './helpers';
 
 test('private chat photo transfers avoid SDK persistence and reject outsiders and blocked reads', async ({
   page,
@@ -7,14 +7,13 @@ test('private chat photo transfers avoid SDK persistence and reject outsiders an
 }) => {
   const a = await account(),
     b = await account(),
-    x = await account();
-  const bc = await browser.newContext(),
-    xc = await browser.newContext();
+    // The outsider reads over REST with their own sign-in: a third signed-in browser tab exhausts WebKit's six
+    // HTTP/1.1 connections to the emulator (production Firestore uses HTTP/2), and their check needs no app.
+    x = await registered(await account());
+  const bc = await browser.newContext();
   try {
-    const bp = await bc.newPage(),
-      xp = await xc.newPage();
+    const bp = await bc.newPage();
     await login(bp, b);
-    await login(xp, x);
     await login(page, a);
     const image = await page.evaluate(async (other) => {
       const { authentication } = await import('/src/firebase.ts' /* @vite-ignore */);
@@ -41,7 +40,8 @@ test('private chat photo transfers avoid SDK persistence and reject outsiders an
         return (await ImageRepository.bytes(id))?.length ?? 0;
       }, image);
     expect(await readPhoto(bp)).toBe(4);
-    expect(await readPhoto(xp)).toBe(0);
+    for (const doc of ['images/' + image, 'images/' + image + '_t'])
+      expect(await readStatusAs(x, doc)).toBe(403);
     for (const target of [page, bp])
       expect(
         await target.evaluate(async (id) => {
@@ -60,6 +60,5 @@ test('private chat photo transfers avoid SDK persistence and reject outsiders an
     expect(await readPhoto(bp)).toBe(0);
   } finally {
     await bc.close();
-    await xc.close();
   }
 });

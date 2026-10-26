@@ -217,6 +217,12 @@ export function usePostMatches(postId: string) {
   };
 }
 
+/** strong 0, possible 1, weak 2, anything else 3: for ordering equal scores. */
+function tierRank(tier: string) {
+  const rank = ['strong', 'possible', 'weak'].indexOf(tier);
+  return rank < 0 ? 3 : rank;
+}
+
 /** "Possible matches" on a lost report or sighting, for the two people involved. */
 export function PostMatchesSection({
   post,
@@ -252,7 +258,10 @@ export function PostMatchesSection({
         !(m.lostOwnerId === uid && m.ownerState === 'not_mine') &&
         !(m.sightingOwnerId === uid && m.reporterState === 'not_same'),
     )
-    .sort((a, b) => b.score - a.score);
+    // Best first: score, then the stronger tier, then the closer photo (MatchUi.kt does the same).
+    .sort(
+      (a, b) => b.score - a.score || tierRank(a.tier) - tierRank(b.tier) || b.visual - a.visual,
+    );
   const shown = visible.filter(
     (m) => m.tier !== 'weak' || m.ownerState !== 'new' || m.reporterState !== 'new',
   );

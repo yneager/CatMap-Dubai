@@ -96,6 +96,8 @@ test('community cat, sighting privacy, rescue, station check-in and maintenance 
     createdAt: Date.now(),
     updatedAt: Date.now(),
   });
+  // Check-ins are rate limited like posts, and a rescue report was just sent.
+  await waitRateLimit(a.uid);
   await page.evaluate(async (id) => {
     const { StationRepository } = await import('/src/data/StationRepository.ts' /* @vite-ignore */),
       { FeedingStationFromDoc } = await import('/src/data/model/index.ts' /* @vite-ignore */),

@@ -190,6 +190,9 @@ fun AppNavHost(pendingRoute: MutableState<String?>) {
     LaunchedEffect(user) { if (user != null) container.location.refreshQuietly() }
     LaunchedEffect(user?.uid) {
         user?.takeIf { it.isEmailVerified }?.uid?.let { uid ->
+            // Only once the profile exists: the rules treat an account without one as not yet verified, and a first
+            // sign-in that recovers a half-finished registration creates it a moment later.
+            kotlinx.coroutines.withTimeoutOrNull(60_000) { container.session.profile.first { it?.uid == uid } } ?: return@let
             // Reminders are about 14 days without activity, so twice a day is plenty (each check reads all own posts).
             val now = System.currentTimeMillis()
             if (now - container.settings.lastStaleCheck(uid) >= 12L * 60 * 60 * 1000) {

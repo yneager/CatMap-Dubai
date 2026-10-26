@@ -210,12 +210,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const timeout = setTimeout(() => setMessage(''), 5000);
     return () => clearTimeout(timeout);
   }, [message]);
+  // Only once the profile exists: the rules treat an account without one as not yet verified, and the first sign-in
+  // of a new account creates it a moment later.
+  const hasProfile = !!profile && profile.uid === uid;
   useEffect(() => {
-    if (uid && session.verified) {
+    if (uid && session.verified && hasProfile) {
       void PostRepository.remindStalePosts(uid).catch(AppErrors.report);
-      void PostRepository.moveAreaCentreToPrivate(uid).catch(AppErrors.report);
+      // Best effort, like Android: it runs again at the next start until it succeeds.
+      void PostRepository.moveAreaCentreToPrivate(uid).catch((e) =>
+        console.info('Alert area not moved yet', e),
+      );
     }
-  }, [uid, session.verified]);
+  }, [uid, session.verified, hasProfile]);
   useEffect(() => {
     if (profile && session.verified)
       void UserRepository.awardNewBadges(profile).catch(AppErrors.report);

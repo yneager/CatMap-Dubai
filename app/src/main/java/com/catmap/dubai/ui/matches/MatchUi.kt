@@ -99,6 +99,14 @@ fun TierPill(match: PostMatch, modifier: Modifier = Modifier) {
 fun animalName(post: Post?): String = post?.name?.takeIf { it.isNotBlank() }
     ?: stringResource(labeledFrom(post?.animalType, AnimalType.OTHER).label)
 
+/** strong 0, possible 1, weak 2, anything else 3: for ordering equal scores. */
+fun tierRank(tier: String): Int = when (tier) {
+    "strong" -> 0
+    "possible" -> 1
+    "weak" -> 2
+    else -> 3
+}
+
 @Composable
 private fun daysText(days: Double): String {
     val d = abs(days)
@@ -194,9 +202,10 @@ fun PostMatchesSection(nav: NavHostController, post: Post, matches: List<PostMat
     }
     val list = all
     // A pair someone turned down leaves their list (it stays stored, so it is never suggested again).
+    // Best first: score, then the stronger tier, then the closer photo (pages arrive by score, so equal scores need it).
     val visible = list.filter {
         it.visible && !(it.lostOwnerId == uid && it.rejected) && !(it.sightingOwnerId == uid && it.reporterState == "not_same")
-    }
+    }.sortedWith(compareByDescending<PostMatch> { it.score }.thenBy { tierRank(it.tier) }.thenByDescending { it.visual })
     val shown = visible.filter { it.tier != MatchTier.WEAK.key || it.ownerState != "new" || it.reporterState != "new" }
     val weak = visible - shown.toSet()
     val fresh = System.currentTimeMillis() - post.createdAt < 3 * 60_000

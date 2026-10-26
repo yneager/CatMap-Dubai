@@ -49,17 +49,23 @@ export const ChatRepository = {
     if (!(await read(`chats/${id}`, ChatFromDoc))) {
       const other = await UserRepository.profile(otherUid);
       const members = [me.uid, otherUid].sort();
-      await setDoc(
-        ref(`chats/${id}`),
-        ChatToDoc({
-          ...ChatDefaults,
-          members,
-          names: { [me.uid]: me.username, [otherUid]: other?.username ?? '' },
-          photos: { [me.uid]: me.photoId, [otherUid]: other?.photoId ?? '' },
-          lastAt: Date.now(),
-          unread: Object.fromEntries(members.map((uid) => [uid, 0])),
-        }),
-      );
+      try {
+        await setDoc(
+          ref(`chats/${id}`),
+          ChatToDoc({
+            ...ChatDefaults,
+            members,
+            names: { [me.uid]: me.username, [otherUid]: other?.username ?? '' },
+            photos: { [me.uid]: me.photoId, [otherUid]: other?.photoId ?? '' },
+            lastAt: Date.now(),
+            unread: Object.fromEntries(members.map((uid) => [uid, 0])),
+          }),
+        );
+      } catch (e) {
+        // Two opens at once (or the other person opening it too): the rules refuse the second create as an
+        // overwrite, and the chat is there to use (ChatRepository.kt does the same).
+        if (!(await read(`chats/${id}`, ChatFromDoc))) throw e;
+      }
     }
     return id;
   },

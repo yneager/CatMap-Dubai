@@ -71,10 +71,14 @@ export default function MessagesScreens() {
       )
     : undefined;
   const postId = new URLSearchParams(location.search).get('postId');
+  // Opened once per person: profile snapshots (new stats, badges) must not start a second, overlapping open.
+  const me = useRef(profile);
+  me.current = profile;
+  const myUid = profile?.uid ?? '';
   useEffect(() => {
-    if (!otherUid || !profile) return;
+    if (!otherUid || !myUid || !me.current) return;
     let active = true;
-    void ChatRepository.open(profile, otherUid)
+    void ChatRepository.open(me.current, otherUid)
       .then((chatId) => {
         if (active)
           navigate('/chat/' + chatId + (postId ? '?postId=' + postId : ''), { replace: true });
@@ -85,7 +89,7 @@ export default function MessagesScreens() {
     return () => {
       active = false;
     };
-  }, [otherUid, profile, postId, navigate]);
+  }, [otherUid, myUid, postId, navigate]);
   useEffect(() => {
     if (isChat && uid && chat) void ChatRepository.markRead(id, uid);
   }, [isChat, uid, id, chat, messages]);

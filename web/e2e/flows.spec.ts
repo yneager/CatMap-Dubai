@@ -82,7 +82,11 @@ test('lost photo wizard, Explore/map, detail update, reunited, favourites and se
   await page.getByRole('button', { name: 'Add update', exact: true }).click();
   await page.getByLabel('Note', { exact: true }).fill('Seen near the entrance');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('Seen near the entrance', { exact: true })).toBeVisible();
+  // The update shows at once from the local write; the form closes when the server has it.
+  await expect(
+    page.getByRole('article').getByText('Seen near the entrance', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Note', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Mark as reunited', exact: true }).click();
   // No match to credit: the owner says how it ended (came home on its own), then sees the confirmation.
   await page.locator('.dialog').getByRole('button', { name: 'Mark as reunited', exact: true }).click();

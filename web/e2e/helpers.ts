@@ -174,6 +174,43 @@ export async function promote(a: Account) {
 export async function waitRateLimit(uid: string) {
   await write('users/' + uid, { lastPostAt: null }, ['lastPostAt']);
 }
+/** The HTTP status of reading one document as a signed-in member (rules apply), without opening a browser. */
+export async function readStatusAs(a: Account, path: string) {
+  const signIn = await fetch(
+    `${authBase}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-key`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: a.email, password: a.password, returnSecureToken: true }),
+    },
+  );
+  const { idToken } = (await signIn.json()) as { idToken: string };
+  return (
+    await fetch(`${firestoreBase}/${path}`, { headers: { Authorization: 'Bearer ' + idToken } })
+  ).status;
+}
+/** A member who registered (profile, username, counters) but never opens the app in this test. */
+export async function registered(a: Account) {
+  await write('users/' + a.uid, {
+    username: a.username,
+    displayName: a.username,
+    bio: '',
+    photoId: '',
+    role: 'user',
+    volunteerStatus: 'none',
+    stats: {},
+    points: 0,
+    neighborhoods: [],
+    badges: [],
+    followedCats: [],
+    showStatsPublicly: true,
+    lastPostAt: null,
+    createdAt: Date.now(),
+  });
+  await write('usernames/' + a.username.toLowerCase(), { uid: a.uid });
+  await write('userLimits/' + a.uid, { favorites: 0, blocked: 0, unreadCount: 0 });
+  return a;
+}
 export async function setupUsername(a: Account) {
   await write('usernames/' + a.username, { uid: a.uid, loginEmail: a.email });
 }

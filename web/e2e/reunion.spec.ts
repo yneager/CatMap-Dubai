@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type BrowserContext } from '@playwright/test';
 import { account, login, navigate, write, document, collection, type Account } from './helpers';
 
 // The lost-to-reunited workflow with two real (disposable) accounts and the app's own code: the AI worker's
@@ -83,13 +83,22 @@ function match(
   });
 }
 
+// Signed-in contexts hold emulator connections; WebKit has six per host for the whole browser, so a context left open
+// here makes later tests' sign-ins hang.
+const opened: BrowserContext[] = [];
+test.afterEach(async () => {
+  await Promise.all(opened.splice(0).map((c) => c.close()));
+});
 test('lost report, AI match, review, chat and reunion across two accounts', async ({ browser }) => {
   test.setTimeout(240_000);
   const a = await account(),
     b = await account(),
     c = await account();
-  const pageA = await (await browser.newContext()).newPage();
-  const pageB = await (await browser.newContext()).newPage();
+  const ca = await browser.newContext(),
+    cb = await browser.newContext();
+  opened.push(ca, cb);
+  const pageA = await ca.newPage();
+  const pageB = await cb.newPage();
   await login(pageA, a);
   await login(pageB, b);
   const L = 'L' + a.uid.slice(0, 8),
@@ -137,7 +146,9 @@ test('lost report, AI match, review, chat and reunion across two accounts', asyn
   // The person who saw the cat replies, and confirms from their side.
   await navigate(pageB, '/chat/' + chatId);
   await expect(pageB.locator('.match-message')).toHaveCount(1);
-  await expect(pageB.locator('.chat-messages').getByText('Did you notice a white mark near its left ear?')).toBeVisible();
+  await expect(
+    pageB.locator('.chat-messages').getByText('Did you notice a white mark near its left ear?'),
+  ).toBeVisible();
   await pageB
     .getByLabel('Message', { exact: true })
     .fill('Yes, I noticed that marking. I saw the cat near the park.');

@@ -347,6 +347,9 @@ export default function CommunityMap({
         });
       }, 400);
     };
+    // The camera is known once the style is in, so the first area is asked for then. 'load' alone isn't enough: it
+    // waits for every source to settle, and the pulsing urgent-pin animation can keep that from ever happening.
+    map.on('style.load', viewport);
     map.on('load', viewport);
     map.on('moveend', () => {
       viewport();

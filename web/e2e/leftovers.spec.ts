@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { test, expect, type Page } from '@playwright/test';
-import { account, login, navigate, write, firestoreBase, headers } from './helpers';
+import { account, login, navigate, registered, write, firestoreBase, headers } from './helpers';
 import {
   PostDefaults,
   PostToDoc,
@@ -84,7 +84,8 @@ test('B1: hidden posts become unavailable without deleting matches, then return 
     page.getByText('This post was removed or is no longer available.', { exact: true }),
   ).toBeVisible();
   expect(await missing('matches/' + match)).toBe(false);
-  await expect(page.locator('.snackbar')).not.toContainText(/permission/i);
+  // No snackbar at all is fine too (a negated text check on a missing element fails).
+  await expect(page.locator('.snackbar', { hasText: /permission/i })).toHaveCount(0);
   await write('posts/' + lost, { hidden: false }, ['hidden']);
   await navigate(page, '/post/' + sighting);
   await expect(page.locator('.match-card')).toHaveCount(1);
@@ -152,6 +153,8 @@ test('B7: deleted favourites are pruned while hidden favourites survive', async 
   await seedPost(hidden, owner.uid, 'lost', true);
   for (const id of [gone, hidden])
     await write(`users/${viewer.uid}/favorites/${id}`, { postId: id, savedAt: Date.now() });
+  // Saved posts are counted in userLimits (capacity slots); seeded ones need the matching count, as the app keeps it.
+  await write(`userLimits/${viewer.uid}`, { favorites: 2, blocked: 0, unreadCount: 0 });
   await navigate(page, '/favorites');
   await expect.poll(() => missing(`users/${viewer.uid}/favorites/${gone}`)).toBe(true);
   expect(await missing(`users/${viewer.uid}/favorites/${hidden}`)).toBe(false);
@@ -161,7 +164,7 @@ test('B8: deleting latest text/photo restores the preceding preview and removes 
   page,
 }) => {
   const sender = await account(),
-    other = await account();
+    other = await registered(await account());
   await login(page, sender);
   const result = await page.evaluate(async (otherUid) => {
     const { ChatRepository: chats } = await import(

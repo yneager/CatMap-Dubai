@@ -26,9 +26,6 @@ class ChatRepository(
 
     fun chatsQuery(uid: String): Query = chats.whereArrayContains("members", uid).orderBy("lastAt", Query.Direction.DESCENDING)
 
-    fun chatsFor(uid: String): Flow<List<Chat>> =
-        chatsQuery(uid).limit(50).listFlow<Chat>().map { l -> l.sortedByDescending { it.lastAt } }
-
     fun chatFlow(id: String): Flow<Chat?> = chats.document(id).objectFlow()
 
     /** The newest [MESSAGE_WINDOW] messages, live; older ones come from [olderMessages]. */
@@ -51,14 +48,20 @@ class ChatRepository(
         if (!exists) {
             val other = users.profile(otherUid)
             val members = listOf(me.uid, otherUid).sorted()
-            ref.set(
-                Chat(
-                    members = members,
-                    names = mapOf(me.uid to me.username, otherUid to (other?.username ?: "")),
-                    photos = mapOf(me.uid to me.photoId, otherUid to (other?.photoId ?: "")),
-                    lastAt = now(), unread = members.associateWith { 0L },
-                ),
-            ).await()
+            try {
+                ref.set(
+                    Chat(
+                        members = members,
+                        names = mapOf(me.uid to me.username, otherUid to (other?.username ?: "")),
+                        photos = mapOf(me.uid to me.photoId, otherUid to (other?.photoId ?: "")),
+                        lastAt = now(), unread = members.associateWith { 0L },
+                    ),
+                ).await()
+            } catch (e: Exception) {
+                // Two opens at once (or the other person opening it too): the rules refuse the second create as an
+                // overwrite, and the chat is there to use.
+                if (e is kotlinx.coroutines.CancellationException || !ref.get().await().exists()) throw e
+            }
         }
         return id
     }
