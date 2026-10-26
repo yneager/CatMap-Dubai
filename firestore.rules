@@ -10,8 +10,10 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function uid() { return request.auth.uid; }
     // Suspended accounts (set by an admin) can still read, but every write that needs verified() is refused.
-    function verified() { return signedIn() && request.auth.token.email_verified == true && exists(userPath()) && !suspended()
-      && !exists(/databases/$(database)/documents/accountDeletions/$(uid())); }
+    // A missing profile makes get() fail, which refuses the write like exists() would, for less of the budget.
+    function verified() { return signedIn() && request.auth.token.email_verified == true
+      && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('suspended', false) != true
+      && !exists(/databases/$(database)/documents/accountDeletions/$(request.auth.uid)); }
     function suspended() { return exists(userPath()) && get(userPath()).data.get('suspended', false) == true; }
     function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
     function role() { return exists(userPath()) ? get(userPath()).data.role : 'user'; }
@@ -56,8 +58,8 @@ service cloud.firestore {
     // The client writes users/{uid}.lastPostAt = serverTimestamp() in the same batch as the post.
     // That proves the timestamp is fresh, and the previous value enforces a gap between posts.
     function rateLimited() {
-      let before = get(userPath()).data;
-      let after = getAfter(userPath()).data;
+      let before = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let after = getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       return after.lastPostAt == request.time
         && (before.get('lastPostAt', null) == null || request.time > before.lastPostAt + duration.value(10, 's'));
     }
@@ -206,7 +208,7 @@ service cloud.firestore {
           && d.lat is number && d.lat >= -90 && d.lat <= 90 && d.lng is number && d.lng >= -180 && d.lng <= 180
           && d.radiusKm is number && d.radiusKm > 0 && d.radiusKm <= 100 && notFuture(d.updatedAt))
         || (doc == 'push' && d.keys().hasOnly(['tokens']) && d.tokens is list && d.tokens.size() <= 10
-          && d.tokens.join(',').size() <= 5120 && d.tokens.join(',').matches('[A-Za-z0-9_:.,-]{1,5120}'));
+          && d.tokens.join(',').size() <= 5120 && d.tokens.join(',').matches('[A-Za-z0-9_:.,-]+'));
     }
 
     match /users/{userId} {
@@ -429,14 +431,6 @@ service cloud.firestore {
         || n.type in ['moderation','rescue_volunteer','volunteer_decision','maintenance_update'] && isMod();
     }
 
-    function senderMaySend(t) {
-      return t in ['message', 'adoption_request', 'adoption_decision', 'booking_request', 'booking_update', 'review',
-                   'post_update', 'lost_nearby', 'followed_cat', 'match_found', 'match_reporter', 'match_info',
-                   'match_reunited', 'rescue_moderation']
-        || (t == 'rescue_update' && isVolunteer())
-        || (t in ['moderation', 'rescue_volunteer', 'volunteer_decision', 'maintenance_update'] && isMod());
-    }
-
     // Username -> uid, so names stay unique. Readable before sign-in for the registration check.
     // The app may only write `uid`; `loginEmail` (username sign-in for demo accounts) is set by admin tooling.
     match /usernames/{name} {
@@ -450,14 +444,17 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // Every aggregate step names the source created/deleted in this same atomic write.
-    function sourceStep(collectionPath, parentField, parentId, ownerField, countField) {
+    // Every aggregate step names the source created/deleted in this same atomic write. `ch` is changed().
+    // One more: the source is created in this write by this person. Each source (sighting, check-in, post update) has
+    // a single create rule that already requires a verified, rate-limited writer and names this counter, so those
+    // checks aren't repeated here: the budget of 1,000 expressions is shared by every document in the batch.
+    function sourceStep(collectionPath, parentField, parentId, ownerField, countField, ch) {
       let source = path('/databases/' + database + '/documents/' + collectionPath + '/' + incoming().counterSourceId);
       let before = resource.data.get(countField, 0);
       let after = incoming()[countField];
-      return (!changed().hasAny(['updatedAt']) || notFuture(incoming().updatedAt))
+      return (!('updatedAt' in ch) || notFuture(incoming().updatedAt))
         && incoming().counterSourceId is string && incoming().counterSourceId.matches('[A-Za-z0-9_.-]{1,128}') && (
-        (verified() && after == before + 1 && rateLimited() && !exists(source)
+        (after == before + 1 && !exists(source)
           && getAfter(source).data[parentField] == parentId && getAfter(source).data[ownerField] == uid())
         || (signedIn() && before >= 0 && after == (before > 0 ? before - 1 : 0)
           && exists(source) && !existsAfter(source) && get(source).data[parentField] == parentId
@@ -470,12 +467,12 @@ service cloud.firestore {
               'coverPhotoId', 'contributors', 'followers', 'aliases', 'tnrStatus', 'healthStatus',
               'features', 'geoCells', 'searchTerms', 'updatedAt'];
     }
-    // Only volunteers may mark a cat as verified neutered.
+    // Only volunteers may mark a cat as verified neutered (the role lookup comes last: it is the costly part).
     function tnrAllowed() {
-      return isVolunteer()
-        || (resource.data.tnrVerified == true
+      return (resource.data.tnrVerified == true
             ? incoming().tnrStatus == resource.data.tnrStatus
-            : incoming().tnrStatus != 'neutered_verified');
+            : incoming().tnrStatus != 'neutered_verified')
+        || isVolunteer();
     }
 
     function catTextOk(d) {
@@ -500,8 +497,10 @@ service cloud.firestore {
         && incoming()[k].toSet().difference(resource.data.get(k, []).toSet()).hasOnly([uid()])
         && resource.data.get(k, []).toSet().difference(incoming()[k].toSet()).hasOnly([uid()]));
     }
+    // The new sighting itself is checked by sourceStep (created in this write, by this person); its own create rule
+    // stamps the rate limit.
     function newSightingOfCatOk(ch, before, d) {
-      return d.sightingCount == before.get('sightingCount', 0) + 1 && rateLimited()
+      return d.sightingCount == before.get('sightingCount', 0) + 1
         && addedOnly(ch, 'photoIds', 6) && addedOnly(ch, 'neighborhoods', 1)
         && (!('contributors' in ch) || (addedOnly(ch, 'contributors', 1)
             && d.contributors.toSet().difference(before.get('contributors', []).toSet()).hasOnly([uid()])))
@@ -509,11 +508,21 @@ service cloud.firestore {
         && (!ch.hasAny(['lat', 'lng', 'neighborhood', 'lastSeen'])
             || (notFuture(d.lastSeen) && d.lastSeen >= before.get('lastSeen', 0)));
     }
-    function communityCatUpdateOk() {
+    // Only the fields a community update may change are checked again: the rest of the profile is unchanged and was
+    // checked when it was written (catTextOk on the whole profile doesn't fit the budget of a sighting batch).
+    function communityCatFieldsOk(ch, d) {
+      return (!('photoIds' in ch) || (d.photoIds.size() <= 1000 && communityPhotos(d.photoIds)))
+        && (!('coverPhotoId' in ch) || (d.coverPhotoId.size() <= 128 && communityPhoto(d.coverPhotoId)))
+        && (!('neighborhood' in ch) || (d.neighborhood is string && d.neighborhood.size() <= 80))
+        && (!('neighborhoods' in ch) || d.neighborhoods.size() <= 200)
+        && (!('aliases' in ch) || d.aliases.size() <= 50)
+        && (!('features' in ch) || (d.features is list && d.features.size() <= 200))
+        && (!('geoCells' in ch) || geoCellsOk(d)) && (!('searchTerms' in ch) || searchTermsOk(d));
+    }
+    function communityCatUpdateOk(ch) {
       let before = resource.data;
       let d = incoming();
-      let ch = changed();
-      return ch.hasOnly(communityCatFields()) && tnrAllowed() && catTextOk(d)
+      return ch.hasOnly(communityCatFields()) && communityCatFieldsOk(ch, d) && tnrAllowed()
         && onlySelfAddedOrRemoved(ch, 'followers')
         && addedOnly(ch, 'aliases', 1)
         && (
@@ -528,15 +537,15 @@ service cloud.firestore {
     }
 
     function ownedImage(id) { return get(/databases/$(database)/documents/images/$(id)).data.ownerId == uid(); }
-    function selfDetachCat() {
+    function selfDetachCat(ch) {
       let d = incoming();
       let removed = d.get('removedPhotoIds', []);
-      return signedIn() && onlyChanging(['photoIds','coverPhotoId','removedPhotoIds','contributors','followers'])
-        && onlySelfAddedOrRemoved(changed(), 'contributors') && onlySelfAddedOrRemoved(changed(), 'followers')
+      return signedIn() && ch.hasOnly(['photoIds','coverPhotoId','removedPhotoIds','contributors','followers'])
+        && onlySelfAddedOrRemoved(ch, 'contributors') && onlySelfAddedOrRemoved(ch, 'followers')
         && d.get('contributors', []).toSet().difference(resource.data.get('contributors', []).toSet()).size() == 0
         && d.get('followers', []).toSet().difference(resource.data.get('followers', []).toSet()).size() == 0
         && removed is list && removed.size() <= 3
-        && (!changed().hasAny(['photoIds','coverPhotoId','removedPhotoIds']) || (
+        && (!ch.hasAny(['photoIds','coverPhotoId','removedPhotoIds']) || (
           d.photoIds.toSet() == resource.data.get('photoIds', []).toSet().difference(removed.toSet())
           && resource.data.get('photoIds', []).toSet().hasAll(removed.toSet())
           && (removed.size() < 1 || ownedImage(removed[0])) && (removed.size() < 2 || ownedImage(removed[1]))
@@ -560,20 +569,24 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/sightings/$(incoming().counterSourceId)).data.userId == uid()
         && notFuture(incoming().get('createdAt', 0))
         && catTextOk(incoming());
-      allow update: if isMod() || selfDetachCat()
-        || (verified() && resource.data.createdBy == uid()
-            && notChanging(['createdBy', 'createdByName', 'createdAt', 'hidden', 'mergedInto', 'tnrVerified','sightingCount','counterSourceId'])
+      allow update: if catUpdateOk(catId, changed());
+      allow delete: if isMod();
+    }
+    // The cat's diff is worked out once (`ch`), and each branch starts with its cheapest test.
+    function catUpdateOk(catId, ch) {
+      return (resource.data.createdBy == uid() && verified()
+            && !ch.hasAny(['createdBy', 'createdByName', 'createdAt', 'hidden', 'mergedInto', 'tnrVerified','sightingCount','counterSourceId'])
             && tnrAllowed() && catTextOk(incoming()))
+        || (verified() && communityCatUpdateOk(ch)
+          && (!ch.hasAny(['sightingCount','counterSourceId']) || sourceStep('sightings', 'catId', catId, 'userId', 'sightingCount', ch)))
+        || (ch.hasOnly(['sightingCount','counterSourceId','updatedAt']) && signedIn()
+          && sourceStep('sightings','catId',catId,'userId','sightingCount', ch))
         // Volunteers confirm neutering (TNR) on top of what any member may do.
-        || (isVolunteer() && onlyChanging(['tnrStatus', 'tnrVerified', 'updatedAt']))
-        || (verified() && communityCatUpdateOk()
-          && (!changed().hasAny(['sightingCount','counterSourceId']) || sourceStep('sightings', 'catId', catId, 'userId', 'sightingCount')))
-        || (signedIn() && onlyChanging(['sightingCount','counterSourceId','updatedAt'])
-          && sourceStep('sightings','catId',catId,'userId','sightingCount'))
+        || (ch.hasOnly(['tnrStatus', 'tnrVerified', 'updatedAt']) && isVolunteer())
+        || isMod() || selfDetachCat(ch)
         // The PC worker fills in the map-area codes and search words of profiles written by older app versions
         // (cat-server backfill).
-        || (aiWorker() && onlyChanging(['geoCells', 'searchTerms']) && geoCellsOk(incoming()) && searchTermsOk(incoming()));
-      allow delete: if isMod();
+        || (aiWorker() && ch.hasOnly(['geoCells', 'searchTerms']) && geoCellsOk(incoming()) && searchTermsOk(incoming()));
     }
 
     // ---------- sightings ----------
@@ -680,10 +693,12 @@ service cloud.firestore {
       allow read: if member();
       allow create, delete: if isAdmin();
       // A check-in counts exactly one more visit; deleting one (yours, or during account deletion) one fewer.
-      allow update: if isAdmin()
-        || (signedIn() && onlyChanging(['checkinCount', 'lastCheckinAt', 'lastCheckinBy', 'counterSourceId'])
-          && sourceStep('checkins', 'stationId', stationId, 'userId', 'checkinCount')
-          && notFuture(incoming().get('lastCheckinAt', 0)) && optStr(incoming(), 'lastCheckinBy', 40));
+      allow update: if stationCheckinStep(stationId, changed()) || isAdmin();
+    }
+    function stationCheckinStep(stationId, ch) {
+      return signedIn() && ch.hasOnly(['checkinCount', 'lastCheckinAt', 'lastCheckinBy', 'counterSourceId'])
+        && sourceStep('checkins', 'stationId', stationId, 'userId', 'checkinCount', ch)
+        && notFuture(incoming().get('lastCheckinAt', 0)) && optStr(incoming(), 'lastCheckinBy', 40);
     }
 
     match /checkins/{checkinId} {
@@ -754,15 +769,16 @@ service cloud.firestore {
     }
 
     // ---------- animal posts: lost, found, spotted, needs help, street, adoption, other ----------
-    // Each of the 27 numbers is in [0, 1]: |x - 0.5| <= 0.5 is one comparison instead of two (the rules budget), and it
-    // still fails for anything that isn't a number.
-    function fingerprintPart0(f) { return math.abs(f[0] - 0.5) <= 0.5 && math.abs(f[1] - 0.5) <= 0.5 && math.abs(f[2] - 0.5) <= 0.5 && math.abs(f[3] - 0.5) <= 0.5 && math.abs(f[4] - 0.5) <= 0.5 && math.abs(f[5] - 0.5) <= 0.5 && math.abs(f[6] - 0.5) <= 0.5 && math.abs(f[7] - 0.5) <= 0.5; }
-    function fingerprintPart1(f) { return math.abs(f[8] - 0.5) <= 0.5 && math.abs(f[9] - 0.5) <= 0.5 && math.abs(f[10] - 0.5) <= 0.5 && math.abs(f[11] - 0.5) <= 0.5 && math.abs(f[12] - 0.5) <= 0.5 && math.abs(f[13] - 0.5) <= 0.5 && math.abs(f[14] - 0.5) <= 0.5 && math.abs(f[15] - 0.5) <= 0.5; }
-    function fingerprintPart2(f) { return math.abs(f[16] - 0.5) <= 0.5 && math.abs(f[17] - 0.5) <= 0.5 && math.abs(f[18] - 0.5) <= 0.5 && math.abs(f[19] - 0.5) <= 0.5 && math.abs(f[20] - 0.5) <= 0.5 && math.abs(f[21] - 0.5) <= 0.5 && math.abs(f[22] - 0.5) <= 0.5 && math.abs(f[23] - 0.5) <= 0.5; }
-    function fingerprintPart3(f) { return math.abs(f[24] - 0.5) <= 0.5 && math.abs(f[25] - 0.5) <= 0.5 && math.abs(f[26] - 0.5) <= 0.5; }
+    // 27 numbers or none. Adding them up fails for anything that isn't a number, which is what keeps every phone able
+    // to read the feed. The range of each number ([0, 1]) is checked by every reader instead (PostAppearance.valid on
+    // Android and the web, fingerprint.valid on the PC): an out-of-range fingerprint only turns off colour matching
+    // for its own post. Checking each number here took about a fifth of the rules budget of a post batch.
     function validFingerprint(f) {
-      return f is list && (f.size() == 0 || (f.size() == 27 && fingerprintPart0(f) && fingerprintPart1(f) && fingerprintPart2(f) && fingerprintPart3(f)));
+      return f is list && (f.size() == 0 || (f.size() == 27 && fingerprintSumOk(f[0] + f[1] + f[2] + f[3] + f[4] + f[5] + f[6] + f[7] + f[8]
+        + f[9] + f[10] + f[11] + f[12] + f[13] + f[14] + f[15] + f[16] + f[17] + f[18] + f[19] + f[20] + f[21] + f[22] + f[23] + f[24]
+        + f[25] + f[26])));
     }
+    function fingerprintSumOk(sum) { return sum is number && sum >= 0 && sum <= 27; }
 
     // Types and size limits. Types matter: the app converts a whole feed at once, so one post with, say, a number
     // where text belongs would break every phone's map. To stay inside the rules' budget of 1,000 expressions per
@@ -773,21 +789,47 @@ service cloud.firestore {
       return ('' + d.ownerName + d.ownerPhotoId + d.name + d.description + d.color + d.breed + d.features + d.sex + d.ageGroup
               + d.videoPath + d.neighborhood + d.contactMethod + d.contactPhone + d.contactEmail + d.health).size() <= 4500
         && d.ownerName.size() <= 40 && d.features.size() <= 600 && d.health.size() <= 600
-        && communityPhotos(d.photoIds) && communityPhoto(d.get('ownerPhotoId', '')) && d.photoIds.join(',').size() <= 800
+        && d.photoIds is list && photoListOk(d.photoIds.join(',')) && communityPhoto(d.get('ownerPhotoId', ''))
         && d.keywords is list && d.keywords.size() <= 100 && d.keywords.join(' ').size() <= 4000
         && (d.lat + d.lng) is number && d.lastSeenAt is int && d.updatesCount is int
         && [d.approximate, d.vaccinated, d.neutered, d.hidden].hasOnly([true, false]);
     }
-    // On an update only what changed is checked again: a full check with a 27-number fingerprint uses most of the
-    // rules' budget of 1,000 expressions per document.
-    // BUDGET: a post edit with a new fingerprint has only about 100 expressions to spare (measured 20 Oct 2026). Any
-    // check added here must keep "largest possible real post fits the rules budget" and "owner edits the fingerprint
-    // of the largest post" passing in tools/rulestest/test.mjs; a request over 1,000 expressions is simply refused.
-    function validPost() { return validPostWith(resource == null ? [] : changed()); }
-    // `ch` is what an update changes, worked out once by the caller (each diff of a 40-field post is costly).
+    // Photo ids joined once: at most 800 characters, and no private chat photo (`c_...`).
+    function photoListOk(joined) { return joined.size() <= 800 && !joined.matches('(^|.*,)(c_[^,]*)(,.*|$)'); }
+    function postKeys() {
+      return ['repairSourceId', 'counterSourceId', 'ownerId', 'ownerName', 'ownerPhotoId', 'animalType', 'category', 'status', 'name', 'description', 'color', 'breed', 'features', 'sex', 'ageGroup', 'photoIds', 'videoPath', 'lat', 'lng', 'approximate', 'areaRadiusM', 'neighborhood', 'lastSeenAt', 'reward', 'contactMethod', 'contactPhone', 'contactEmail', 'adoptionStatus', 'health', 'vaccinated', 'neutered', 'updatesCount', 'hidden', 'keywords', 'createdAt', 'updatedAt', 'resolvedAt', 'lastActivityAt', 'fingerprint', 'microchip', 'resolution', 'resolvedMatchId', 'geoCells', 'searchTerms'];
+    }
+    // BUDGET: the rules may evaluate at most 1,000 expressions per request, and a batch (a new post plus the author's
+    // stats) shares them. Measure with tools/rulestest/budget.mjs after any change to a busy rule (26 Oct 2026, spare
+    // in the tool's units: largest new post 72, its edits 64-84, sightings on someone else's cat 92-112, check-in 264).
+    // A new post: everything is checked, under the author's real username (never a made-up name), open, unresolved
+    // and with its counters at zero.
+    function newPostOk(postId, d) {
+      let latest = request.time.toMillis() + 3600000;
+      return verified()
+        && d.ownerId == request.auth.uid && !deletingPost(postId)
+        && d.status == 'open' && d.get('resolution', '') == '' && d.get('resolvedMatchId', '') == ''
+        && d.ownerName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username
+        && d.hidden == false && d.updatesCount == 0 && d.get('counterSourceId', '') == ''
+        && d.category in ['lost', 'found', 'spotted', 'needs_help', 'street', 'adoption', 'other']
+        && d.animalType in ['cat', 'dog', 'bird', 'rabbit', 'other']
+        && d.adoptionStatus in ['available', 'pending', 'adopted']
+        && d.description.size() <= 2000 && d.name.size() <= 60
+        && d.photoIds.size() <= 6
+        && d.reward is int && d.reward >= 0 && d.reward < 1000000
+        && d.areaRadiusM is int && d.areaRadiusM >= 0 && d.areaRadiusM <= 5000
+        && d.get('lastActivityAt', 0) is int && d.get('lastActivityAt', 0) >= 0 && d.get('lastActivityAt', 0) <= latest
+        && d.get('microchip', 'unknown') in ['yes','no','unknown']
+        && validFingerprint(d.get('fingerprint', []))
+        && geoCellsOk(d) && searchTermsOk(d) && postFieldsOk(d)
+        // No post can claim to be newer than now (that would pin it to the top of every feed).
+        && d.createdAt is int && d.createdAt <= latest && d.updatedAt is int && d.updatedAt <= latest
+        && d.keys().hasOnly(postKeys())
+        && rateLimited();
+    }
+    // An edit: only what changed is checked again. `ch` is what the update changes, worked out once by the caller.
     function validPostWith(ch) {
       let d = incoming();
-      let creating = resource == null;
       let latest = request.time.toMillis() + 3600000;
       return d.category in ['lost', 'found', 'spotted', 'needs_help', 'street', 'adoption', 'other']
         && d.animalType in ['cat', 'dog', 'bird', 'rabbit', 'other']
@@ -799,25 +841,27 @@ service cloud.firestore {
         && d.areaRadiusM is int && d.areaRadiusM >= 0 && d.areaRadiusM <= 5000
         && d.get('lastActivityAt', 0) is int && d.get('lastActivityAt', 0) >= 0
         && d.get('microchip', 'unknown') in ['yes','no','unknown']
-        && ((!creating && !('fingerprint' in ch)) || validFingerprint(d.get('fingerprint', [])))
+        && (!('fingerprint' in ch) || validFingerprint(d.get('fingerprint', [])))
         // How a lost/found report was closed: through a CatMap match, the animal came home by itself, or other.
         && d.get('resolution', '') in ['', 'catmap', 'home', 'other']
         && d.get('resolvedMatchId', '') is string && d.get('resolvedMatchId', '').size() <= 300
-        && ((!creating && !('geoCells' in ch)) || geoCellsOk(d))
-        && ((!creating && !('searchTerms' in ch)) || searchTermsOk(d))
-        && ((!creating && !ch.hasAny(['ownerId', 'ownerName', 'ownerPhotoId', 'name', 'description', 'color', 'breed', 'features', 'sex', 'ageGroup',
+        && (!('geoCells' in ch) || geoCellsOk(d))
+        && (!('searchTerms' in ch) || searchTermsOk(d))
+        && (!ch.hasAny(['ownerId', 'ownerName', 'ownerPhotoId', 'name', 'description', 'color', 'breed', 'features', 'sex', 'ageGroup',
                         'videoPath', 'neighborhood', 'contactMethod', 'contactPhone', 'contactEmail', 'health', 'photoIds', 'keywords',
-                        'lat', 'lng', 'approximate', 'lastSeenAt', 'vaccinated', 'neutered', 'hidden', 'updatesCount']))
+                        'lat', 'lng', 'approximate', 'lastSeenAt', 'vaccinated', 'neutered', 'hidden', 'updatesCount'])
             || postFieldsOk(d))
         // No post can claim to be newer than now (that would pin it to the top of every feed).
-        && ((!creating && !ch.hasAny(['createdAt', 'lastActivityAt', 'updatedAt']))
+        && (!ch.hasAny(['createdAt', 'lastActivityAt', 'updatedAt'])
             || (d.createdAt is int && d.createdAt <= latest && d.get('lastActivityAt', 0) <= latest
                 && d.updatedAt is int && d.updatedAt <= latest))
-        && d.keys().hasOnly(['repairSourceId', 'counterSourceId', 'ownerId', 'ownerName', 'ownerPhotoId', 'animalType', 'category', 'status', 'name', 'description', 'color', 'breed', 'features', 'sex', 'ageGroup', 'photoIds', 'videoPath', 'lat', 'lng', 'approximate', 'areaRadiusM', 'neighborhood', 'lastSeenAt', 'reward', 'contactMethod', 'contactPhone', 'contactEmail', 'adoptionStatus', 'health', 'vaccinated', 'neutered', 'updatesCount', 'hidden', 'keywords', 'createdAt', 'updatedAt', 'resolvedAt', 'lastActivityAt', 'fingerprint', 'microchip', 'resolution', 'resolvedMatchId', 'geoCells', 'searchTerms']);
+        && d.keys().hasOnly(postKeys());
     }
 
-    function ownerPostUpdateOk(ch) {
-      return !ch.hasAny(['ownerId', 'ownerName', 'hidden', 'createdAt', 'updatesCount', 'counterSourceId','repairSourceId']) && validPostWith(ch);
+    // `ch` is changed(), worked out once by the caller: diffing a 40-field post twice doesn't fit the budget.
+    function ownerPostUpdateOk(postId, ch) {
+      return !ch.hasAny(['ownerId', 'ownerName', 'hidden', 'createdAt', 'updatesCount', 'counterSourceId','repairSourceId'])
+        && validPostWith(ch) && reunionSourceOk(postId, ch);
     }
     function reunionSourceOk(postId, ch) {
       let d = incoming();
@@ -826,6 +870,24 @@ service cloud.firestore {
           && getAfter(/databases/$(database)/documents/matches/$(d.resolvedMatchId)).data.lostPostId == postId
           && getAfter(/databases/$(database)/documents/matches/$(d.resolvedMatchId)).data.lostOwnerId == uid()
           && getAfter(/databases/$(database)/documents/matches/$(d.resolvedMatchId)).data.ownerState == 'reunited');
+    }
+
+    // The post's diff is worked out once (`ch`: a 40-field diff is costly), and the owner's edit, by far the most
+    // common update, is tried first.
+    function postUpdateOk(postId, ch) {
+      return (resource.data.ownerId == uid() && verified() && ownerPostUpdateOk(postId, ch))
+        || (ch.hasOnly(['updatesCount', 'updatedAt', 'counterSourceId']) && signedIn()
+            && sourceStep('posts/' + postId + '/updates', 'postId', postId, 'byUid', 'updatesCount', ch))
+        || (resource.data.ownerId == uid() && ch.hasOnly(['hidden']) && incoming().hidden == true
+          && existsAfter(/databases/$(database)/documents/postDeletions/$(postId)))
+        || (maintenanceWorker() && ch.hasOnly(['updatesCount','repairSourceId'])
+          && incoming().updatesCount is int && incoming().updatesCount >= 0
+          && get(/databases/$(database)/documents/updateRepairs/$(incoming().repairSourceId)).data.postId == postId
+          && !existsAfter(/databases/$(database)/documents/updateRepairs/$(incoming().repairSourceId)))
+        || (isMod() && validPostWith(ch))
+        // The PC worker fills in the map-area codes and search words of posts written by older app versions
+        // (recovery.py, backfill).
+        || (aiWorker() && ch.hasOnly(['geoCells', 'searchTerms']) && geoCellsOk(incoming()) && searchTermsOk(incoming()));
     }
 
     function deletingPost(id) { return exists(/databases/$(database)/documents/postDeletions/$(id)); }
@@ -895,28 +957,8 @@ service cloud.firestore {
       // Hidden posts stay visible to their author and to moderators only.
       allow get: if member() && (resource == null || resource.data.hidden == false || resource.data.ownerId == uid() || isMod() || maintenanceWorker());
       allow list: if member() && (resource.data.hidden == false || resource.data.ownerId == uid() || isMod() || maintenanceWorker());
-      allow create: if verified()
-        && incoming().ownerId == uid() && !deletingPost(postId)
-        && incoming().status == 'open' && incoming().get('resolution', '') == '' && incoming().get('resolvedMatchId', '') == ''
-        // Posts show the author's real username, never a made-up name.
-        && incoming().ownerName == get(userPath()).data.username
-        && incoming().hidden == false
-        && incoming().updatesCount == 0 && incoming().get('counterSourceId', '') == ''
-        && validPost()
-        && rateLimited();
-      allow update: if (maintenanceWorker() && onlyChanging(['updatesCount','repairSourceId'])
-          && incoming().updatesCount is int && incoming().updatesCount >= 0
-          && get(/databases/$(database)/documents/updateRepairs/$(incoming().repairSourceId)).data.postId == postId
-          && !existsAfter(/databases/$(database)/documents/updateRepairs/$(incoming().repairSourceId)))
-        || (isMod() && validPost())
-        || (signedIn() && resource.data.ownerId == uid() && onlyChanging(['hidden']) && incoming().hidden == true
-          && existsAfter(/databases/$(database)/documents/postDeletions/$(postId)))
-        || (verified() && resource.data.ownerId == uid() && ownerPostUpdateOk(changed()) && reunionSourceOk(postId, changed()))
-        || (signedIn() && onlyChanging(['updatesCount', 'updatedAt', 'counterSourceId'])
-            && sourceStep('posts/' + postId + '/updates', 'postId', postId, 'byUid', 'updatesCount'))
-        // The PC worker fills in the map-area codes and search words of posts written by older app versions
-        // (recovery.py, backfill).
-        || (aiWorker() && onlyChanging(['geoCells', 'searchTerms']) && geoCellsOk(incoming()) && searchTermsOk(incoming()));
+      allow create: if newPostOk(postId, request.resource.data);
+      allow update: if postUpdateOk(postId, changed());
       allow delete: if signedIn() && (resource.data.ownerId == uid() || isMod() || (maintenanceWorker() && deletingPost(postId)));
 
       match /updates/{updateId} {
@@ -1194,8 +1236,10 @@ service cloud.firestore {
     match /config/aiWorker {
       allow read: if member();
       allow write: if aiWorker()
-        && request.resource.data.keys().hasOnly(['online', 'lastSeen', 'model', 'provider', 'same', 'maybe'])
-        && request.resource.data.online is bool && request.resource.data.lastSeen is timestamp;
+        && request.resource.data.keys().hasOnly(['online', 'lastSeen', 'model', 'provider', 'same', 'maybe', 'capabilities'])
+        && request.resource.data.online is bool && request.resource.data.lastSeen is timestamp
+        // Job kinds this PC answers beyond the original three (photo review: 'review-v1'); apps check before sending.
+        && request.resource.data.get('capabilities', []) is list && request.resource.data.get('capabilities', []).size() <= 8;
     }
 
     // One job per user (document id = uid): crops of a new street animal and of nearby posts, photos to embed for
@@ -1206,7 +1250,10 @@ service cloud.firestore {
       allow create, update: if verified() && uid() == ownerId
         && incoming().keys().hasOnly(['uid', 'kind', 'status', 'query', 'images', 'ids', 'labels', 'photos', 'requestId', 'createdAt'])
         && incoming().uid == ownerId && incoming().status == 'pending'
-        && incoming().kind in ['compare', 'embed', 'check']
+        && incoming().kind in ['compare', 'embed', 'check', 'review']
+        // Photo review (docs/MATCHING_REVIEW_V1.md): one photo and 1-8 cat ids; the PC reads the cats' photos itself.
+        && (incoming().kind != 'review' || (incoming().images.size() == 0 && incoming().get('photos', []).size() == 0
+          && incoming().ids.size() >= 1 && incoming().ids.size() <= 8 && incoming().get('query', null) is bytes))
         && incoming().images is list && incoming().images.size() <= 16
         && incoming().ids is list && incoming().ids.size() <= 16
         && incoming().get('labels', []).size() <= 16
@@ -1217,7 +1264,7 @@ service cloud.firestore {
         // At most one new job a second per person.
         && (resource == null || request.time > resource.data.createdAt + duration.value(1, 's'));
       allow update: if aiWorker()
-        && changed().hasOnly(['status', 'results', 'embeddings', 'classification', 'model', 'provider', 'ms', 'error', 'doneAt', 'answeredRequestId'])
+        && changed().hasOnly(['status', 'results', 'embeddings', 'classification', 'review', 'model', 'provider', 'ms', 'error', 'doneAt', 'answeredRequestId'])
         && incoming().status in ['done', 'error'];
       // Phase 9: the phone removes its job once answered, or after its 15 s wait. Deleting a pending job sooner would
       // let a script skip the one-second gap above by deleting and re-creating (v0.0.9 never deletes).

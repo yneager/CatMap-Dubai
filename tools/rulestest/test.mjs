@@ -28,7 +28,8 @@ await env.clearFirestore();
 let passed = 0, failed = 0;
 async function check(name, promise) {
   try { await promise; passed++; console.log("  ok  ", name); }
-  catch (e) { failed++; console.log("  FAIL", name, "-", e.message.split("\n")[0]); }
+  // RULES_DEBUG=1 prints the emulator's whole reason (rule lines, "false for ... @ L123").
+  catch (e) { failed++; console.log("  FAIL", name, "-", process.env.RULES_DEBUG ? e.message.replace(/\s+/g, " ").slice(0, 1500) : e.message.split("\n")[0]); }
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const now = () => Date.now();
@@ -174,6 +175,23 @@ console.log("AI server jobs");
   await check("unknown job kind rejected", assertFails(setDoc(doc(ctx("frank"), "aiJobs", "frank"), job("frank", { kind: "classify" }))));
   await check("worker writes the photo classification", assertSucceeds(updateDoc(doc(W, "aiJobs", "dave"), { status: "done", classification: [{ kind: "object", animalType: "", phrase: "a coffee cup", score: 0.99 }], results: [], model: "m", provider: "cpu", ms: 5, doneAt: serverTimestamp(), answeredRequestId: "r1" })));
   await check("member cannot fake a classification", assertFails(updateDoc(doc(ctx("dave"), "aiJobs", "dave"), { status: "done", classification: [{ kind: "animal" }] })));
+  // Photo review (docs/MATCHING_REVIEW_V1.md): one photo plus 1-8 cat ids; the PC reads the cats' photos itself.
+  for (const actor of ['gail', 'hugo']) await register(actor);
+  const review = (uid, extra = {}) => job(uid, { kind: "review", images: [], photos: [], ids: ["cat1", "cat2"], labels: ["Tom", "Ash"], ...extra });
+  await check("member creates a photo review job", assertSucceeds(setDoc(doc(ctx("gail"), "aiJobs", "gail"), review("gail"))));
+  await check("photo review can't carry other photos", assertFails(setDoc(doc(ctx("hugo"), "aiJobs", "hugo"), review("hugo", { images: photos(1) }))));
+  await check("photo review can't carry post photos", assertFails(setDoc(doc(ctx("hugo"), "aiJobs", "hugo"), review("hugo", { photos: photos(1) }))));
+  await check("photo review is limited to 8 cats", assertFails(setDoc(doc(ctx("hugo"), "aiJobs", "hugo"), review("hugo", { ids: Array.from({ length: 9 }, (_, i) => `c${i}`) }))));
+  await check("photo review needs at least one cat", assertFails(setDoc(doc(ctx("hugo"), "aiJobs", "hugo"), review("hugo", { ids: [] }))));
+  const noQuery = review("hugo");
+  delete noQuery.query;
+  await check("photo review needs its photo", assertFails(setDoc(doc(ctx("hugo"), "aiJobs", "hugo"), noQuery)));
+  await check("photo review photo is size-limited", assertFails(setDoc(doc(ctx("hugo"), "aiJobs", "hugo"), review("hugo", { query: Bytes.fromUint8Array(new Uint8Array(160000)) }))));
+  await check("worker writes the photo review", assertSucceeds(updateDoc(doc(W, "aiJobs", "gail"), { status: "done", review: { protocol: "review-v1", space: "s", ranked: [{ id: "cat1", score: 0.31, photoIds: ["a", "b"] }], unavailable: [{ id: "cat2", reason: "too_few_photos" }] }, model: "review-candidate-v1", provider: "dml", ms: 900, doneAt: serverTimestamp(), answeredRequestId: "r1" })));
+  await check("member cannot fake a photo review", assertFails(updateDoc(doc(ctx("dave"), "aiJobs", "dave"), { status: "done", review: { ranked: [] } })));
+  await check("worker heartbeat lists photo review", assertSucceeds(setDoc(doc(W, "config", "aiWorker"), { online: true, lastSeen: serverTimestamp(), model: "m", provider: "cpu", same: 0.75, maybe: 0.6, capabilities: ["review-v1"] })));
+  await check("heartbeat capabilities must be a short list", assertFails(setDoc(doc(W, "config", "aiWorker"), { online: true, lastSeen: serverTimestamp(), capabilities: "review-v1" })));
+  await check("heartbeat refuses unknown keys", assertFails(setDoc(doc(W, "config", "aiWorker"), { online: true, lastSeen: serverTimestamp(), debug: true })));
 }
 
 console.log("Sightings");
@@ -306,6 +324,14 @@ const station = { name: "Station", description: "", operatorName: "", schedule: 
   verified: true, active: true, sample: false, checkinCount: 0, lastCheckinAt: 0, lastCheckinBy: "", createdAt: now(), updatedAt: now() };
 await check("user cannot create station", assertFails(setDoc(doc(B, "stations", "st1"), station)));
 await check("admin creates station", assertSucceeds(setDoc(doc(ctx("admin"), "stations", "st1"), station)));
+// Check-ins are rate limited like posts (both apps stamp lastPostAt), and alice just reported a rescue.
+await check("check-in right after another post is rate limited", assertFails((async () => {
+  const b = writeBatch(A);
+  b.set(doc(A, "checkins", "ck0"), { stationId: "st1", stationName: "Station", userId: "alice", username: "alice", catsSeen: 1, catIds: [], foodLevel: "low", waterLevel: "full", note: "", at: now() });
+  b.update(doc(A, "stations", "st1"), { counterSourceId: 'ck0', checkinCount: increment(1), lastCheckinAt: now(), lastCheckinBy: "alice" });
+  userStats(b, A, "alice", { checkins: 1 }, 5, "al_barsha", true); await b.commit();
+})()));
+await sleep(11_000);
 await check("check-in batch", assertSucceeds((async () => {
   const b = writeBatch(A);
   b.set(doc(A, "checkins", "ck1"), { stationId: "st1", stationName: "Station", userId: "alice", username: "alice", catsSeen: 3, catIds: [], foodLevel: "low", waterLevel: "full", note: "", at: now() });
@@ -611,7 +637,10 @@ await check("negative activity rejected", assertFails(updateDoc(doc(C,"posts","p
 const fingerprint=Array(27).fill(0.01);
 await check("bounded numeric fingerprint accepted", assertSucceeds(updateDoc(doc(C,"posts","p1"),{fingerprint})));
 await check("oversized fingerprint rejected", assertFails(updateDoc(doc(C,"posts","p1"),{fingerprint:Array(65).fill(0)})));
-await check("fingerprint values outside range rejected", assertFails(updateDoc(doc(C,"posts","p1"),{fingerprint:[2,...fingerprint.slice(1)]})));
+// Each number's [0, 1] range is checked by the readers (PostAppearance.valid, fingerprint.valid); the rules keep the
+// type and a bound on the sum, which is what keeps every reader able to load the feed (26 Oct 2026, rules budget).
+await check("fingerprint adding up to more than 27 rejected", assertFails(updateDoc(doc(C,"posts","p1"),{fingerprint:Array(27).fill(2)})));
+await check("negative fingerprint rejected", assertFails(updateDoc(doc(C,"posts","p1"),{fingerprint:Array(27).fill(-1)})));
 await check("non-numeric fingerprint rejected", assertFails(updateDoc(doc(C,"posts","p1"),{fingerprint:[...fingerprint.slice(0,26),"invalid"]})));
 await check("non-finite fingerprint rejected", assertFails(updateDoc(doc(C,"posts","p1"),{fingerprint:[NaN,...fingerprint.slice(1)]})));
 await check("foreign fingerprint edit rejected", assertFails(updateDoc(doc(B,"posts","p1"),{fingerprint})));
