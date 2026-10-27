@@ -19,7 +19,7 @@
    described in `docs/security/GITHUB_SETTINGS.md`.
 
 **27 Oct evening:** photo check answers now save (they never did since 23 Oct), and lost-pet matching keeps far,
-older look-alikes as "weak". See the section below. Owner: add a photo on a phone and confirm the check answers in about a second.
+older look-alikes as "weak". See the section below. The owner checked on a phone: the photo check is fast again.
 
 **Still open (owner):**
 
@@ -90,7 +90,7 @@ ValueError" about once a minute, and a lost cat didn't match a look-alike street
    dies when the command ends.
 4. Checks: worker portable suite 55 + matching/geocells/searchterms OK; Kotlin `MatchEngineTest`; web 129 unit,
    Prettier, ESLint, tsc. Production was only read (lost report, candidates, embeddings, matches), with the owner's
-   gcloud sign-in. Not yet confirmed: a real phone adding a photo and getting the PC's answer quickly.
+   gcloud sign-in. Confirmed by the owner on a phone the same evening: the photo check answers quickly.
 5. Seen while testing: two photos of the same dataset cat (Milo front vs left profile) score 0.73 with
    pet-recognition-base, which is below "possible". Different angles of one cat often land in "weak", so
    lost-pet matching will mostly surface weak suggestions until a better model is approved (photo review v1's
