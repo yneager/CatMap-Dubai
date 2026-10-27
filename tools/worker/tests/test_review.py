@@ -202,24 +202,24 @@ class ReviewJob(unittest.TestCase):
         exec(compile(ast.Module(body=[handle], type_ignores=[]), str(ROOT / "server.py"), "exec"), self.ns)
         firestore = types.ModuleType("google.cloud.firestore")
         firestore.SERVER_TIMESTAMP = "timestamp"
-        firestore.transactional = lambda fn: fn
         google, cloud = types.ModuleType("google"), types.ModuleType("google.cloud")
-        google.cloud, cloud.firestore = cloud, firestore
-        modules = patch.dict(sys.modules, {"google": google, "google.cloud": cloud, "google.cloud.firestore": firestore})
+        api_core, exceptions = types.ModuleType("google.api_core"), types.ModuleType("google.api_core.exceptions")
+        exceptions.FailedPrecondition = exceptions.NotFound = type("Stale", (Exception,), {})
+        google.cloud, cloud.firestore, google.api_core, api_core.exceptions = cloud, firestore, api_core, exceptions
+        modules = patch.dict(sys.modules, {"google": google, "google.cloud": cloud, "google.cloud.firestore": firestore,
+                                           "google.api_core": api_core, "google.api_core.exceptions": exceptions})
         modules.start()
         self.addCleanup(modules.stop)
 
     def run_job(self, fields, reviewer):
         written = {}
-        current = {"requestId": "A", "status": "pending"}
-        ref = types.SimpleNamespace(get=lambda transaction=None: types.SimpleNamespace(to_dict=lambda: dict(current), update_time=None),
-                                    update=lambda r, value: written.update(value))
+        ref = types.SimpleNamespace(update=lambda value, option=None: written.update(value))
         doc = types.SimpleNamespace(id="alice", reference=ref, update_time=None,
                                     to_dict=lambda: {"uid": "alice", "requestId": "A", "status": "pending", **fields})
         worker = types.SimpleNamespace(answered=set(), handled=0, model=types.SimpleNamespace(provider="cpu"), events=queue.Queue(),
                                        username=lambda _: "alice", retry_jobs={}, retry_attempts={}, reviewer=reviewer,
                                        read_cats=None, read_images=None,
-                                       fs=types.SimpleNamespace(client=types.SimpleNamespace(transaction=lambda: ref)))
+                                       fs=types.SimpleNamespace(client=types.SimpleNamespace(write_option=lambda **kw: kw)))
         self.ns["handle"](worker, doc)
         return written
 

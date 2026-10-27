@@ -429,6 +429,7 @@ class Worker:
                  "verdict": "same" if s >= SAME else "maybe" if s >= MAYBE else "different"} for i, s in enumerate(sims)]
 
     def handle(self, doc):
+        from google.api_core.exceptions import FailedPrecondition, NotFound
         from google.cloud import firestore
         f = doc.to_dict() or {}
         request_id = str(f.get("requestId", ""))
@@ -481,21 +482,16 @@ class Worker:
         provider = self.reviewer.provider if kind == "review" and self.reviewer is not None else self.model.provider
         out.update({"model": model_name, "provider": provider, "ms": int((time.time() - started) * 1000),
                     "doneAt": firestore.SERVER_TIMESTAMP, "answeredRequestId": request_id})
-        # Inference runs outside the transaction. Commit only if this is still the current
-        # pending request; retries re-read the live document rather than overwrite a replacement.
-        @firestore.transactional
-        def save(transaction):
-            current = doc.reference.get(transaction=transaction)
-            live = current.to_dict() or {}
-            if (live.get("requestId") != request_id or live.get("status") != "pending"
-                or getattr(current, 'update_time', None) != getattr(doc, 'update_time', None)):
-                return False
-            transaction.update(doc.reference, out)
-            return True
+        # Commit only if the job is unchanged since it was read, i.e. still this pending request: a replaced or
+        # deleted job fails the precondition and is left alone. A conditional write like recovery.py's, not a
+        # transaction: one round trip, no locks, nothing to abort or roll back (the 23 Oct transaction kept failing to save
+        # in production, so phones waited out their 15 s and the worker retried every minute).
         try:
-            committed = save(self.fs.client.transaction())
-            if committed:
+            try:
+                doc.reference.update(out, option=self.fs.client.write_option(last_update_time=doc.update_time))
                 self.handled += 1
+            except (FailedPrecondition, NotFound):
+                pass
             # A stale request is also finished, but never mark a failed commit as answered.
             if len(self.answered) >= 2048:
                 self.answered.clear()
@@ -510,7 +506,7 @@ class Worker:
                 self.retry_jobs[key] = (time.monotonic() + min(60, 2 ** min(attempts, 6)), doc, attempts)
             else:
                 self.refill_needed = True
-            self.events.put(("log", f"Couldn't save the answer for @{who}; queued retry: {type(e).__name__}"))
+            self.events.put(("log", f"Couldn't save the answer for @{who}; queued retry: {type(e).__name__}: {str(e)[:160]}"))
 
 
 

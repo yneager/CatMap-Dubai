@@ -16,27 +16,30 @@ namespace = {'time': time, 'MODEL_NAME': 'test', 'CLIP_NAME': 'test', 'MAX_IMAGE
 exec(compile(ast.Module(body=[handle], type_ignores=[]), str(ROOT / 'server.py'), 'exec'), namespace)
 
 
+class FailedPrecondition(Exception): pass
+class NotFound(Exception): pass
+
+
 class Reference:
     def __init__(self):
         self.current = {'requestId': 'A', 'status': 'pending'}
         self.fail = False
         self.writes = 0
 
-    def get(self, transaction=None):
-        return types.SimpleNamespace(to_dict=lambda: dict(self.current),update_time=getattr(self,'version',None))
-
-    def update(self, ref, value):
+    def update(self, value, option=None):
+        # Firestore's precondition: the job must still be the version the worker read.
+        if option != getattr(self, 'version', None): raise FailedPrecondition('replaced request')
         if self.fail: raise OSError('injected outage')
         self.current.update(value)
         self.writes += 1
 
 
 def make(ref, uid='alice'):
-    doc = types.SimpleNamespace(id=uid, reference=ref,
+    doc = types.SimpleNamespace(id=uid, reference=ref, update_time=None,
         to_dict=lambda: {'uid': uid, 'requestId': 'A', 'status': 'pending', 'kind': 'compare', 'query': b'jpeg', 'images': [b'jpeg']})
     obj = types.SimpleNamespace(answered=set(), handled=0, model=types.SimpleNamespace(provider='test'),
         events=queue.Queue(), username=lambda _: 'test', compare=lambda *args: [], retry_jobs={}, retry_attempts={},
-        fs=types.SimpleNamespace(client=types.SimpleNamespace(transaction=lambda: ref)))
+        fs=types.SimpleNamespace(client=types.SimpleNamespace(write_option=lambda **kw: kw['last_update_time'])))
     return obj, doc
 
 
@@ -44,16 +47,18 @@ class JobProtocol(unittest.TestCase):
     def setUp(self):
         firestore = types.ModuleType('google.cloud.firestore')
         firestore.SERVER_TIMESTAMP = 'timestamp'
-        firestore.transactional = lambda fn: fn
         google, cloud = types.ModuleType('google'), types.ModuleType('google.cloud')
-        google.cloud, cloud.firestore = cloud, firestore
-        self.modules = patch.dict(sys.modules, {'google': google, 'google.cloud': cloud, 'google.cloud.firestore': firestore})
+        api_core, exceptions = types.ModuleType('google.api_core'), types.ModuleType('google.api_core.exceptions')
+        exceptions.FailedPrecondition, exceptions.NotFound = FailedPrecondition, NotFound
+        google.cloud, cloud.firestore, google.api_core, api_core.exceptions = cloud, firestore, api_core, exceptions
+        self.modules = patch.dict(sys.modules, {'google': google, 'google.cloud': cloud, 'google.cloud.firestore': firestore,
+                                                'google.api_core': api_core, 'google.api_core.exceptions': exceptions})
         self.modules.start()
         self.addCleanup(self.modules.stop)
 
     def test_stale_inference_cannot_answer_a_replacement(self):
         ref = Reference(); obj, doc = make(ref)
-        def replace(*_): ref.current = {'requestId': 'B', 'status': 'pending'}; return []
+        def replace(*_): ref.current = {'requestId': 'B', 'status': 'pending'}; ref.version = 2; return []
         obj.compare = replace
         namespace['handle'](obj, doc)
         self.assertEqual(ref.current, {'requestId': 'B', 'status': 'pending'})
@@ -75,6 +80,14 @@ class JobProtocol(unittest.TestCase):
         obj.compare=replace
         namespace['handle'](obj,doc)
         self.assertEqual(ref.writes,0);self.assertEqual(ref.current['status'],'pending')
+
+    def test_job_the_phone_already_deleted_is_finished_without_retry(self):
+        ref = Reference(); obj, doc = make(ref)
+        def gone(*_): raise NotFound('no document')
+        ref.update = lambda value, option=None: gone()
+        namespace['handle'](obj, doc)
+        self.assertIn(('alice', 'A', None), obj.answered)
+        self.assertEqual(obj.retry_jobs, {})
 
     def test_dedupe_is_scoped_to_user_and_request(self):
         ref = Reference(); obj, doc = make(ref)
