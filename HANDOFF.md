@@ -5,7 +5,8 @@
 **State:**
 
 * Everything local is green (counts in the next section).
-* `main` has 23 unpushed local commits. The last four (`ddb6197`..`750d985`, committed 26 Oct at the owner's request)
+* `main` has 29 unpushed local commits (27 Oct added three clean-up commits plus their handoff; see the next
+  section). Four of the 26 Oct ones (`ddb6197`..`750d985`, committed 26 Oct at the owner's request)
   hold the rules budget, the e2e fixes, photo review v1 and the clean-up. Left untracked on purpose, until the owner
   says they may go public: `docs/done/work done (bugs and extras, 23 Oct).txt`, the two `CLAUDE_CAT_MATCHING_*`
   files in `docs/done/`, and `tools/matching_candidate/`.
@@ -61,6 +62,45 @@
   it through the auth emulator's `oobCodes`, and set a role with `Bearer owner` emulator access.
 * **Photo review locally:** run `cat-server` `server.py --emulator --review`. Seed cats with 2+ photos near the test
   spot, turn on the moderator switch in Settings, then add a new sighting.
+
+## 27 October 2026 - dead code and legacy map model removed (Claude)
+
+The owner asked for a code quality review and then for the safe part of it. Three local commits, nothing pushed.
+
+**What changed:**
+
+* **Unused code:**
+  * `tools/icons/vector_to_svg.py` no longer generates `catMapUrl`, `iconUrls` (about 60 `?url` imports),
+    `factIcons` or `preservesArtwork`; `web/src/icons/CatMapIcons.ts` was regenerated.
+  * `watch()` was removed from `web/src/data/Firestore.ts`.
+  * 13 unused web strings were removed from `strings_web.py`. All were `TODO-AR`, so D2 shrinks by 13.
+  * Deleted `tools/qa/*.ps1` (PowerShell is blocked here; `tools/adb.sh` covers it) and the unreferenced
+    `web/tools/bundle-report.mjs`.
+  * Dropped the stale `tinypool` override from `web/package.json`; nothing depends on tinypool any more.
+    The lockfile is unchanged.
+* **Duplicated logic:** the web now awards points through `Points.*` (`Badges.ts`) instead of literal numbers in
+  `CatRepository`, `StationRepository` and `RescueRepository`, like Android. The values are unchanged.
+* **Legacy map model (both apps):**
+  * Since `375e381`, the map uses live cell windows. The old load-once cell code is gone: `toLoad`, `withCell`,
+    `CellLoad`/`cells`, `postsSince`/`catsSince`, `CELL_TTL` and `OVERLAP`. Its tests went with it.
+  * Android's saved map copy no longer writes those fields. Old copies that still have them load fine (new test
+    `copiesSavedBeforeTheCellFieldsWentStillLoad`); the web decoder already ignored unknown keys.
+
+**Checks run (27 Oct):**
+
+* Android: unit tests 119 run, 0 failed, 1 skipped (121 before, minus 3 removed tests, plus 1 new);
+  `lintDebug`/`lintRelease` 0 errors; `assembleDebug` passed.
+* Web: lint, typecheck, unit 126 passed (128 before, 2 tests removed with the code), `strings:check`, build.
+* Strings and icons generator `--check` passed. The secret scan of the working tree is clean.
+* Isolated e2e `major-update.spec` (map counters, warm reopen): 12 passed on Chromium + WebKit.
+
+**Not run:** the full e2e suite, Roborazzi (no visual change), and the rules suite (rules were not touched).
+
+**Left for the owner to decide** (from the review): wire up or remove `MatchEngine.applyFeedback` (unused in both
+apps and the worker); move or ignore the 21 Oct snapshots in `web/docs` (Lighthouse reports, `screens/`); CI or
+Dependabot for `functions/`; enforce or drop Prettier.
+
+**Not pushed. Nothing deployed.**
 
 ## 26 October 2026 (night) - schema backfill written and rehearsed (Claude)
 
