@@ -65,7 +65,7 @@
 
 ## 27 October 2026 - dead code and legacy map model removed (Claude)
 
-The owner asked for a code quality review and then for the safe part of it. Three local commits, nothing pushed.
+The owner asked for a code quality review and then for the safe part of it. Local commits only, nothing pushed.
 
 **What changed:**
 
@@ -96,9 +96,22 @@ The owner asked for a code quality review and then for the safe part of it. Thre
 
 **Not run:** the full e2e suite, Roborazzi (no visual change), and the rules suite (rules were not touched).
 
-**Left for the owner to decide** (from the review): wire up or remove `MatchEngine.applyFeedback` (unused in both
-apps and the worker); move or ignore the 21 Oct snapshots in `web/docs` (Lighthouse reports, `screens/`); CI or
-Dependabot for `functions/`; enforce or drop Prettier.
+**Later the same day, the owner's decisions on the rest of the review:**
+
+* **Match feedback: kept.** The review said `applyFeedback` was unused, but that was wrong: the PC worker calls
+  `matching.apply_feedback` (`tools/worker/recovery.py`), and both apps show its two reasons on match cards. The
+  Kotlin and TS copies mirror the shared vectors in `tools/matching/cases.json`. Only the `hasPhotos`/`has_photos`
+  input really is unread, in all three engines. It was left alone because removing it means regenerating the shared
+  vectors (owner's call).
+* **Prettier is enforced:** `npm run lint` now runs `prettier --check .` (so CI does too). 7 files were
+  reformatted, with no logic change. `endOfLine: "auto"` keeps the check independent of Windows line endings.
+* **`functions/` in CI:** a new `functions` job runs its push test on the Firestore emulator. It passed locally:
+  6 checks.
+* **`web/docs`:** the round-3 Lighthouse, audit, bundle and verification files moved to `docs/done/web-round3/`,
+  with links updated in `web/README.md` and `web/docs/parity.md`. `web/docs/screens/` was regenerated
+  (`npm run screens`, isolated emulators, WebKit): 71 shots per variant, 3/3 passed. The light admin shot shows
+  "..." in App statistics, because light runs first, right after the test account is made admin; dark and Arabic
+  show the counts. The map shots have no tiles, as before (the test doesn't load real tiles).
 
 **Not pushed. Nothing deployed.**
 
