@@ -1,23 +1,28 @@
 # CatMap Dubai – handoff
 
-## Start here (written 26 Oct 2026, evening, for the next chat)
+## Start here (written 27 Oct 2026, for the next chat)
 
 **State:**
 
-* Everything local is green (counts in the next section).
-* `main` has 29 unpushed local commits (27 Oct added three clean-up commits plus their handoff; see the next
-  section). Four of the 26 Oct ones (`ddb6197`..`750d985`, committed 26 Oct at the owner's request)
-  hold the rules budget, the e2e fixes, photo review v1 and the clean-up. Left untracked on purpose, until the owner
-  says they may go public: `docs/done/work done (bugs and extras, 23 Oct).txt`, the two `CLAUDE_CAT_MATCHING_*`
-  files in `docs/done/`, and `tools/matching_candidate/`.
+* Everything local is green, re-checked 27 Oct after the clean-up:
+  * web e2e, full isolated suite on fresh emulators: 64 passed, 0 failed, 8 skipped (opt-in);
+  * Android 119 unit tests run, 0 failed, 1 skipped; lint and build passed;
+  * web unit 126 passed, plus lint (now with Prettier), typecheck, strings and build;
+  * the secret scan of the history shows only the three known items (two example `.env` files and a test fixture),
+    and the working tree is clean. **Run it as `python -I tools/security/secretscan.py . --worktree`**: without
+    the `.` it silently scans nothing (the catmap skill had it wrong until 27 Oct).
+* `main` has 35 unpushed local commits. Left untracked on purpose, until the owner says they may go public:
+  `docs/done/work done (bugs and extras, 23 Oct).txt`, the two `CLAUDE_CAT_MATCHING_*` files in `docs/done/`, and
+  `tools/matching_candidate/`.
 * Nothing is pushed, deployed or released. Production still runs v0.1.0, with its rules.
 
 **Next steps, in order** (the owner decides each; never push, deploy or touch production without being told):
 
-1. **Commits: done** (four local commits, see State). Still to decide: whether the untracked `docs/done/` notes and
-   `tools/matching_candidate/` (README and scripts only; `artifacts/` is the 335 MB model) may go public. They mention
-   private audit paths or paths on this PC, and the repo is public. Run
-   `python tools/security/secretscan.py . --worktree` (and history mode) before any push.
+1. **Push `main` (no tag) so CI runs on GitHub.** A push alone publishes nothing to users: releases need a tag, and
+   the web app needs `web\publish.cmd`. One thing to weigh: the commits include the 23 Oct rules, so once pushed,
+   anyone reading the public repo can compare them with the older rules production still runs. Pushing after step 4.2
+   avoids that, but then CI comes last. Still to decide: whether the untracked `docs/done/` notes and
+   `tools/matching_candidate/` may go public (they mention private audit paths and paths on this PC).
 2. **The 23 Oct schema backfill is written and rehearsed on the emulators** (section below), committed locally and never
    run against production. Read `docs/SCHEMA_TRANSITION.md` and the backfill section below before any release:
    without the backfill, nobody can message an account made with v0.1.0, and those accounts can't save, unsave,
@@ -34,7 +39,7 @@
    2. Deploy the rules + indexes, then **at once** the backfill with `--apply`, repeated until it writes nothing.
       Also `cat-server\backfill.cmd --dry-run` (map codes and search words), and run it if it finds anything.
    3. Restart the PC worker (`start.cmd`, plus `--review` only if wanted, and only after the new rules are live).
-   4. Push and tag `v0.1.1` or higher.
+   4. Tag `v0.1.1` or higher (push `main` first if step 1 hasn't).
    5. `web\publish.cmd`.
    6. Check on a real iPhone.
 5. **Waiting on the owner:**
@@ -112,6 +117,11 @@ The owner asked for a code quality review and then for the safe part of it. Loca
   (`npm run screens`, isolated emulators, WebKit): 71 shots per variant, 3/3 passed. The light admin shot shows
   "..." in App statistics, because light runs first, right after the test account is made admin; dark and Arabic
   show the counts. The map shots have no tiles, as before (the test doesn't load real tiles).
+
+* **Flaky e2e fixed:** `logout wipes chat/account caches` read IndexedDB while the page was still loading after
+  logout (start-up finishes the wipe and can load the page again). It failed 1 time in 6 in either mode; it now
+  re-reads until the wipe settles. 16/16 after the fix. `map area pins ... Explore reads cursor pages` timed out
+  once in a long run and passed on both reruns; left as is.
 
 **Not pushed. Nothing deployed.**
 
