@@ -264,21 +264,28 @@ for (const offline of [false, true])
         if (!page.url().startsWith('http')) await navigate(page, '/login');
       }
       await expect(page).toHaveURL(/\/login$/);
-      const keys = await page.evaluate(async () => {
-        return new Promise<IDBValidKey[]>((resolve, reject) => {
-          const request = indexedDB.open('catmap-device');
-          request.onsuccess = () => {
-            const db = request.result,
-              r = db.transaction('values').objectStore('values').getAllKeys();
-            r.onsuccess = () => {
-              db.close();
-              resolve(r.result);
-            };
-            r.onerror = () => reject(r.error);
-          };
-        });
-      });
-      expect(keys).toEqual(['settings']);
+      // The start-up after logout may finish the wipe and load the page once more, so read until it settles.
+      const deviceKeys = () =>
+        page
+          .evaluate(async () => {
+            return new Promise<IDBValidKey[]>((resolve, reject) => {
+              const request = indexedDB.open('catmap-device');
+              request.onsuccess = () => {
+                const db = request.result,
+                  r = db.transaction('values').objectStore('values').getAllKeys();
+                r.onsuccess = () => {
+                  db.close();
+                  resolve(r.result);
+                };
+                r.onerror = () => reject(r.error);
+              };
+            });
+          })
+          .catch((e) => {
+            if (!String(e).includes('Execution context was destroyed')) throw e;
+            return null;
+          });
+      await expect.poll(deviceKeys).toEqual(['settings']);
       await login(page, next);
       await navigate(page, '/messages');
       if (offline) await context.setOffline(true);
