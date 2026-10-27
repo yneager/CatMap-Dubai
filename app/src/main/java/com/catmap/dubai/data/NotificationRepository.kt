@@ -62,7 +62,7 @@ class NotificationRepository(private val db: FirebaseFirestore, private val auth
 
     /**
      * Only the alerts created after [sinceMillis]: what the background check needs. When nothing is new this costs one
-     * Firestore read, where [latest] costs up to 100 every 15 minutes.
+     * Firestore read, where [latest] costs up to 100 every 4 hours.
      */
     suspend fun since(uid: String, sinceMillis: Long): List<AppNotification> =
         col(uid).whereGreaterThan("createdAt", sinceMillis).orderBy("createdAt", Query.Direction.DESCENDING).limit(50)

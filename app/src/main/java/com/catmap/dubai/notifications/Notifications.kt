@@ -246,11 +246,19 @@ object SystemNotifications {
         container.settings.setDeliveredNotifications(uid, NotificationDelivery.checkpoint(notifications, delivered))
     }
 
+    /**
+     * How often a closed app checks the inbox. Every 15 minutes, a few hundred installed phones would use the free
+     * plan's whole daily read quota on empty checks (docs/cost/FREE_PLAN_CAPACITY.md), so it is 4 hours until alerts
+     * are pushed instead. An open app still gets alerts at once from its live inbox listener.
+     */
+    const val POLL_HOURS = 4L
+
     fun schedulePolling(context: Context) {
-        val request = PeriodicWorkRequestBuilder<NotificationWorker>(15, TimeUnit.MINUTES)
+        val request = PeriodicWorkRequestBuilder<NotificationWorker>(POLL_HOURS, TimeUnit.HOURS)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .build()
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork("notification-poll", ExistingPeriodicWorkPolicy.KEEP, request)
+        // UPDATE, not KEEP: phones that scheduled the old 15-minute check switch to the new interval.
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork("notification-poll", ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 }
 
