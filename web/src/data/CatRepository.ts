@@ -36,6 +36,7 @@ import { SearchTerms } from './SearchTerms';
 import { UserRepository as users } from './UserRepository';
 import { NotificationRepository as notifications } from './NotificationRepository';
 import { ModerationRepository as moderation } from './ModerationRepository';
+import { Points } from '../gamification/Badges';
 export interface SightingDraft {
   existingCat: Cat | null;
   newCatName: string;
@@ -282,7 +283,7 @@ export const CatRepository = {
         souqSightings: Dubai.souqAreas.includes(hood) ? 1 : 0,
         marinaSightings: Dubai.marinaAreas.includes(hood) ? 1 : 0,
       },
-      10 + 2 * d.photoIds.length + (existing ? 0 : 15),
+      Points.SIGHTING + Points.PHOTO * d.photoIds.length + (existing ? 0 : Points.NEW_CAT),
       hood,
       true,
     );
@@ -354,7 +355,7 @@ export const CatRepository = {
       counterSourceId: s.id,
       updatedAt: Date.now(),
     });
-    users.addStats(b, s.userId, { sightings: -1 }, -10);
+    users.addStats(b, s.userId, { sightings: -1 }, -Points.SIGHTING);
     await b.commit();
   },
   medicalRecords: (catId: string) => listQuery('medicalRecords', where('catId', '==', catId)),
@@ -413,7 +414,7 @@ export const CatRepository = {
         createdAt: Date.now(),
       }),
     );
-    users.addStats(b, me.uid, { mergeSuggestions: 1 }, 5, undefined, true);
+    users.addStats(b, me.uid, { mergeSuggestions: 1 }, Points.MERGE, undefined, true);
     await b.commit();
   },
   rejectMerge: async (r: MergeRequest, me: UserProfile, note: string) => {
@@ -528,7 +529,7 @@ export const CatRepository = {
       status: approve ? 'approved' : 'rejected',
       updatedAt: Date.now(),
     });
-    if (approve) users.addStats(b, s.userId, { approvedSightings: 1 }, 5);
+    if (approve) users.addStats(b, s.userId, { approvedSightings: 1 }, Points.APPROVED);
     await b.commit();
     await moderation.log(
       me,

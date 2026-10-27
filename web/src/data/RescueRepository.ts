@@ -7,6 +7,7 @@ import { Dubai, LocationPrivacy } from './Neighborhoods';
 import { UserRepository as users } from './UserRepository';
 import { NotificationRepository as notifications } from './NotificationRepository';
 import { ModerationRepository as moderation } from './ModerationRepository';
+import { Points } from '../gamification/Badges';
 export const RescueRepository = {
   volunteerStatuses: ['approved', 'in_progress', 'resolved'],
   myReports: (uid: string) => listQuery('rescues', where('reporterId', '==', uid)),
@@ -44,7 +45,7 @@ export const RescueRepository = {
         updatedAt: created,
       }),
     );
-    users.addStats(b, me.uid, { rescueReports: 1 }, 20, hood, true);
+    users.addStats(b, me.uid, { rescueReports: 1 }, Points.RESCUE, hood, true);
     await b.commit();
     await notifications.send(
       (await users.uidsWithRoles('moderator', 'admin').catch(() => [])).filter(

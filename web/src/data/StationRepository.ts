@@ -27,6 +27,7 @@ import { Dubai } from './Neighborhoods';
 import { UserRepository as users } from './UserRepository';
 import { ModerationRepository as moderation } from './ModerationRepository';
 import { NotificationRepository as notifications } from './NotificationRepository';
+import { Points } from '../gamification/Badges';
 export const StationRepository = {
   stations: () => listQuery('stations'),
   station: (id: string) => ref(`stations/${id}`),
@@ -156,7 +157,7 @@ export const StationRepository = {
       b,
       me.uid,
       { checkins: 1, iftarCheckins: hour >= 18 && hour <= 19 ? 1 : 0 },
-      5,
+      Points.CHECKIN,
       s.neighborhood,
       true,
     );
@@ -183,7 +184,7 @@ export const StationRepository = {
         updatedAt: Date.now(),
       }),
     );
-    users.addStats(b, me.uid, { maintenanceReports: 1 }, 5, undefined, true);
+    users.addStats(b, me.uid, { maintenanceReports: 1 }, Points.MAINTENANCE, undefined, true);
     await b.commit();
   },
   updateMaintenance: async (
