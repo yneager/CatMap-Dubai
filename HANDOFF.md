@@ -101,8 +101,8 @@ five-second Lottie stories, with one drawn at random on each fresh launch and th
   * Skipped for `prefers-reduced-motion`. The same tap-to-skip, load failure, 2 s load and 7 s limits as Android.
   * `playwright.config.ts` now sets `reducedMotion: 'reduce'`, so other e2e specs don't wait behind the story;
     `e2e/startup-intro.spec.ts` plays it.
-* **Choices Claude made beyond the spec:** tap to skip; no story for notification/link launches or the logout
-  restart. Say if either should change.
+* **Beyond the spec, confirmed by the owner (27 Oct):** tap to skip; no story for notification/link launches or
+  the logout restart.
 
 **Checks run:**
 
