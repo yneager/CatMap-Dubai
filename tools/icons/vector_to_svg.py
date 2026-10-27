@@ -175,17 +175,13 @@ def registry(project: Path, files: list[Path]) -> str:
     for stem in svg_names:
         lines.append(f"import {stem}Svg from './generated/{stem}.svg?raw';")
         lines.append(f"import {stem}OriginalSvg from './generated/{stem}.original.svg?raw';")
-        lines.append(f"import {stem}Url from './generated/{stem}.original.svg?url';")
     lines += ["", "export const iconSvgs = {"]
     for stem in svg_names:
         lines.append(f"  '{stem.removeprefix('ic_cm_')}': {stem}Svg,")
     lines += ["} as const;", "export type IconName = keyof typeof iconSvgs;", "", "export const iconOriginalSvgs: Record<IconName, string> = {"]
     for stem in svg_names:
         lines.append(f"  '{stem.removeprefix('ic_cm_')}': {stem}OriginalSvg,")
-    lines += ["};", "export const iconUrls: Record<IconName, string> = {"]
-    for stem in svg_names:
-        lines.append(f"  '{stem.removeprefix('ic_cm_')}': {stem}Url,")
-    lines += ["};", "", "export function catMapSvg(icon: IconName, original = false): string {", "  return original ? iconOriginalSvgs[icon] : iconSvgs[icon];", "}", "export function catMapUrl(icon: IconName): string { return iconUrls[icon]; }", ""]
+    lines += ["};", "", "export function catMapSvg(icon: IconName, original = false): string {", "  return original ? iconOriginalSvgs[icon] : iconSvgs[icon];", "}", ""]
     for method, enum_name in (("animal", "AnimalType"), ("category", "PostCategory"), ("layer", "MapLayer")):
         match = re.search(rf"fun {method}\([^{{]+\{{(.*?)\n    }}", kotlin, re.S)
         if match is None:
@@ -196,7 +192,6 @@ def registry(project: Path, files: list[Path]) -> str:
     badges = (project / "app/src/main/java/com/catmap/dubai/gamification/Badges.kt").read_text(encoding="utf-8")
     badge_pairs = re.findall(r"^\s+(\w+)\([^\n]*?R\.drawable\.(ic_cm_\w+)", badges, re.M)
     lines += [f"const badgeIcons: Record<string, IconName> = {json.dumps({key.lower(): value.removeprefix('ic_cm_') for key, value in badge_pairs})};",
-              "export const factIcons = { age: 'age', ageGroup: 'age', color: 'colour', colour: 'colour', breed: 'breed', sex: 'sex', size: 'size', microchip: 'microchip' } as const satisfies Record<string, IconName>;",
               "export const CatMapIcons = {"]
     for constant, drawable in constants:
         lines.append(f"  {constant}: '{drawable.removeprefix('ic_cm_')}',")
@@ -205,10 +200,7 @@ def registry(project: Path, files: list[Path]) -> str:
               "  category: (key: string): IconName => categoryIcons[key.toLowerCase()] ?? 'note',",
               "  layer: (key: string): IconName => layerIcons[key.toLowerCase()] ?? 'paw',",
               "  badge: (key: string): IconName => badgeIcons[key.toLowerCase()] ?? 'badge_paw',",
-              "} as const;",
-              "export function preservesArtwork(icon: IconName): boolean {",
-              "  return ['cat', 'dog', 'bird', 'rabbit', 'paw'].includes(icon) || icon.startsWith('badge_') || !iconSvgs[icon].includes('currentColor');",
-              "}", ""]
+              "} as const;", ""]
     return "\n".join(lines)
 
 

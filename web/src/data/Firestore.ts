@@ -3,13 +3,11 @@ import {
   doc,
   getDoc,
   getDocs,
-  onSnapshot,
   query,
   writeBatch,
   type QueryConstraint,
   type DocumentData,
   type Query,
-  type DocumentReference,
 } from 'firebase/firestore';
 import { auth, database } from '../firebase';
 import { t } from '../i18n';
@@ -72,23 +70,6 @@ export const AppErrors = {
     errors.forEach((fn) => fn());
   },
 };
-export function watch<T>(
-  q: Query | DocumentReference,
-  mapper: (id: string, data: DocumentData) => T,
-  callback: (value: T[] | T | null) => void,
-) {
-  return onSnapshot(
-    q as Query,
-    (snap) => {
-      if ('docs' in snap) callback(snap.docs.map((d) => mapper(d.id, d.data())));
-      else {
-        const s = snap as unknown as import('firebase/firestore').DocumentSnapshot;
-        callback(s.exists() ? mapper(s.id, s.data()) : null);
-      }
-    },
-    AppErrors.report,
-  );
-}
 export async function deleteDocuments(paths: string[]) {
   for (let i = 0; i < paths.length; i += 400) {
     const batch = writeBatch(database());
