@@ -1,51 +1,37 @@
 # CatMap Dubai – handoff
 
-## Start here (written 27 Oct 2026, for the next chat)
+## Start here (written 27 Oct 2026, evening, for the next chat)
 
-**State:**
+**Release 0.1.1 is going out (27 Oct).** Done, in this order:
 
-* Everything local is green, re-checked 27 Oct after the clean-up and the startup stories:
-  * web e2e, full isolated suite on fresh emulators: 74 passed, 0 failed, 8 skipped (opt-in);
-  * Android 123 unit tests run, 0 failed, 1 skipped; lint and builds passed;
-  * web unit 129 passed, plus lint (now with Prettier), typecheck, strings and build;
-  * the secret scan of the history shows only the three known items (two example `.env` files and a test fixture),
-    and the working tree is clean. **Run it as `python -I tools/security/secretscan.py . --worktree`**: without
-    the `.` it silently scans nothing (the catmap skill had it wrong until 27 Oct).
-* `main` has 37 unpushed local commits. Left untracked on purpose, until the owner says they may go public:
-  `docs/done/work done (bugs and extras, 23 Oct).txt`, the two `CLAUDE_CAT_MATCHING_*` files in `docs/done/`, and
-  `tools/matching_candidate/`.
-* Nothing is pushed, deployed or released. Production still runs v0.1.0, with its rules.
+1. `main` pushed to GitHub; CI green, all 6 jobs (android, rules, functions, web, worker, browser), plus CodeQL.
+2. Google Cloud CLI installed (winget) and the owner signed in to Application Default Credentials, with quota project
+   `catmap-dubai`.
+3. Schema backfill dry run against production: 8 profiles, 70 reads, 22 writes planned, 0 blockers.
+4. **Rules and indexes deployed to production** (`firebase-tools@15.34.0 deploy --only firestore`, by Claude).
+5. **Schema backfill applied by the owner** (Claude's run was refused by the auto-mode classifier): 22 writes, then
+   a second run with 0 writes. Reports are in `tools/migrate/backfill-report-*.json` (git-ignored, private).
+6. Worker backfill (`cat-server\backfill.py --dry-run`): 0 posts and 0 cats need area codes, so no real run.
+7. PC worker started with `start.cmd` (production, without `--review`) at 15:12.
+8. Tag `v0.1.1` pushed. The `Release APK` workflow waits for the owner's approval of the `release` environment on
+   GitHub, then publishes `CatMap-0.1.1.apk`.
 
-**Next steps, in order** (the owner decides each; never push, deploy or touch production without being told):
+**Still open (owner):**
 
-1. **Push `main` (no tag) so CI runs on GitHub.** A push alone publishes nothing to users: releases need a tag, and
-   the web app needs `web\publish.cmd`. One thing to weigh: the commits include the 23 Oct rules, so once pushed,
-   anyone reading the public repo can compare them with the older rules production still runs. Pushing after step 4.2
-   avoids that, but then CI comes last. Still to decide: whether the untracked `docs/done/` notes and
-   `tools/matching_candidate/` may go public (they mention private audit paths and paths on this PC).
-2. **The 23 Oct schema backfill is written and rehearsed on the emulators** (section below), committed locally and never
-   run against production. Read `docs/SCHEMA_TRANSITION.md` and the backfill section below before any release:
-   without the backfill, nobody can message an account made with v0.1.0, and those accounts can't save, unsave,
-   block or unblock. Their photos are visible only to their owners, and old cats drop off the map.
-3. **Other open gates:**
-   * CI on GitHub (needs a push);
-   * manual Android checks (interruption/offline/foreground);
-   * the web app on a real iPhone;
-   * photo review field validation: the model is reliable only for "review by eye", and G1's real-Android-thumbnail
-     check reached cosine ≥ 0.99 on 4 of 6 photos.
-4. **Owner release steps,** when the above is done, in this order:
-   1. Dry run of `tools/migrate/schema_backfill.py` against production (owner, see the section below); resolve its
-      blockers.
-   2. Deploy the rules + indexes, then **at once** the backfill with `--apply`, repeated until it writes nothing.
-      Also `cat-server\backfill.cmd --dry-run` (map codes and search words), and run it if it finds anything.
-   3. Restart the PC worker (`start.cmd`, plus `--review` only if wanted, and only after the new rules are live).
-   4. Tag `v0.1.1` or higher (push `main` first if step 1 hasn't).
-   5. `web\publish.cmd`.
-   6. Check on a real iPhone.
-5. **Waiting on the owner:**
-   * Arabic: D2 (~148 strings) plus the 10 new `TODO-AR` strings in `strings_k.py`. The owner said "Arabic when I
-     say so".
-   * D1 (sighting photos in the cat gallery).
+* Approve the release on GitHub (Actions, the run "Release APK" for v0.1.1, then Review deployments, then Approve).
+* `web\publish.cmd` (Claude's run was refused by the auto-mode classifier).
+* Optional: replace the auto-generated release text on GitHub with friendly notes. The app's update sheet shows it.
+* Check on a real Android phone and iPhone: the startup story, messages to and from an old account, the map.
+* Arabic: D2 (about 135 strings), when the owner says.
+* D1 (sighting photos in the cat gallery).
+* The untracked `docs/done/` notes and `tools/matching_candidate/` stay private until the owner decides.
+
+**Running the secret scan:** `python -I tools/security/secretscan.py . --worktree` (history: the same without
+`--worktree`). Without the `.` it silently scans nothing.
+
+**Auto-mode refuses** these as production actions even when the owner has asked: the schema backfill `--apply`,
+`web\publish.cmd`/`publish.mjs`, and edits to the catmap skill (self-modification). Hand them to the owner with the
+exact command (start in the `cat` folder), or the owner adds a permission rule in `~/.claude/settings.json`.
 
 **How to test** (things learned 26 Oct; also see the catmap skill):
 
