@@ -13,14 +13,17 @@
    a second run with 0 writes. Reports are in `tools/migrate/backfill-report-*.json` (git-ignored, private).
 6. Worker backfill (`cat-server\backfill.py --dry-run`): 0 posts and 0 cats need area codes, so no real run.
 7. PC worker started with `start.cmd` (production, without `--review`) at 15:12.
-8. Tag `v0.1.1` pushed. The `Release APK` workflow waits for the owner's approval of the `release` environment on
-   GitHub, then publishes `CatMap-0.1.1.apk`.
+8. Tag `v0.1.1` pushed. The `Release APK` workflow passed check, build and publish. The release was published at
+   11:29 UTC and is GitHub's latest: `CatMap-0.1.1.apk` (24.6 MB), `.sha256`, the dependency list and the SBOM.
+   **It did not wait for an approval**, so the `release` environment has no required reviewer. Set one as
+   described in `docs/security/GITHUB_SETTINGS.md`.
 
 **Still open (owner):**
 
-* Approve the release on GitHub (Actions, the run "Release APK" for v0.1.1, then Review deployments, then Approve).
+* GitHub settings: Environments, then `release`, then Required reviewers: add yourself, so future releases wait for you.
 * `web\publish.cmd` (Claude's run was refused by the auto-mode classifier).
-* Optional: replace the auto-generated release text on GitHub with friendly notes. The app's update sheet shows it.
+* Replace the release text on GitHub (it only says "Full Changelog: link") with friendly notes; the app's update
+  sheet shows that text.
 * Check on a real Android phone and iPhone: the startup story, messages to and from an old account, the map.
 * Arabic: D2 (about 135 strings), when the owner says.
 * D1 (sighting photos in the cat gallery).
