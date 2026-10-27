@@ -11,10 +11,17 @@ demo-* loopback emulators. Do not ship rules independently of the matching clien
    Rules access-call and 1,000-expression budgets require emulator proof.
 2. Review `tools/migrate/approved-extras.py`. It accepts a **synthetic** path-to-fields
    JSON fixture and emits a dry-run plan; it has no network or apply mode. It prepares
-   canonical username claims, missing cat visibility defaults, private area centres, capacity/unread totals and
+   canonical username claims, missing cat visibility defaults, private area centres, capacity/unread totals,
+   missing chat unread counts, community audience on every photo public content shows, and
    per-message private photo copies. Conflicts and missing/foreign photos are blockers.
-   A production migration is separate work needing explicit authorization and a
-   version/precondition protected executor. This planner must not ingest live exports.
+   The executor is `tools/migrate/schema_backfill.py` (26 Oct): it reads a snapshot, plans with
+   `plan()`, and writes every change conditionally (unchanged since read / still missing), with a
+   chat photo's copies, lease and message, and a private area's two documents, each atomic. Dry run
+   unless `--apply`; a real project also needs `--confirm <project>`. It never overwrites an existing
+   `userLimits`. Rehearsal: `test_schema_backfill_emulator.py` then `tools/rulestest/after-backfill.mjs`
+   (the migrated accounts message, save, unblock and see photos under the new rules; the same checks
+   fail 10 of 16 on unmigrated data). Run it right after deploying the rules: from then on old clients
+   can't change the counters it computes. Running it in production is an owner step.
 3. Verify aliases, usernames and caps before switching clients. Existing list entries
    above 500 need an owner policy; do not silently discard data. Create `userLimits`
    from actual favorites, blocked entries and each chat's unread map. Keep complete

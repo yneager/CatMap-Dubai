@@ -52,3 +52,6 @@ test-results/
 /tools/worker/*.bak
 /tools/worker/*.local.*
 /.ci-worker/
+
+# Schema backfill reports name real documents and accounts (tools/migrate/schema_backfill.py).
+tools/migrate/backfill-report-*.json

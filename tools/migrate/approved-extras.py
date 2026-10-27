@@ -13,7 +13,9 @@ from collections import defaultdict
 from pathlib import Path
 
 
-def plan(documents):
+def plan(documents, list_counts=None):
+    """`list_counts` ({uid: {'favorites': n, 'blocked': n}}) replaces counting favorites/blocked paths, so an executor
+    can count with aggregation queries instead of reading every entry."""
     desired = copy.deepcopy(documents)
     blockers, notes = [], []
     def put(path, value): desired[path] = value
@@ -29,6 +31,17 @@ def plan(documents):
             public.update(data.get('photoIds', []))
         if (len(parts) == 2 and parts[0] in ('users', 'sitters')) or (len(parts) == 4 and parts[0] == 'posts' and parts[2] == 'updates'):
             if data.get('photoId'): public.add(data['photoId'])
+        # Copies of community photos other documents show: a post's author photo, a cat's cover, the post photo on an
+        # adoption request or a post/match card in a chat, and the members' profile photos in a chat.
+        for key in ('ownerPhotoId', 'coverPhotoId', 'postPhotoId', 'matchPhotoId'):
+            if len(parts) in (2, 4) and isinstance(data.get(key), str) and data[key]: public.add(data[key])
+        if len(parts) == 2 and parts[0] == 'chats':
+            public.update(v for v in (data.get('photos') or {}).values() if isinstance(v, str) and v)
+            members = data.get('members', [])
+            unread = data.get('unread') if isinstance(data.get('unread'), dict) else {}
+            if any(not isinstance(unread.get(m), int) for m in members):
+                # The 23 Oct rules read unread[member] for both members; a missing count would refuse marking read.
+                put(path, {**data, 'unread': {**unread, **{m: 0 for m in members if not isinstance(unread.get(m), int)}}})
     private = defaultdict(list)
     for path, data in documents.items():
         parts = path.split('/')
@@ -71,15 +84,19 @@ def plan(documents):
         parts=path.split('/')
         if len(parts)==2 and parts[0]=='users':
             uid=parts[1]; name=data.get('username','').lower()
-            if not re.fullmatch(r'[a-z0-9_.]{3,20}',name): blockers.append(path+': username requires owner-reviewed rename'); continue
-            names[name].append(uid)
-            claim=documents.get('usernames/'+name,{})
-            if claim.get('uid',uid)!=uid: blockers.append(path+': username claim belongs to another UID')
-            else: put('usernames/'+name,{**claim,'uid':uid})
-            counts={bucket:sum(p.startswith(f'users/{uid}/{bucket}/') and len(p.split('/'))==4 for p in documents) for bucket in ('favorites','blocked')}
-            if any(v>500 for v in counts.values()): blockers.append(path+': existing private list exceeds capacity; owner must choose entries')
-            counts['unreadCount']=sum(int(c.get('unread',{}).get(uid,0)) for p,c in documents.items() if p.startswith('chats/') and len(p.split('/'))==2 and uid in c.get('members',[]))
-            put('userLimits/'+uid,counts)
+            if not re.fullmatch(r'[a-z0-9_.]{3,20}',name): blockers.append(path+': username requires owner-reviewed rename')
+            else:
+                names[name].append(uid)
+                claim=documents.get('usernames/'+name,{})
+                if claim.get('uid',uid)!=uid: blockers.append(path+': username claim belongs to another UID')
+                else: put('usernames/'+name,{**claim,'uid':uid})
+            if list_counts is not None:
+                counts={bucket:int(list_counts.get(uid,{}).get(bucket,0)) for bucket in ('favorites','blocked')}
+            else:
+                counts={bucket:sum(p.startswith(f'users/{uid}/{bucket}/') and len(p.split('/'))==4 for p in documents) for bucket in ('favorites','blocked')}
+            if any(v>500 for v in counts.values()): blockers.append(path+': existing private list exceeds capacity; owner must choose entries'); continue
+            counts['unreadCount']=sum(int((c.get('unread') or {}).get(uid,0) or 0) for p,c in documents.items() if p.startswith('chats/') and len(p.split('/'))==2 and uid in c.get('members',[]))
+            put('userLimits/'+uid,{**documents.get('userLimits/'+uid,{}),**counts})
         if len(parts)==2 and parts[0]=='areaFollows':
             neighborhoods=data.get('neighborhoods',[])
             if not isinstance(neighborhoods,list) or len(neighborhoods)>200 or any(not isinstance(n,str) or re.fullmatch(r'[a-z0-9_-]{1,64}',n) is None for n in neighborhoods) or len(','.join(neighborhoods))>4000:

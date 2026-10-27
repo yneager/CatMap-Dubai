@@ -17,12 +17,10 @@
    `tools/matching_candidate/` (README and scripts only; `artifacts/` is the 335 MB model) may go public. They mention
    private audit paths or paths on this PC, and the repo is public. Run
    `python tools/security/secretscan.py . --worktree` (and history mode) before any push.
-2. **Before any release**, read `docs/SCHEMA_TRANSITION.md`. The 23 Oct schema (capacity slots in `userLimits`,
-   unread totals, source-bound counters, canonical usernames) needs the reviewed backfill for **existing production
-   users**. Without it, old accounts can't, for example, remove saved posts or get unread counts right: the e2e had
-   to seed those counters for test accounts.
-   The migration planner is dry-run only (`tools/migrate/approved-extras.py`), and the real backfill isn't written
-   yet. This is the biggest remaining release gate.
+2. **The 23 Oct schema backfill is written and rehearsed on the emulators** (section below), committed locally and never
+   run against production. Read `docs/SCHEMA_TRANSITION.md` and the backfill section below before any release:
+   without the backfill, nobody can message an account made with v0.1.0, and those accounts can't save, unsave,
+   block or unblock. Their photos are visible only to their owners, and old cats drop off the map.
 3. **Other open gates:**
    * CI on GitHub (needs a push);
    * manual Android checks (interruption/offline/foreground);
@@ -30,8 +28,10 @@
    * photo review field validation: the model is reliable only for "review by eye", and G1's real-Android-thumbnail
      check reached cosine ≥ 0.99 on 4 of 6 photos.
 4. **Owner release steps,** when the above is done, in this order:
-   1. Deploy the rules + indexes.
-   2. Run the backfill (dry-run first).
+   1. Dry run of `tools/migrate/schema_backfill.py` against production (owner, see the section below); resolve its
+      blockers.
+   2. Deploy the rules + indexes, then **at once** the backfill with `--apply`, repeated until it writes nothing.
+      Also `cat-server\backfill.cmd --dry-run` (map codes and search words), and run it if it finds anything.
    3. Restart the PC worker (`start.cmd`, plus `--review` only if wanted, and only after the new rules are live).
    4. Push and tag `v0.1.1` or higher.
    5. `web\publish.cmd`.
@@ -61,6 +61,88 @@
   it through the auth emulator's `oobCodes`, and set a role with `Bearer owner` emulator access.
 * **Photo review locally:** run `cat-server` `server.py --emulator --review`. Seed cats with 2+ photos near the test
   spot, turn on the moderator switch in Settings, then add a new sighting.
+
+## 26 October 2026 (night) - schema backfill written and rehearsed (Claude)
+
+The owner asked for the 23 Oct schema backfill from `docs/SCHEMA_TRANSITION.md`, tested on the emulators only.
+**Nothing was run against production.**
+
+**Why it matters:**
+
+* Without `userLimits/{uid}`, an account made with v0.1.0 can't receive messages, because both apps' send batch
+  updates the recipient's `userLimits`. Saving, unsaving, blocking and unblocking fail too.
+* The new rules show a photo to others only if it has `audience: 'community'`; v0.1.0 photos have no audience field.
+* The map's cat query filters on `hidden` and `mergedInto`, which old cats lack.
+* Public alert-area centres stay readable by every member until moved.
+
+**Why the old worker backfill can't do it:** the rules let only a brand-new account create `userLimits`, and the AI
+worker may not write `userLimits`, `usernames`, private area docs or chat photos. So the backfill uses Google's admin
+library with the owner's own sign-in (Application Default Credentials), which skips the rules.
+
+**What was added:**
+
+* `tools/migrate/schema_backfill.py`, the executor:
+  * reads a snapshot, plans with `approved-extras.py`'s `plan()`, then writes;
+  * every write is conditional: an update only if the document is unchanged since it was read, a create only if it is
+    still missing. Anything that changed is skipped and reported, and the next run picks it up;
+  * a chat photo's copies, lease and message are one atomic write, and so are a private area's two documents. An old
+    chat photo is removed only after every message that showed it has moved;
+  * an existing `userLimits` is never overwritten;
+  * dry run by default. `--apply` on a real project also needs `--confirm <project>`. It refuses a `demo-*` project
+    without `--emulator`, and refuses `--emulator` without a `demo-*` project on loopback;
+  * the report (git-ignored `tools/migrate/backfill-report-*.json`) has paths and field names only, no values;
+  * reads are kept small: field projections, count queries for saved/blocked lists, per-chat message queries (a
+    filtered collection-group query would need an index production doesn't have). The report gives the read count.
+* `approved-extras.py` additions:
+  * `list_counts` (counts from aggregation queries);
+  * `userLimits` even for a username the owner must rename;
+  * existing `userLimits` fields kept;
+  * a missing chat `unread` count set to 0 (the rules read both members' counts);
+  * `community` audience also for post author photos, cat covers, adoption-request and chat card photos, and chat
+    member photos.
+* Tests:
+  * `tools/migrate/test_schema_backfill.py`: 10 offline tests;
+  * `tools/migrate/test_schema_backfill_emulator.py`: rehearsal on synthetic v0.1.0-shaped data;
+  * `tools/rulestest/after-backfill.mjs`: the migrated accounts under the new rules (receive and read a message, save,
+    unsave, unblock, see photos, the map query, area follow).
+  * CI's worker job runs all three.
+
+**Checks run (26 Oct night):**
+
+* Emulator rehearsal: **32/32**. It covers:
+  * the dry run writes nothing;
+  * a document edited between read and write is skipped and left as the editor saved it;
+  * the second run picks up only that document, and the third writes nothing.
+* After-backfill rules check: **16/16**. Control on the same data without the backfill: **10 of 16 fail**, as
+  expected. The area-follow update passes either way, because the app rewrites the whole document; only privacy needs
+  the move.
+* Offline tests 10/10; planner tests (in the worker suite) and worker portable suite **54 passed**; rules suite
+  **584 passed, 0 failed**.
+* CLI guards: a demo project without `--emulator`, `--apply` without `--confirm`, an emulator host with a real
+  project, and `--emulator` with a non-demo project are all refused. Checked with a made-up project name.
+
+**Not verified:**
+
+* Production read cost and data shapes (never read).
+* Application Default Credentials against Firestore.
+* Behaviour with very large chats. Messages are read per chat with three filtered queries.
+
+**Owner steps for production, in order:**
+
+1. Install the Google Cloud CLI, then run
+   `gcloud auth application-default login` (the Google account that owns `catmap-dubai`) and
+   `gcloud auth application-default set-quota-project catmap-dubai`.
+2. Dry run, safe at any time (reads only):
+   `..\cat-server\.venv\Scripts\python.exe tools\migrate\schema_backfill.py --project catmap-dubai`.
+   Check `reads` against the 50,000/day Spark limit, and resolve each blocker (for example usernames the new rules
+   refuse). Keep the report private.
+3. Deploy the rules and indexes, and wait for "Enabled".
+4. Straight away:
+   `..\cat-server\.venv\Scripts\python.exe tools\migrate\schema_backfill.py --project catmap-dubai --apply --confirm catmap-dubai`.
+   Repeat until it reports 0 writes and nothing skipped. Until it has run, messages to old accounts fail.
+5. Then the rest of the release steps in "Start here".
+
+**Committed locally. Nothing pushed, deployed or run against production.**
 
 ## 26 October 2026 (evening) - rules budget, check-ins and web e2e fixed (Claude)
 

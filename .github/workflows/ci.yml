@@ -100,6 +100,11 @@ jobs:
       - run: >
           npx -y firebase-tools@15.34.0 emulators:exec --config firebase.rules-test.json --only firestore
           --project demo-catmap-recovery ".ci-worker/bin/python tools/worker/tests/test_recovery_synthetic.py"
+      - run: .ci-worker/bin/python tools/migrate/test_schema_backfill.py
+      - run: npm --prefix tools/rulestest ci
+      - run: >
+          npx -y firebase-tools@15.34.0 emulators:exec --config firebase.rules-test.json --only firestore
+          --project demo-catmap-backfill ".ci-worker/bin/python tools/migrate/test_schema_backfill_emulator.py && node tools/rulestest/after-backfill.mjs"
 
   browser:
     runs-on: ubuntu-latest
