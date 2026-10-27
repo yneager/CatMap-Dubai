@@ -80,7 +80,11 @@ function NewSighting() {
     preset = params.get('catId');
   const [draft, setDraft] = useState<SightingDraft>(() => {
       const fix = LocationRepository.get();
-      return { ...draftDefault, seenAt: Date.now(), ...(fix ? { ...fix, accuracy: fix.accuracy ?? 0, locationSource: 'gps' } : {}) };
+      return {
+        ...draftDefault,
+        seenAt: Date.now(),
+        ...(fix ? { ...fix, accuracy: fix.accuracy ?? 0, locationSource: 'gps' } : {}),
+      };
     }),
     [step, setStep] = useState(0),
     [photos, setPhotos] = useState<{ data: ProcessedPhoto; url: string; id?: string }[]>([]),
@@ -130,7 +134,9 @@ function NewSighting() {
   const visibleCandidates = candidates.filter((c) => !draft.rejectedCatIds.includes(c.cat.id));
   // Photo review (docs/MATCHING_REVIEW_V1.md, NewSightingViewModel.startReview): the AI server ranks the nearest cats
   // with two or more photos, by distance only. Moderators with the switch on; once per first photo and place.
-  const [review, setReview] = useState<{ cat: Cat; photoIds: string[]; distance: number }[] | null>(null),
+  const [review, setReview] = useState<{ cat: Cat; photoIds: string[]; distance: number }[] | null>(
+      null,
+    ),
     [reviewing, setReviewing] = useState(false),
     [reviewFailed, setReviewFailed] = useState(false),
     [reviewUnavailable, setReviewUnavailable] = useState(0),
@@ -493,8 +499,14 @@ function NewSighting() {
               lat={draft.lat}
               lng={draft.lng}
               onChange={(lat, lng) => {
-                const fix = LocationRepository.get(), gps = fix?.lat === lat && fix?.lng === lng;
-                change({ lat, lng, accuracy: gps ? fix.accuracy ?? 0 : 0, locationSource: gps ? 'gps' : 'manual' });
+                const fix = LocationRepository.get(),
+                  gps = fix?.lat === lat && fix?.lng === lng;
+                change({
+                  lat,
+                  lng,
+                  accuracy: gps ? (fix.accuracy ?? 0) : 0,
+                  locationSource: gps ? 'gps' : 'manual',
+                });
               }}
             />
             {draft.accuracy > 0 && <p>{t('accuracy_m', Math.round(draft.accuracy))}</p>}
@@ -566,7 +578,9 @@ function SightingDetail() {
         </Link>
         <StatusPill group="SubmissionStatus" value={sighting.status} />
         {sighting.newCat && <p>{t('first_sighting')}</p>}
-        {sighting.matchScore > 0 && <p>{t('ai_match_score', Math.round(sighting.matchScore * 100))}</p>}
+        {sighting.matchScore > 0 && (
+          <p>{t('ai_match_score', Math.round(sighting.matchScore * 100))}</p>
+        )}
         <p>
           <Link to={'/user/' + sighting.userId}>@{sighting.username}</Link> ·{' '}
           {dateTime(sighting.seenAt)} · {Dubai.nameOf(sighting.neighborhood)}

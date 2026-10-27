@@ -457,7 +457,9 @@ function AdminUsers() {
             onClick={() =>
               void action.run(async () => {
                 await AdminRepository.setSuspended(manage, !manage.suspended, profile!, note);
-                page.patch((u) => (u.uid === manage.uid ? { ...u, suspended: !manage.suspended } : u));
+                page.patch((u) =>
+                  u.uid === manage.uid ? { ...u, suspended: !manage.suspended } : u,
+                );
                 setManage(null);
               }, t('updated'))
             }

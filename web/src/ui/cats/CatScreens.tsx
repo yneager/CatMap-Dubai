@@ -242,7 +242,15 @@ function CatDetail() {
   return (
     <>
       <AppTopBar title={cat.name}>
-        <button className="text-button" onClick={() => void action.run(async () => { const message = await shareCat(cat); if (message) toast(message); })}>
+        <button
+          className="text-button"
+          onClick={() =>
+            void action.run(async () => {
+              const message = await shareCat(cat);
+              if (message) toast(message);
+            })
+          }
+        >
           {t('share_cat')}
         </button>
         {(own || mod) && (

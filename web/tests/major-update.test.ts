@@ -12,14 +12,7 @@ import {
   RescueReportFromDoc,
   ChatFromDoc,
 } from '../src/data/model';
-import {
-  areaPlan,
-  withItems,
-  emptyArea,
-  encodeArea,
-  decodeArea,
-  KEEP,
-} from '../src/data/MapArea';
+import { areaPlan, withItems, emptyArea, encodeArea, decodeArea, KEEP } from '../src/data/MapArea';
 import { parseSearch } from '../src/data/SearchQuery';
 import { nameIdeas } from '../src/ai/NameIdeas';
 

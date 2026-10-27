@@ -89,7 +89,10 @@ test('lost photo wizard, Explore/map, detail update, reunited, favourites and se
   await expect(page.getByLabel('Note', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Mark as reunited', exact: true }).click();
   // No match to credit: the owner says how it ended (came home on its own), then sees the confirmation.
-  await page.locator('.dialog').getByRole('button', { name: 'Mark as reunited', exact: true }).click();
+  await page
+    .locator('.dialog')
+    .getByRole('button', { name: 'Mark as reunited', exact: true })
+    .click();
   await expect(page.locator('.celebrate')).toBeVisible();
   await page.locator('.celebrate').getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByText('Reunited', { exact: true })).toBeVisible();

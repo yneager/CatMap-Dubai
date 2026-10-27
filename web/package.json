@@ -8,7 +8,7 @@
     "dev:emulators": "vite --mode emulators --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "lint": "eslint .",
+    "lint": "eslint . && prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
