@@ -4,14 +4,14 @@
 
 **State:**
 
-* Everything local is green, re-checked 27 Oct after the clean-up:
-  * web e2e, full isolated suite on fresh emulators: 64 passed, 0 failed, 8 skipped (opt-in);
-  * Android 119 unit tests run, 0 failed, 1 skipped; lint and build passed;
-  * web unit 126 passed, plus lint (now with Prettier), typecheck, strings and build;
+* Everything local is green, re-checked 27 Oct after the clean-up and the startup stories:
+  * web e2e, full isolated suite on fresh emulators: 74 passed, 0 failed, 8 skipped (opt-in);
+  * Android 123 unit tests run, 0 failed, 1 skipped; lint and builds passed;
+  * web unit 129 passed, plus lint (now with Prettier), typecheck, strings and build;
   * the secret scan of the history shows only the three known items (two example `.env` files and a test fixture),
     and the working tree is clean. **Run it as `python -I tools/security/secretscan.py . --worktree`**: without
     the `.` it silently scans nothing (the catmap skill had it wrong until 27 Oct).
-* `main` has 35 unpushed local commits. Left untracked on purpose, until the owner says they may go public:
+* `main` has 37 unpushed local commits. Left untracked on purpose, until the owner says they may go public:
   `docs/done/work done (bugs and extras, 23 Oct).txt`, the two `CLAUDE_CAT_MATCHING_*` files in `docs/done/`, and
   `tools/matching_candidate/`.
 * Nothing is pushed, deployed or released. Production still runs v0.1.0, with its rules.
@@ -67,6 +67,60 @@
   it through the auth emulator's `oobCodes`, and set a role with `Bearer owner` emulator access.
 * **Photo review locally:** run `cat-server` `server.py --emulator --review`. Seed cats with 2+ photos near the test
   spot, turn on the moderator switch in Settings, then add a new sighting.
+
+## 27 October 2026 (afternoon) - startup stories on both apps (Claude)
+
+The owner asked for the animations in `Desktop\startup` to play when the app launches, so people see a story instead
+of loading screens. The spec there (`START_HERE_CLAUDE.md`, `RANDOM_LAUNCH_REQUIREMENTS.md`) asks for four
+five-second Lottie stories, with one drawn at random on each fresh launch and the light/dark file matching the theme.
+
+**What was added:**
+
+* **Assets:** the 8 files (4 stories × light/dark, 120–178 KB each, vectors only: no scripts, images or fonts)
+  are copied unchanged to `app/src/main/res/raw/startup_*.json` and `web/src/assets/startup/*.json`.
+  * Their editable source and generators stay in `Desktop\startup` (outside git). To change a story, regenerate it
+    there and copy both themes again to both apps.
+* **Android:**
+  * `ui/startup/StartupIntro.kt`: the `StartupStory` registry and the overlay. It uses `lottie-compose:6.7.1`, the
+    new dependency.
+  * `MainActivity` draws the story once per fresh launch, above everything. The app starts underneath.
+  * No story after rotation or process restore (`savedInstanceState`), when a notification or link opened the app,
+    or on the logout restart (`AppRestart.EXTRA_SKIP_INTRO`).
+  * The notification-permission dialog waits until the story ends.
+  * Progress follows the clock, so a theme change mid-way swaps the file without restarting.
+  * A tap skips the story. It ends at once if animations are turned off in Android settings, if the file fails to
+    open, or if loading takes more than 2 s. Hard limit: 7 s.
+* **Web:**
+  * `platform/StartupIntro.tsx`, mounted by `InstallRoot` for the installed app only (the install page has no
+    story), outside routing. It uses `lottie-web@5.13.0`, the new dependency, with its script-free `lottie_light`
+    player: the hosting CSP has no `unsafe-eval`.
+  * Each story file is fetched on its own and precached, so offline launches still play it. Precache went from 4.3
+    to 5.6 MB; one story is about 17 KB gzipped and the player 47 KB gzipped.
+  * Once per session: a reload, the logout wipe or an update reload doesn't replay it. `DeviceWipe` keeps the
+    `catmap_intro_seen` flag.
+  * Skipped for `prefers-reduced-motion`. The same tap-to-skip, load failure, 2 s load and 7 s limits as Android.
+  * `playwright.config.ts` now sets `reducedMotion: 'reduce'`, so other e2e specs don't wait behind the story;
+    `e2e/startup-intro.spec.ts` plays it.
+* **Choices Claude made beyond the spec:** tap to skip; no story for notification/link launches or the logout
+  restart. Say if either should change.
+
+**Checks run:**
+
+* Android: `StartupIntroTest` 4/4. All 8 files open in lottie-android and last exactly 5.0 s; the draw reaches every
+  story evenly (4,000 draws); the story completes exactly once on its own and on a tap.
+* Web: unit 129 passed (3 new), lint, typecheck and build. `e2e/startup-intro.spec.ts` 10/10 on Chromium +
+  WebKit: each of the 4 stories plays for about 5 s with the login ready underneath, a reload doesn't replay it,
+  and dark theme and tap-to-skip work. Mid-story frames were inspected in WebKit, light and dark.
+* Full runs afterwards:
+  * web e2e on fresh isolated emulators: 74 passed, 0 failed, 8 skipped (64 before, plus the 10 new);
+  * Android unit tests: 123 run, 0 failed, 1 skipped;
+  * `lintDebug`/`lintRelease`: 0 errors;
+  * `assembleDebug`, the R8 `assembleStaging` (all 8 stories present in the shrunk APK) and
+    `verifyRoborazziDebug`: passed.
+
+**Not verified:** a real Android phone, a real iPhone home-screen launch, and release (R8) startup on a device.
+Owner: launch both apps a few times and check that the story plays, matches the theme, and that the app is ready
+when it ends.
 
 ## 27 October 2026 - dead code and legacy map model removed (Claude)
 
