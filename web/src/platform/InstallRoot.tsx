@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { SettingsRepository } from '../data/SettingsRepository';
 import { setLanguage, t } from '../i18n';
 import { installation, installGateEnabled, installPlatform } from './install';
+import { launchStory, StartupIntro } from './StartupIntro';
 const Runtime = lazy(() => import('./Runtime'));
 function ShareIcon() {
   return (
@@ -29,6 +30,8 @@ export default function InstallRoot() {
     [dark, setDark] = useState(matchMedia('(prefers-color-scheme: dark)').matches),
     [message, setMessage] = useState('');
   const gated = installGateEnabled && !state.standalone;
+  // Drawn once per launch, and only for the installed app: the install page is not a launch.
+  const [intro, setIntro] = useState(() => (gated ? null : launchStory()));
   const platform = installPlatform();
   useEffect(() => {
     void SettingsRepository.load().catch(() => {});
@@ -67,15 +70,18 @@ export default function InstallRoot() {
   }, [gated, platform.ios, platform.android]);
   if (!gated)
     return (
-      <Suspense
-        fallback={
-          <div className="app boot-screen" role="status">
-            {t('web_loading')}
-          </div>
-        }
-      >
-        <Runtime />
-      </Suspense>
+      <>
+        <Suspense
+          fallback={
+            <div className="app boot-screen" role="status">
+              {t('web_loading')}
+            </div>
+          }
+        >
+          <Runtime />
+        </Suspense>
+        {intro && <StartupIntro story={intro} dark={dark} onDone={() => setIntro(null)} />}
+      </>
     );
   return (
     <main className={'app install-gate ' + (platform.ipad ? 'ipad' : '')} data-install-gate>

@@ -33,6 +33,9 @@ import com.catmap.dubai.ui.components.LocalContainer
 import com.catmap.dubai.ui.components.LocalIsDark
 import com.catmap.dubai.ui.components.LocalSnackbar
 import com.catmap.dubai.ui.navigation.AppNavHost
+import com.catmap.dubai.ui.startup.StartupIntro
+import com.catmap.dubai.ui.startup.StartupStory
+import com.catmap.dubai.util.AppRestart
 import com.catmap.dubai.util.PostLinks
 import com.catmap.dubai.ui.theme.CatMapTheme
 import com.catmap.dubai.ui.theme.isDark
@@ -52,6 +55,14 @@ class MainActivity : AppCompatActivity() {
         // re-created with the same intent, and reading it again would open that screen a second time.
         pendingRoute.value = savedInstanceState?.getString("pending_route") ?: routeFrom(intent)
         val container = (application as CatMapApp).container
+        // A startup story plays only on a fresh launch from the launcher: not after rotation or process restore
+        // (savedInstanceState), not when a notification or link asked for a screen, and not on the logout restart.
+        val intro = mutableStateOf(
+            StartupStory.pick().takeIf {
+                savedInstanceState == null && pendingRoute.value == null && container.firebaseReady &&
+                    !intent.getBooleanExtra(AppRestart.EXTRA_SKIP_INTRO, false)
+            },
+        )
 
         setContent {
             val settings by container.settings.settings.collectAsStateWithLifecycle(AppSettings())
@@ -72,12 +83,15 @@ class MainActivity : AppCompatActivity() {
                         if (!container.firebaseReady) {
                             SetupRequiredScreen()
                         } else {
-                            AskForNotificationPermission()
+                            // The system dialog would cover the startup story, so it waits until the story ends.
+                            if (intro.value == null) AskForNotificationPermission()
                             AppNavHost(pendingRoute)
                         }
                         // Offered on every screen, signed in or not: a build without Firebase (or a signed-out
                         // user) must still be able to receive the update that fixes things.
                         UpdatePrompt()
+                        // Drawn above everything while the app loads underneath it.
+                        intro.value?.let { story -> StartupIntro(story, dark) { intro.value = null } }
                     }
                 }
             }

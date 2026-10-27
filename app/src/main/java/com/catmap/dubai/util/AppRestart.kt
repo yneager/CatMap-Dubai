@@ -9,6 +9,9 @@ import kotlin.system.exitProcess
 
 /** Starts the app again from the login screen in a fresh process (used after logout, see [com.catmap.dubai.data.LocalWipe]). */
 object AppRestart {
+    /** Set on the relaunch intent: a restart after logout is not a new visit, so it skips the startup story. */
+    const val EXTRA_SKIP_INTRO = "catmap.skip_intro"
+
     fun relaunch(context: Context, message: Int? = null) {
         val app = context.applicationContext
         val main = Handler(Looper.getMainLooper())
@@ -19,7 +22,9 @@ object AppRestart {
             // again anyway if one was lost.
             main.postDelayed({
                 val launch = app.packageManager.getLaunchIntentForPackage(app.packageName)
-                if (launch != null) app.startActivity(Intent.makeRestartActivityTask(launch.component))
+                if (launch != null) {
+                    app.startActivity(Intent.makeRestartActivityTask(launch.component).putExtra(EXTRA_SKIP_INTRO, true))
+                }
                 exitProcess(0)
             }, 300)
         }

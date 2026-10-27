@@ -236,4 +236,6 @@ dependencies {
 
     // Vector maps (OpenFreeMap tiles, no key); replaces osmdroid's blurry raster tiles.
     implementation("org.maplibre.gl:android-sdk:13.6.1")
+    // Plays the startup stories (res/raw/startup_*.json), the same Lottie files the web app uses.
+    implementation("com.airbnb.android:lottie-compose:6.7.1")
 }

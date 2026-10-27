@@ -14,6 +14,8 @@ export default defineConfig({
     navigationTimeout: 45000,
     screenshot: 'only-on-failure',
     viewport: { width: 393, height: 852 },
+    // Reduced motion skips the five-second startup story; e2e/startup-intro.spec.ts plays it.
+    reducedMotion: 'reduce',
   },
   projects: [
     {
