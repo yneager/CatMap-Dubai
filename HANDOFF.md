@@ -23,8 +23,8 @@ older look-alikes as "weak". See the section below. The owner checked on a phone
 
 **Still open (owner):**
 
-* Send Claude the contact email for the privacy policy and terms (they say `CONTACT_EMAIL`), then run
-  `web\publish.cmd` to put them online at catmap-dubai.web.app/privacy.html and /terms.html.
+* Run `web\publish.cmd` to put the privacy policy and terms online at catmap-dubai.web.app/privacy.html and
+  /terms.html (the contact address is the owner's account email, at their request).
 
 * GitHub settings: Environments, then `release`, then Required reviewers: add yourself, so future releases wait for you.
 * `web\publish.cmd` (Claude's run was refused by the auto-mode classifier).
@@ -74,8 +74,8 @@ capacity.
 2. **Privacy policy and terms of use:** `web/public/privacy.html` and `terms.html`, plain English, written from the
    privacy audit and the code. Linked from Settings → About and from sign-up (with "By creating an account, you agree
    ..."), on Android (`util/LegalLinks.kt`, opens `https://catmap-dubai.web.app/...`) and the web
-   (`ui/components/LegalLinks.tsx`). **Both pages say `CONTACT_EMAIL` where the owner's contact address must go,
-   and they aren't online until the owner runs `web\publish.cmd`.** Have them read by someone who knows UAE data
+   (`ui/components/LegalLinks.tsx`). The contact address is the owner's account email (their choice). The pages
+   aren't online until the owner runs `web\publish.cmd`.** Have them read by someone who knows UAE data
    law before a wide launch. English only for now (Arabic with D2).
 3. **Crash reports (Android only):** Firebase Crashlytics 20.1.1 (BoM), Gradle plugin 3.0.8. Release builds only;
    off in the manifest until the app applies **Settings → Privacy → Send crash reports** (on by default). No user
