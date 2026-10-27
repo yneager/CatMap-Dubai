@@ -4,7 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.firebase.crashlytics")
-    id("io.github.takahirom.roborazzi") version "1.76.0"
+    id("io.github.takahirom.roborazzi") version "1.77.0"
     id("androidx.baselineprofile") version "1.5.0"
 }
 
@@ -203,8 +203,8 @@ dependencies {
     implementation("com.google.zxing:core:3.5.4")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.17")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.76.0")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.76.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.77.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.77.0")
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     val composeBom = platform("androidx.compose:compose-bom:2026.09.00")
@@ -225,10 +225,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-process:2.11.0")
     implementation("androidx.navigation:navigation-compose:2.10.2")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
-    implementation("androidx.datastore:datastore-preferences:1.2.1")
+    implementation("androidx.datastore:datastore-preferences:1.3.0")
     implementation("androidx.exifinterface:exifinterface:1.4.2")
 
-    implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
+    implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
@@ -245,7 +245,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
 
     // Vector maps (OpenFreeMap tiles, no key); replaces osmdroid's blurry raster tiles.
-    implementation("org.maplibre.gl:android-sdk:13.6.1")
+    implementation("org.maplibre.gl:android-sdk:13.7.1")
     // Plays the startup stories (res/raw/startup_*.json), the same Lottie files the web app uses.
     implementation("com.airbnb.android:lottie-compose:6.7.1")
 }
