@@ -178,9 +178,6 @@ object MapAreaCodec {
 
     fun encode(a: MapArea): String = JSONObject().apply {
         put("v", VERSION)
-        put("postsSince", a.postsSince)
-        put("catsSince", a.catsSince)
-        put("cells", JSONObject().apply { a.cells.forEach { (k, c) -> put(k, JSONArray().put(c.at).put(c.complete)) } })
         put("posts", JSONArray().apply {
             a.posts.values.forEach { p ->
                 put(JSONObject().apply {
@@ -212,11 +209,6 @@ object MapAreaCodec {
         val o = JSONObject(text)
         if (o.optInt("v") != VERSION) return null
         val seen = HashMap<String, Long>()
-        val cellsJson = o.getJSONObject("cells")
-        val cells = cellsJson.keys().asSequence().associateWith { k ->
-            val c = cellsJson.getJSONArray(k)
-            CellLoad(c.getLong(0), c.getBoolean(1))
-        }
         val posts = o.getJSONArray("posts").objects().map { j ->
             Post(
                 id = j.getString("id"), animalType = j.getString("animalType"), category = j.getString("category"),
@@ -237,10 +229,7 @@ object MapAreaCodec {
                 geoCells = j.getJSONArray("geoCells").strings(),
             ).also { seen["c:${it.id}"] = j.getLong("seen") }
         }
-        MapArea(
-            posts = posts.associateBy { it.id }, cats = cats.associateBy { it.id }, seen = seen, cells = cells,
-            postsSince = o.getLong("postsSince"), catsSince = o.getLong("catsSince"),
-        )
+        MapArea(posts = posts.associateBy { it.id }, cats = cats.associateBy { it.id }, seen = seen)
     }.getOrNull()
 
     private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }

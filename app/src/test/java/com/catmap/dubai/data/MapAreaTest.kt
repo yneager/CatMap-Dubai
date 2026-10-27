@@ -16,7 +16,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class)
 class MapAreaTest {
-    private val hour = 3_600_000L
     private val now = 1_800_000_000_000L
     private val cell = "thrr3"
 
@@ -44,35 +43,6 @@ class MapAreaTest {
     }
 
     @Test
-    fun toLoadSkipsFreshCellsAndCompleteParents() {
-        val a = MapArea(cells = mapOf("thrr" to CellLoad(now - hour, complete = true), "thrq5" to CellLoad(now - hour, false)))
-        assertEquals(emptyList<String>(), a.toLoad(listOf("thrr3", "thrr3s"), now))
-        assertEquals(emptyList<String>(), a.toLoad(listOf("thrq5"), now))
-        // Inside an incomplete parent, or once the parent is a day old, the cell is asked for.
-        val partial = MapArea(cells = mapOf("thrr" to CellLoad(now - hour, complete = false)))
-        assertEquals(listOf("thrr3"), partial.toLoad(listOf("thrr3"), now))
-        assertEquals(listOf("thrr3"), a.toLoad(listOf("thrr3"), now + MapArea.CELL_TTL_MS))
-    }
-
-    @Test
-    fun aCompleteCellAnswerDropsWhatTheServerNoLongerReturns() {
-        val a = MapArea().withPosts(listOf(post("kept", 10), post("gone", 20), post("other", 5, listOf("thrq", "thrq5", "thrq5x"))), now)
-        val b = a.withCell(cell, listOf(post("kept", 10), post("new", 30)), emptyList(), postLimit = 50, catLimit = 50, now = now)
-        assertEquals(setOf("kept", "new", "other"), b.posts.keys)
-        assertTrue(b.cells.getValue(cell).complete)
-        assertFalse("p:gone" in b.seen)
-    }
-
-    @Test
-    fun aCutAnswerOnlyJudgesWhatIsAsNewAsItsOldestItem() {
-        val a = MapArea().withPosts(listOf(post("older", 5), post("gone", 25), post("noCells", 30, emptyList())), now)
-        val b = a.withCell(cell, listOf(post("x", 40), post("y", 20)), emptyList(), postLimit = 2, catLimit = 50, now = now)
-        // "older" may simply not have fitted; "gone" is newer than the oldest answer, so it was deleted or hidden.
-        assertEquals(setOf("older", "noCells", "x", "y"), b.posts.keys)
-        assertFalse(b.cells.getValue(cell).complete)
-    }
-
-    @Test
     fun newerCopiesWinAndHiddenCatsLeave() {
         val a = MapArea().withPosts(listOf(post("p", 20)), now).withPosts(listOf(post("p", 10).apply { name = "stale" }), now)
         assertEquals("P p", a.posts.getValue("p").name)
@@ -84,10 +54,8 @@ class MapAreaTest {
     @Test
     fun prunedForgetsWhatWasNotConfirmedForAWeek() {
         val a = MapArea().withPosts(listOf(post("old", 1)), now - MapArea.KEEP_MS - 1).withPosts(listOf(post("new", 2)), now)
-            .copy(cells = mapOf("thrr" to CellLoad(now - MapArea.KEEP_MS - 1, true)))
         val b = a.pruned(now)
         assertEquals(setOf("new"), b.posts.keys)
-        assertTrue(b.cells.isEmpty())
     }
 
     @Test
@@ -105,12 +73,10 @@ class MapAreaTest {
 
     @Test
     fun savedCopyRoundTrips() {
-        val a = MapArea(postsSince = 7, catsSince = 8, cells = mapOf(cell to CellLoad(now, false)))
+        val a = MapArea()
             .withPosts(listOf(post("p", 20).apply { photoIds = listOf("a", "b"); reward = 50 }), now)
             .withCats(listOf(cat("c", 30).apply { name = "Simba"; coverPhotoId = "img" }), now)
         val b = MapAreaCodec.decode(MapAreaCodec.encode(a))!!
-        assertEquals(7L, b.postsSince); assertEquals(8L, b.catsSince)
-        assertEquals(a.cells, b.cells)
         assertEquals(a.seen, b.seen)
         val p = b.posts.getValue("p")
         assertEquals(listOf("a"), p.photoIds) // only the cover is kept
@@ -122,5 +88,11 @@ class MapAreaTest {
     fun damagedOrOldCopiesAreIgnored() {
         assertNull(MapAreaCodec.decode("not json"))
         assertNull(MapAreaCodec.decode("""{"v":0}"""))
+    }
+
+    @Test
+    fun copiesSavedBeforeTheCellFieldsWentStillLoad() {
+        val old = """{"v":1,"postsSince":7,"catsSince":8,"cells":{"thrr3":[1,false]},"posts":[],"cats":[]}"""
+        assertTrue(MapAreaCodec.decode(old)!!.posts.isEmpty())
     }
 }

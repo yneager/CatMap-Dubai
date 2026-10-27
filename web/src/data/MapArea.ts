@@ -10,21 +10,14 @@ export interface Area {
   posts: Record<string, Post>;
   cats: Record<string, Cat>;
   seen: Record<string, number>;
-  cells: Record<string, { at: number; complete: boolean }>;
-  postsSince: number;
-  catsSince: number;
 }
 export const emptyArea = (): Area => ({
   posts: {},
   cats: {},
   seen: {},
-  cells: {},
-  postsSince: 0,
-  catsSince: 0,
 });
-export const CELL_TTL = 86400000,
-  KEEP = 7 * CELL_TTL,
-  OVERLAP = 3600000;
+/** A saved pin not confirmed by the server for this long is dropped. */
+export const KEEP = 7 * 86400000;
 export function areaPlan(b: Box) {
   for (const precision of [6, 5, 4]) {
     const cells = Geohash.covering(b.south, b.west, b.north, b.east, precision, 6);
@@ -48,15 +41,6 @@ export function areaPlan(b: Box) {
     perCell: 50,
   };
 }
-export function toLoad(a: Area, cells: string[], now = Date.now()) {
-  return cells.filter(
-    (cell) =>
-      !Array.from({ length: cell.length - 3 }, (_, i) => cell.slice(0, i + 4)).some((parent) => {
-        const load = a.cells[parent];
-        return load && now - load.at < CELL_TTL && (parent === cell || load.complete);
-      }),
-  );
-}
 export function withItems(a: Area, posts: Post[], cats: Cat[], now = Date.now()): Area {
   const next = { ...a, posts: { ...a.posts }, cats: { ...a.cats }, seen: { ...a.seen } };
   for (const p of posts) {
@@ -74,36 +58,6 @@ export function withItems(a: Area, posts: Post[], cats: Cat[], now = Date.now())
     }
   }
   return next;
-}
-export function withCell(
-  a: Area,
-  cell: string,
-  posts: Post[],
-  cats: Cat[],
-  size: number,
-  now = Date.now(),
-) {
-  const next = { ...a, posts: { ...a.posts }, cats: { ...a.cats }, seen: { ...a.seen } };
-  for (const [key, incoming, prefix] of [
-    ['posts', posts, 'p:'],
-    ['cats', cats, 'c:'],
-  ] as const) {
-    const ids = new Set(incoming.map((v) => v.id)),
-      oldest = Math.min(...incoming.map((v) => v.updatedAt));
-    for (const item of Object.values(next[key]))
-      if (
-        !ids.has(item.id) &&
-        item.geoCells.includes(cell) &&
-        (incoming.length < size || item.updatedAt >= oldest)
-      ) {
-        delete next[key][item.id];
-        delete next.seen[prefix + item.id];
-      }
-  }
-  return {
-    ...withItems(next, posts, cats, now),
-    cells: { ...a.cells, [cell]: { at: now, complete: posts.length < size && cats.length < size } },
-  };
 }
 const postKeys = [
   'id',
@@ -179,15 +133,5 @@ export function decodeArea(value: unknown, now = Date.now()): Area {
       out.seen[prefix + id] = a.seen[prefix + id];
     }
   }
-  for (const [key, c] of Object.entries(a.cells ?? {}))
-    if (
-      /^[0-9bcdefghjkmnpqrstuvwxyz]{4,6}$/.test(key) &&
-      typeof c?.at === 'number' &&
-      typeof c.complete === 'boolean' &&
-      now - c.at < KEEP
-    )
-      out.cells[key] = c;
-  out.postsSince = typeof a.postsSince === 'number' ? a.postsSince : 0;
-  out.catsSince = typeof a.catsSince === 'number' ? a.catsSince : 0;
   return out;
 }

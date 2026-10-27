@@ -14,13 +14,11 @@ import {
 } from '../src/data/model';
 import {
   areaPlan,
-  toLoad,
-  withCell,
   withItems,
   emptyArea,
   encodeArea,
   decodeArea,
-  CELL_TTL,
+  KEEP,
 } from '../src/data/MapArea';
 import { parseSearch } from '../src/data/SearchQuery';
 import { nameIdeas } from '../src/ai/NameIdeas';
@@ -204,7 +202,7 @@ describe('untrusted Firestore documents', () => {
     'notifications',
   ])('allows route %s', (route) => expect(alertRoute(route)).toBe('/' + route));
 });
-describe('map saved-copy and cell rules', () => {
+describe('map saved-copy rules', () => {
   const now = 2000000000,
     p = {
       ...PostDefaults,
@@ -220,18 +218,8 @@ describe('map saved-copy and cell rules', () => {
     expect(plan.perCell).toBeGreaterThanOrEqual(40);
     expect(plan.perCell).toBeLessThanOrEqual(150);
   });
-  it('skips recent complete parents and refreshes after 24 hours', () => {
-    const a = withCell(emptyArea(), 'thrr', [p], [], 150, now);
-    expect(toLoad(a, ['thrr3s'], now + 10)).toEqual([]);
-    expect(toLoad(a, ['thrr3s'], now + CELL_TTL)).toEqual(['thrr3s']);
-  });
-  it('keeps finer cells available when a parent was truncated', () => {
-    const a = withCell(emptyArea(), 'thrr', [p], [], 1, now);
-    expect(toLoad(a, ['thrr3s'], now)).toEqual(['thrr3s']);
-  });
-  it('removes disappeared pins on a complete refresh and ignores older updates', () => {
-    const a = withCell(emptyArea(), 'thrr', [p], [], 150, now);
-    expect(withCell(a, 'thrr', [], [], 150, now + CELL_TTL).posts).toEqual({});
+  it('ignores older updates', () => {
+    const a = withItems(emptyArea(), [p], [], now);
     expect(withItems(a, [{ ...p, name: 'old', updatedAt: 99 }], [], now).posts.p.name).toBe('');
   });
   it('drops hidden/merged cats and saves pin fields only, for at most a week', () => {
@@ -246,7 +234,7 @@ describe('map saved-copy and cell rules', () => {
     expect(JSON.stringify(saved)).not.toContain('private');
     expect(JSON.stringify(saved)).not.toContain('not a pin');
     expect(decodeArea(saved, now).posts.p.id).toBe('p');
-    expect(decodeArea(saved, now + 8 * CELL_TTL).posts).toEqual({});
+    expect(decodeArea(saved, now + KEEP).posts).toEqual({});
     a = withItems(a, [], [{ ...c, hidden: true }], now);
     expect(a.cats).toEqual({});
   });
