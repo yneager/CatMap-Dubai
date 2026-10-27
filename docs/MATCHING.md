@@ -84,7 +84,8 @@ category, so notification settings and quiet hours apply.
 1. **Photo evidence decides the label.** AI model: half the best photo pair + half the averaged photos (several
    reference photos per animal). Thresholds per species, calibrated in `AI_EVALUATION.md` §6 (cats strong ≥ 0.88,
    possible ≥ 0.79, weak ≥ 0.68; dogs 0.89 / 0.66 / 0.27). Colour fingerprint: at most "possible".
-2. **Place and time are context:** each can move the label down one step, never remove it.
+2. **Place and time are context:** each can move the label down one step, never remove it: together they stop at
+   "weak", so a photo match far away and from before the loss is still listed (folded away), not dropped.
    * Uncertainty is subtracted first: GPS 2 × 0.15 km, 0.45 km for each blurred ("approximate") post, and the lost
      report's search area.
    * "Far" means beyond how far a lost pet plausibly is: 3 km + 1 km per day, at most 25 km.
@@ -94,7 +95,7 @@ category, so notification settings and quiet hours apply.
    looks like one the owner already rejected, or whose reporter says it's a different animal, drops one step.
 4. Without usable photos: at most "weak", only if nearby, recent and the descriptions share a colour word.
 
-The three copies are kept identical by `tools/matching/cases.json` (198 + 3 cases written by
+The three copies are kept identical by `tools/matching/cases.json` (234 + 3 cases written by
 `cat-server/tests/make_match_cases.py`) and tests in Kotlin (`MatchEngineTest`), TypeScript
 (`web/tests/match-engine.test.ts`) and Python (`cat-server/tests/test_matching.py`).
 

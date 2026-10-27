@@ -865,7 +865,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.3213,
     "visual": 0.7,
     "method": "embedding",
@@ -1193,7 +1193,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.3438,
     "visual": 0.7,
     "method": "embedding",
@@ -1659,6 +1659,334 @@
   },
   {
    "animalType": "cat",
+   "method": "embedding",
+   "visual": 0.95,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.8035,
+    "visual": 0.95,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_very_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "cat",
+   "method": "embedding",
+   "visual": 0.885,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.7114,
+    "visual": 0.885,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_very_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "cat",
+   "method": "embedding",
+   "visual": 0.85,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.6193,
+    "visual": 0.85,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "cat",
+   "method": "embedding",
+   "visual": 0.8,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.4776,
+    "visual": 0.8,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "cat",
+   "method": "embedding",
+   "visual": 0.7,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.2754,
+    "visual": 0.7,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_somewhat_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "cat",
+   "method": "embedding",
+   "visual": 0.6,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "none",
+    "score": 0.1235,
+    "visual": 0.6,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_different",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "cat",
+   "method": "embedding",
+   "visual": 0.4,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "none",
+    "score": 0.0243,
+    "visual": 0.4,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_different",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "cat",
+   "method": "embedding",
+   "visual": 0.2,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "none",
+    "score": 0.0243,
+    "visual": 0.2,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_different",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "cat",
    "method": "fingerprint",
    "visual": 0.95,
    "lost": {
@@ -1937,7 +2265,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.4189,
     "visual": 0.86,
     "method": "fingerprint",
@@ -2021,7 +2349,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.5802,
     "visual": 0.95,
     "method": "fingerprint",
@@ -2063,7 +2391,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.4952,
     "visual": 0.9,
     "method": "fingerprint",
@@ -2105,7 +2433,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.3738,
     "visual": 0.86,
     "method": "fingerprint",
@@ -2273,7 +2601,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.3962,
     "visual": 0.86,
     "method": "fingerprint",
@@ -2499,6 +2827,174 @@
   },
   {
    "animalType": "cat",
+   "method": "fingerprint",
+   "visual": 0.95,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.5343,
+    "visual": 0.95,
+    "method": "fingerprint",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_similar",
+     "colour_only",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "cat",
+   "method": "fingerprint",
+   "visual": 0.9,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.4493,
+    "visual": 0.9,
+    "method": "fingerprint",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_similar",
+     "colour_only",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "cat",
+   "method": "fingerprint",
+   "visual": 0.86,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.3279,
+    "visual": 0.86,
+    "method": "fingerprint",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_somewhat_similar",
+     "colour_only",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "cat",
+   "method": "fingerprint",
+   "visual": 0.8,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "none",
+    "score": 0.1943,
+    "visual": 0.8,
+    "method": "fingerprint",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_different",
+     "colour_only",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "cat",
    "method": "details",
    "visual": -1.0,
    "lost": {
@@ -2702,6 +3198,47 @@
      "same_colour_words",
      "near",
      "long_after"
+    ]
+   }
+  },
+  {
+   "animalType": "cat",
+   "method": "details",
+   "visual": -1.0,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": false,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "none",
+    "score": 0.0243,
+    "visual": -1.0,
+    "method": "details",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "no_photo",
+     "far",
+     "before_lost"
     ]
    }
   },
@@ -3594,7 +4131,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.4625,
     "visual": 0.6,
     "method": "embedding",
@@ -3635,7 +4172,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.3535,
     "visual": 0.4,
     "method": "embedding",
@@ -3922,7 +4459,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.485,
     "visual": 0.6,
     "method": "embedding",
@@ -3963,7 +4500,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.376,
     "visual": 0.4,
     "method": "embedding",
@@ -4347,6 +4884,334 @@
   },
   {
    "animalType": "dog",
+   "method": "embedding",
+   "visual": 0.95,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.797,
+    "visual": 0.95,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_very_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "dog",
+   "method": "embedding",
+   "visual": 0.885,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.6988,
+    "visual": 0.885,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "dog",
+   "method": "embedding",
+   "visual": 0.85,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.6599,
+    "visual": 0.85,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "dog",
+   "method": "embedding",
+   "visual": 0.8,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.6045,
+    "visual": 0.8,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "dog",
+   "method": "embedding",
+   "visual": 0.7,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.4936,
+    "visual": 0.7,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "dog",
+   "method": "embedding",
+   "visual": 0.6,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.4166,
+    "visual": 0.6,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_somewhat_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "dog",
+   "method": "embedding",
+   "visual": 0.4,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.3076,
+    "visual": 0.4,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_somewhat_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "dog",
+   "method": "embedding",
+   "visual": 0.2,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "none",
+    "score": 0.1376,
+    "visual": 0.2,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_different",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "dog",
    "method": "fingerprint",
    "visual": 0.95,
    "lost": {
@@ -4625,7 +5490,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.4189,
     "visual": 0.86,
     "method": "fingerprint",
@@ -4709,7 +5574,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.5802,
     "visual": 0.95,
     "method": "fingerprint",
@@ -4751,7 +5616,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.4952,
     "visual": 0.9,
     "method": "fingerprint",
@@ -4793,7 +5658,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.3738,
     "visual": 0.86,
     "method": "fingerprint",
@@ -4961,7 +5826,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.3962,
     "visual": 0.86,
     "method": "fingerprint",
@@ -5187,6 +6052,174 @@
   },
   {
    "animalType": "dog",
+   "method": "fingerprint",
+   "visual": 0.95,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.5343,
+    "visual": 0.95,
+    "method": "fingerprint",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_similar",
+     "colour_only",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "dog",
+   "method": "fingerprint",
+   "visual": 0.9,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.4493,
+    "visual": 0.9,
+    "method": "fingerprint",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_similar",
+     "colour_only",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "dog",
+   "method": "fingerprint",
+   "visual": 0.86,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.3279,
+    "visual": 0.86,
+    "method": "fingerprint",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_somewhat_similar",
+     "colour_only",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "dog",
+   "method": "fingerprint",
+   "visual": 0.8,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "none",
+    "score": 0.1943,
+    "visual": 0.8,
+    "method": "fingerprint",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_different",
+     "colour_only",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "dog",
    "method": "details",
    "visual": -1.0,
    "lost": {
@@ -5390,6 +6423,47 @@
      "same_colour_words",
      "near",
      "long_after"
+    ]
+   }
+  },
+  {
+   "animalType": "dog",
+   "method": "details",
+   "visual": -1.0,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": false,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "none",
+    "score": 0.0243,
+    "visual": -1.0,
+    "method": "details",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "no_photo",
+     "far",
+     "before_lost"
     ]
    }
   },
@@ -6241,7 +7315,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.3213,
     "visual": 0.7,
     "method": "embedding",
@@ -6569,7 +7643,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.3438,
     "visual": 0.7,
     "method": "embedding",
@@ -7035,6 +8109,334 @@
   },
   {
    "animalType": "rabbit",
+   "method": "embedding",
+   "visual": 0.95,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.8035,
+    "visual": 0.95,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_very_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "rabbit",
+   "method": "embedding",
+   "visual": 0.885,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.7114,
+    "visual": 0.885,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_very_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "rabbit",
+   "method": "embedding",
+   "visual": 0.85,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.6193,
+    "visual": 0.85,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "rabbit",
+   "method": "embedding",
+   "visual": 0.8,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.4776,
+    "visual": 0.8,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "rabbit",
+   "method": "embedding",
+   "visual": 0.7,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.2754,
+    "visual": 0.7,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_somewhat_similar",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "rabbit",
+   "method": "embedding",
+   "visual": 0.6,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "none",
+    "score": 0.1235,
+    "visual": 0.6,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_different",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "rabbit",
+   "method": "embedding",
+   "visual": 0.4,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "none",
+    "score": 0.0243,
+    "visual": 0.4,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_different",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "rabbit",
+   "method": "embedding",
+   "visual": 0.2,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "none",
+    "score": 0.0243,
+    "visual": 0.2,
+    "method": "embedding",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_different",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "rabbit",
    "method": "fingerprint",
    "visual": 0.95,
    "lost": {
@@ -7313,7 +8715,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.4189,
     "visual": 0.86,
     "method": "fingerprint",
@@ -7397,7 +8799,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.5802,
     "visual": 0.95,
     "method": "fingerprint",
@@ -7439,7 +8841,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.4952,
     "visual": 0.9,
     "method": "fingerprint",
@@ -7481,7 +8883,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.3738,
     "visual": 0.86,
     "method": "fingerprint",
@@ -7649,7 +9051,7 @@
     ]
    },
    "expected": {
-    "tier": "none",
+    "tier": "weak",
     "score": 0.3962,
     "visual": 0.86,
     "method": "fingerprint",
@@ -7875,6 +9277,174 @@
   },
   {
    "animalType": "rabbit",
+   "method": "fingerprint",
+   "visual": 0.95,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.5343,
+    "visual": 0.95,
+    "method": "fingerprint",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_similar",
+     "colour_only",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "rabbit",
+   "method": "fingerprint",
+   "visual": 0.9,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.4493,
+    "visual": 0.9,
+    "method": "fingerprint",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_similar",
+     "colour_only",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "rabbit",
+   "method": "fingerprint",
+   "visual": 0.86,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "weak",
+    "score": 0.3279,
+    "visual": 0.86,
+    "method": "fingerprint",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_somewhat_similar",
+     "colour_only",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "rabbit",
+   "method": "fingerprint",
+   "visual": 0.8,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": true,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "none",
+    "score": 0.1943,
+    "visual": 0.8,
+    "method": "fingerprint",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "photo_different",
+     "colour_only",
+     "far",
+     "before_lost"
+    ]
+   }
+  },
+  {
+   "animalType": "rabbit",
    "method": "details",
    "visual": -1.0,
    "lost": {
@@ -8078,6 +9648,47 @@
      "same_colour_words",
      "near",
      "long_after"
+    ]
+   }
+  },
+  {
+   "animalType": "rabbit",
+   "method": "details",
+   "visual": -1.0,
+   "lost": {
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "time_ms": 1760000000000,
+    "approximate": false,
+    "area_m": 500,
+    "has_photos": true,
+    "colour_words": [
+     "orange",
+     "tabby"
+    ]
+   },
+   "sighting": {
+    "lat": 25.312713669064745,
+    "lng": 55.2708,
+    "time_ms": 1758963200000,
+    "approximate": false,
+    "area_m": 0,
+    "has_photos": false,
+    "colour_words": [
+     "black"
+    ]
+   },
+   "expected": {
+    "tier": "none",
+    "score": 0.0243,
+    "visual": -1.0,
+    "method": "details",
+    "distance_km": 11.999,
+    "days_apart": -12.0,
+    "reasons": [
+     "no_photo",
+     "far",
+     "before_lost"
     ]
    }
   },

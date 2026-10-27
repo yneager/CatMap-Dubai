@@ -53,6 +53,9 @@ export interface MatchResult {
 const embedThresholds = (animalType: string) => EMBED[animalType] ?? EMBED.cat;
 export const down = (tier: Tier): Tier =>
   TIERS[Math.min(TIERS.length - 1, TIERS.indexOf(tier) + 1)];
+/** One step down for place or time, which lower a photo label but never remove it: it stops at "weak". */
+export const contextDown = (tier: Tier): Tier =>
+  tier === 'weak' || tier === 'none' ? tier : down(tier);
 // Python's round() rounds halves to even; the shared cases compare with a small tolerance anyway.
 const round = (v: number, places: number) => Math.round(v * 10 ** places) / 10 ** places;
 
@@ -144,10 +147,10 @@ export function score(
     );
     if (m === 'fingerprint') {
       reasons.push('colour_only');
-      if (!near) tier = down(tier);
+      if (!near) tier = contextDown(tier);
     }
-    if (far) tier = down(tier);
-    if (before) tier = down(tier);
+    if (far) tier = contextDown(tier);
+    if (before) tier = contextDown(tier);
   }
   reasons.push(near ? 'near' : far ? 'far' : 'in_range');
   reasons.push(before ? 'before_lost' : recent ? 'recent' : 'long_after');

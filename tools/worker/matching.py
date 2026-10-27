@@ -81,6 +81,11 @@ def down(tier: str) -> str:
     return TIERS[min(len(TIERS) - 1, TIERS.index(tier) + 1)]
 
 
+def context_down(tier: str) -> str:
+    """One step down for place or time, which lower a photo label but never remove it: it stops at "weak"."""
+    return tier if tier in ("weak", "none") else down(tier)
+
+
 def embed_thresholds(animal_type: str) -> tuple[float, float, float]:
     return EMBED.get(animal_type, EMBED["cat"])
 
@@ -140,11 +145,11 @@ def score(lost: Side, sighting: Side, method: str, visual: float = -1.0, animal_
             reasons.append("colour_only")
             # Colour is weak evidence on its own: only a nearby sighting keeps its label.
             if not near:
-                tier = down(tier)
+                tier = context_down(tier)
         if far:
-            tier = down(tier)
+            tier = context_down(tier)
         if before:
-            tier = down(tier)
+            tier = context_down(tier)
     reasons.append("near" if near else "far" if far else "in_range")
     reasons.append("before_lost" if before else "recent" if recent else "long_after")
 

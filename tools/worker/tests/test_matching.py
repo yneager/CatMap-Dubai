@@ -28,6 +28,16 @@ def test_place_and_time_move_one_step_each():
     assert matching.score(lost, far_before, "embedding", 0.95).tier == "weak"
 
 
+def test_place_and_time_never_remove_a_photo_match():
+    # 27 Oct: a street cat 12 km away, posted 12 days before the pet went missing, whose photo scored 0.808
+    # ("possible"), fell to "none" and was never stored.
+    lost = matching.Side(25.2, 55.27, 0)
+    street = matching.Side(25.2 + 12 / 111.2, 55.27, -12 * matching.DAY_MS)
+    assert matching.score(lost, street, "embedding", 0.808).tier == "weak"
+    assert matching.score(lost, street, "embedding", 0.70).tier == "weak"
+    assert matching.score(lost, street, "embedding", 0.50).tier == "none"
+
+
 def test_cats_need_more_than_dogs():
     s = matching.Side(25.2, 55.27, 0)
     assert matching.score(s, s, "embedding", 0.7, "dog").tier == "possible"

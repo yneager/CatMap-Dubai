@@ -18,6 +18,9 @@
    **It did not wait for an approval**, so the `release` environment has no required reviewer. Set one as
    described in `docs/security/GITHUB_SETTINGS.md`.
 
+**27 Oct evening:** photo check answers now save (they never did since 23 Oct), and lost-pet matching keeps far,
+older look-alikes as "weak". See the section below. Owner: add a photo on a phone and confirm the check answers in about a second.
+
 **Still open (owner):**
 
 * GitHub settings: Environments, then `release`, then Required reviewers: add yourself, so future releases wait for you.
@@ -56,6 +59,42 @@ exact command (start in the `cat` folder), or the owner adds a permission rule i
   it through the auth emulator's `oobCodes`, and set a role with `Bearer owner` emulator access.
 * **Photo review locally:** run `cat-server` `server.py --emulator --review`. Seed cats with 2+ photos near the test
   spot, turn on the moderator switch in Settings, then add a new sighting.
+
+## 27 October 2026 (evening) - photo check never saved; missed lost-pet match (Claude)
+
+The owner reported that adding a photo took about 10 s, the worker logged "Couldn't save the answer ... queued retry:
+ValueError" about once a minute, and a lost cat didn't match a look-alike street cat already on the map.
+
+1. **Photo check answers never saved (since 23 Oct).** `Worker.handle` saved through `@firestore.transactional`,
+   added in 28e9e88. In production every save raised ValueError: the worker signs in as a user, and the
+   transaction failed before its first read (the same retries kept failing after the phone had deleted the job).
+   The exact message wasn't logged. The same code saved fine on the emulator. The phone waits up to 15 s
+   (`AiServer.TIMEOUT_MS`) for the answer, so every photo waited out the timeout, then fell back to on-device
+   checks. The worker's backoff (2, 4 ... 60 s) explains the once-a-minute log line. **Fix:** a conditional write
+   (`update(..., option=write_option(last_update_time=doc.update_time))`), as `recovery.py` already uses: one round
+   trip, no lock. A replaced or deleted job fails the precondition (FailedPrecondition/NotFound) and is finished
+   without a retry. The retry log now includes the error message. Checked on the emulator as the worker account
+   (rules on): answer saved in about 0.2 s; a deleted job leaves no retry.
+2. **Missed match.** A new lost cat against a street cat posted earlier:
+   photo similarity 0.808, which is "possible" (cats >= 0.79). It is 12 km away and was posted 12 days before the
+   loss, so "far" and "before lost" each dropped one step: possible, then weak, then **none**, which is never
+   stored. That broke MATCHING.md's own rule ("each can move the label down one step, never remove it").
+   **Fix:** a `context_down`/`contextDown` step that stops at "weak", in all three engines (worker
+   `matching.py`, `MatchEngine.kt`, `MatchEngine.ts`). `cases.json` was regenerated with a far-and-before
+   placement: 237 cases, and 23 existing ones went from none to weak. A regression test was added to
+   `tests/test_matching.py`. After the restart, the live worker stored the pair as **weak** (folded under "Show
+   weak matches"). The "before lost" and "far" rules themselves are unchanged.
+3. Worker files were backed up as `*.before-conditional-save-20261027-160308.bak` and
+   `*.before-context-floor-*.bak` in `cat-server`. SHA-256 parity with `tools/worker` was confirmed for the changed
+   files. The worker was restarted from the app's Terminal panel. A worker started from Claude's sandboxed shell
+   dies when the command ends.
+4. Checks: worker portable suite 55 + matching/geocells/searchterms OK; Kotlin `MatchEngineTest`; web 129 unit,
+   Prettier, ESLint, tsc. Production was only read (lost report, candidates, embeddings, matches), with the owner's
+   gcloud sign-in. Not yet confirmed: a real phone adding a photo and getting the PC's answer quickly.
+5. Seen while testing: two photos of the same dataset cat (Milo front vs left profile) score 0.73 with
+   pet-recognition-base, which is below "possible". Different angles of one cat often land in "weak", so
+   lost-pet matching will mostly surface weak suggestions until a better model is approved (photo review v1's
+   model is moderator-only by design).
 
 ## 27 October 2026 (afternoon) - startup stories on both apps (Claude)
 

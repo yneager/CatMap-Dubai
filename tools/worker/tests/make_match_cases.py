@@ -21,7 +21,7 @@ def at(km_north: float):
 cases = []
 for animal in ("cat", "dog", "rabbit"):
     for method, visuals in (("embedding", [0.95, 0.885, 0.85, 0.8, 0.7, 0.6, 0.4, 0.2]), ("fingerprint", [0.95, 0.9, 0.86, 0.8]), ("details", [-1.0])):
-        for km, days, approx in ((0.3, 1, False), (4, 3, True), (40, 2, False), (1, -5, False), (2, 40, False)):
+        for km, days, approx in ((0.3, 1, False), (4, 3, True), (40, 2, False), (1, -5, False), (2, 40, False), (12, -12, False)):
             for v in visuals:
                 sighting = dict(lat=at(km), lng=55.2708, time_ms=T0 + int(days * DAY), approximate=approx, area_m=0,
                                 has_photos=method != "details", colour_words=["orange"] if km < 3 else ["black"])

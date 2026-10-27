@@ -76,6 +76,9 @@ object MatchEngine {
 
     fun down(tier: String): String = TIERS[min(TIERS.size - 1, TIERS.indexOf(tier) + 1)]
 
+    /** One step down for place or time, which lower a photo label but never remove it: it stops at "weak". */
+    fun contextDown(tier: String): String = if (tier == "weak" || tier == "none") tier else down(tier)
+
     fun visualTier(method: String, visual: Double, animalType: String = "cat"): String = when (method) {
         "embedding" -> embedThresholds(animalType).let { (strong, possible, weak) ->
             if (visual >= strong) "strong" else if (visual >= possible) "possible" else if (visual >= weak) "weak" else "none"
@@ -120,10 +123,10 @@ object MatchEngine {
             reasons += when (tier) { "strong" -> "photo_very_similar"; "possible" -> "photo_similar"; "weak" -> "photo_somewhat_similar"; else -> "photo_different" }
             if (m == "fingerprint") {
                 reasons += "colour_only"
-                if (!near) tier = down(tier)
+                if (!near) tier = contextDown(tier)
             }
-            if (far) tier = down(tier)
-            if (before) tier = down(tier)
+            if (far) tier = contextDown(tier)
+            if (before) tier = contextDown(tier)
         }
         reasons += if (near) "near" else if (far) "far" else "in_range"
         reasons += if (before) "before_lost" else if (recent) "recent" else "long_after"
