@@ -19,6 +19,7 @@ import { alertRoute } from '../../util/AppRoutes';
 import { getReleaseNotes } from '../../util/whatsNew';
 import { t, dateTime } from '../../i18n';
 import { config } from '../../config';
+import { LegalLinks } from '../components/LegalLinks';
 import {
   AppTopBar,
   SectionHeader,
@@ -369,6 +370,7 @@ function Settings() {
         </button>
         <SectionHeader>{t('about')}</SectionHeader>
         <p>{t('about_text', config.version)}</p>
+        <LegalLinks />
         <button
           className="link-row"
           disabled={action.busy}

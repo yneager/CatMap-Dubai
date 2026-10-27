@@ -65,6 +65,8 @@ data class AppSettings(
     val releaseNotes:String = "",
     /** Photo review on new sightings (docs/MATCHING_REVIEW_V1.md); offered to moderators only, off by default. */
     val photoReview: Boolean = false,
+    /** Crash reports to Firebase Crashlytics (release builds only, [com.catmap.dubai.util.CrashReports]); on by default. */
+    val crashReports: Boolean = true,
 ) {
     fun allows(category: NotifCategory) = notificationsEnabled && categories[category] != false
 }
@@ -112,6 +114,7 @@ class SettingsRepository(private val context: Context) {
         val RELEASE_NOTES_VERSION = stringPreferencesKey("release_notes_version")
         val RELEASE_NOTES = stringPreferencesKey("release_notes")
         val PHOTO_REVIEW = booleanPreferencesKey("photo_review")
+        val CRASH_REPORTS = booleanPreferencesKey("crash_reports")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { it.toSettings() }
@@ -147,6 +150,7 @@ class SettingsRepository(private val context: Context) {
         releaseNotesVersion = this[Keys.RELEASE_NOTES_VERSION].orEmpty(),
         releaseNotes = this[Keys.RELEASE_NOTES].orEmpty(),
         photoReview = this[Keys.PHOTO_REVIEW] ?: false,
+        crashReports = this[Keys.CRASH_REPORTS] ?: true,
     )
 
     suspend fun setTheme(mode: ThemeMode) = context.dataStore.edit { it[Keys.THEME] = mode.name }
@@ -156,6 +160,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setPrivacyLevel(level: String) = context.dataStore.edit { it[Keys.PRIVACY_LEVEL] = level }
     suspend fun setShareExact(on: Boolean) = context.dataStore.edit { it[Keys.SHARE_EXACT] = on }
     suspend fun setPhotoReview(on: Boolean) = context.dataStore.edit { it[Keys.PHOTO_REVIEW] = on }
+    suspend fun setCrashReports(on: Boolean) = context.dataStore.edit { it[Keys.CRASH_REPORTS] = on }
     suspend fun setMapMode(mode: MapMode) = context.dataStore.edit { it[Keys.MAP_MODE] = mode.name }
     suspend fun setSatellite(on: Boolean) = context.dataStore.edit { it[Keys.SATELLITE] = on }
     suspend fun setShowStations(on: Boolean) = context.dataStore.edit { it[Keys.STATIONS] = on }

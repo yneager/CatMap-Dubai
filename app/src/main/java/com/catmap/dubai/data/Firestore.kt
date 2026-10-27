@@ -112,6 +112,7 @@ object AppErrors {
         // Listeners are torn down with permission errors right after sign-out; those are expected.
         val signedOut = runCatching { FirebaseAuth.getInstance().currentUser == null }.getOrDefault(true)
         if (signedOut) return
+        com.catmap.dubai.util.CrashReports.record(t)
         if (::appContext.isInitialized) _messages.tryEmit(t.userMessage(appContext))
     }
 

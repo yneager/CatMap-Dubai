@@ -14,6 +14,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.platform.LocalContext
+import com.catmap.dubai.util.LegalLinks
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -193,6 +196,12 @@ fun RegisterScreen(nav: NavHostController) {
                 PasswordField(confirm, { confirm = it }, stringResource(R.string.confirm_password), ImeAction.Done)
                 if (mismatch) Text(stringResource(R.string.passwords_dont_match), color = MaterialTheme.colorScheme.error)
                 Text(stringResource(R.string.register_privacy_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val context = LocalContext.current
+                Text(stringResource(R.string.register_agree), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row {
+                    TextButton(onClick = { LegalLinks.open(context, LegalLinks.TERMS) }) { Text(stringResource(R.string.terms_of_use)) }
+                    TextButton(onClick = { LegalLinks.open(context, LegalLinks.PRIVACY) }) { Text(stringResource(R.string.privacy_policy)) }
+                }
                 BusyButton(
                     stringResource(R.string.create_account), runner.busy,
                     username.length >= 3 && email.contains('@') && password.length >= 8 && !mismatch && confirm.isNotEmpty(),

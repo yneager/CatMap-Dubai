@@ -2,6 +2,7 @@ package com.catmap.dubai.ui.settings
 
 import android.Manifest
 import android.content.Intent
+import com.catmap.dubai.util.LegalLinks
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -260,6 +261,8 @@ fun SettingsScreen(nav: NavHostController) {
                 SwitchRow(stringResource(R.string.show_stats_publicly), p.showStatsPublicly) { on -> runner.run { container.users.setShowStats(p.uid, on) } }
             }
             Text(stringResource(R.string.metadata_always_removed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            SwitchRow(stringResource(R.string.crash_reports_setting), settings.crashReports) { on -> scope.launch { container.settings.setCrashReports(on) } }
+            Text(stringResource(R.string.crash_reports_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             DemoAccountSwitcher(nav)
 
@@ -292,6 +295,10 @@ fun SettingsScreen(nav: NavHostController) {
 
             SectionHeader(stringResource(R.string.about))
             Text(stringResource(R.string.about_text, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodySmall)
+            Row {
+                TextButton(onClick = { LegalLinks.open(context, LegalLinks.PRIVACY) }) { Text(stringResource(R.string.privacy_policy)) }
+                TextButton(onClick = { LegalLinks.open(context, LegalLinks.TERMS) }) { Text(stringResource(R.string.terms_of_use)) }
+            }
             Text(stringResource(R.string.map_attribution), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(vertical = 16.dp))
         }
     }

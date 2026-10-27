@@ -23,6 +23,9 @@ older look-alikes as "weak". See the section below. The owner checked on a phone
 
 **Still open (owner):**
 
+* Send Claude the contact email for the privacy policy and terms (they say `CONTACT_EMAIL`), then run
+  `web\publish.cmd` to put them online at catmap-dubai.web.app/privacy.html and /terms.html.
+
 * GitHub settings: Environments, then `release`, then Required reviewers: add yourself, so future releases wait for you.
 * `web\publish.cmd` (Claude's run was refused by the auto-mode classifier).
 * Replace the release text on GitHub (it only says "Full Changelog: link") with friendly notes; the app's update
@@ -59,6 +62,34 @@ exact command (start in the `cat` folder), or the owner adds a permission rule i
   it through the auth emulator's `oobCodes`, and set a role with `Bearer owner` emulator access.
 * **Photo review locally:** run `cat-server` `server.py --emulator --review`. Seed cats with 2+ photos near the test
   spot, turn on the moderator switch in Settings, then add a new sighting.
+
+## 27 October 2026 (night) - public release prep: legal pages, crash reports, 4-hour inbox check (Claude)
+
+The owner asked for items 3 and 5 of the release list and a 4-hour notification check, then for the free plan's
+capacity.
+
+1. **Inbox check every 4 hours** (`SystemNotifications.POLL_HOURS`). It was 15 minutes. `ExistingPeriodicWorkPolicy`
+   changed from KEEP to UPDATE, so installed phones switch too. An open app still gets alerts at once from its live
+   listener; a closed Android app can now be up to 4 hours late. The web app never had a background check.
+2. **Privacy policy and terms of use:** `web/public/privacy.html` and `terms.html`, plain English, written from the
+   privacy audit and the code. Linked from Settings → About and from sign-up (with "By creating an account, you agree
+   ..."), on Android (`util/LegalLinks.kt`, opens `https://catmap-dubai.web.app/...`) and the web
+   (`ui/components/LegalLinks.tsx`). **Both pages say `CONTACT_EMAIL` where the owner's contact address must go,
+   and they aren't online until the owner runs `web\publish.cmd`.** Have them read by someone who knows UAE data
+   law before a wide launch. English only for now (Arabic with D2).
+3. **Crash reports (Android only):** Firebase Crashlytics 20.1.1 (BoM), Gradle plugin 3.0.8. Release builds only;
+   off in the manifest until the app applies **Settings → Privacy → Send crash reports** (on by default). No user
+   ID. Caught errors are recorded as non-fatal, except offline errors. The automatic mapping upload needs the
+   google-services plugin this build replaces, so it's off; `release.yml` keeps `mapping.txt` as the `r8-mapping`
+   artifact (90 days). Details and the upload command: `docs/security/CRASH_REPORTS.md`. Checked on the Android
+   emulator: a staging build (R8) logs "Initializing Firebase Crashlytics 20.1.1" and keeps running.
+4. **Capacity:** `docs/cost/FREE_PLAN_CAPACITY.md`. About 120 daily users (about 500 installs) now, about 30-60
+   once the map is full. Storage holds about 5,000 photos in total. Production on 27 Oct: 9 users, 4 posts,
+   24 photos (read-only count queries). `BASELINE.md`'s "46,000 worker reads a day" is out of date: the worker's
+   re-listen is incremental, with a full re-read every 12 hours.
+5. Strings: 5 new ones in `strings_k.py`, marked TODO-AR. Checks: Android unit tests and `assembleStaging`;
+   web lint, Prettier, tsc and unit tests; e2e `legal.spec.ts` + `flows.spec.ts` + `startup-intro.spec.ts`, 22
+   passed (Chromium and WebKit, isolated emulators).
 
 ## 27 October 2026 (evening) - photo check never saved; missed lost-pet match (Claude)
 

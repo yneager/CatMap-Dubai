@@ -1281,6 +1281,11 @@
     <string name="photo_review_none">None of these: it\'s a new cat</string>
     <string name="photo_review_unavailable">Nearby cats without enough photos to compare: %1$d</string>
     <string name="photo_review_failed">Photo review is unavailable right now, so these suggestions come from colours on this phone.</string>
+    <string name="crash_reports_setting">Send crash reports</string>
+    <string name="crash_reports_hint">If the app crashes, the technical details (what went wrong, the phone model, Android and app version) go to Google\'s Firebase Crashlytics so the bug can be fixed. Never your posts, messages, photos or places.</string>
+    <string name="privacy_policy">Privacy policy</string>
+    <string name="terms_of_use">Terms of use</string>
+    <string name="register_agree">By creating an account, you agree to the terms of use and the privacy policy.</string>
     <plurals name="unread_notifications">
         <item quantity="one">%d unread notification</item>
         <item quantity="other">%d unread notifications</item>

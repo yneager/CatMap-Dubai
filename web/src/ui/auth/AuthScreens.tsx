@@ -6,6 +6,7 @@ import { useApp, useAction } from '../../state';
 import { t } from '../../i18n';
 import { safeRoute } from '../../util/links';
 import { AppException } from '../../data/Firestore';
+import { LegalLinks } from '../components/LegalLinks';
 export default function AuthScreens() {
   const location = useLocation(),
     path = location.pathname,
@@ -192,6 +193,8 @@ export default function AuthScreens() {
                   required
                 />
                 <p className="muted small">{t('register_privacy_note')}</p>
+                <p className="muted small">{t('register_agree')}</p>
+                <LegalLinks />
                 {confirmation && confirmation !== password && (
                   <ErrorText text={t('passwords_dont_match')} />
                 )}

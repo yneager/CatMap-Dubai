@@ -31,6 +31,9 @@
         android:theme="@style/Theme.CatMap"
         tools:targetApi="36">
 
+        <!-- Off until CatMapApp applies the person's setting (util/CrashReports.kt): never from debug or staging builds. -->
+        <meta-data android:name="firebase_crashlytics_collection_enabled" android:value="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

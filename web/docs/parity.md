@@ -47,6 +47,7 @@ The light/dark launch-image set includes the 402×874 / 440×956 families and 42
 - Posters preserve native geometry and QR target rules, but browser/Android canvas text baselines, line wrapping and QR module rasterization differ. Safari uses a bounded font-load wait with system-font fallback if its font requests stall.
 - List/dialog/administration spacing, chart labels, empty-state illustration sizes and control elevations are close CSS equivalents, not pixel-identical. Recognition has the explicit web-descriptor/ML Kit adaptation.
 - Actual pinch, camera capture, share-sheet, install and geolocation presentation remain unverified on a real iPhone. Browser alert toasts replace Android system notifications; no background poll or push is implemented as specified.
+- Crash reports (Firebase Crashlytics, Settings → Privacy) are Android-only: Crashlytics has no web SDK (`docs/security/CRASH_REPORTS.md`). The privacy policy and terms (`public/privacy.html`, `public/terms.html`) are shared: both apps link to them from Settings and sign-up.
 
 The renderer set is review evidence. Visual parity remains subject to the owner's/Claude's comparison and real-device approval, and should not be described as exact 1:1.
 

@@ -3,6 +3,7 @@ import groovy.json.JsonSlurper
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.firebase.crashlytics")
     id("io.github.takahirom.roborazzi") version "1.76.0"
     id("androidx.baselineprofile") version "1.5.0"
 }
@@ -119,6 +120,8 @@ android {
         buildConfigField("String", "GITHUB_REPO", "\"$githubRepo\"")
         buildConfigField("boolean", "STORAGE_ENABLED", blazeEnabled.toString())
         buildConfigField("boolean", "PUSH_ENABLED", blazeEnabled.toString())
+        // Crash reports (Firebase Crashlytics) only from release builds, never from tests, emulators or staging.
+        buildConfigField("boolean", "CRASH_REPORTS", "false")
     }
 
     signingConfigs {
@@ -139,6 +142,10 @@ android {
             if (hasSigning) signingConfig = signingConfigs.getByName("release")
             // Never the local emulators: release doesn't call useEmulators(), and its network config refuses plain HTTP.
             buildConfigField("String", "EMULATOR_HOST", "\"\"")
+            buildConfigField("boolean", "CRASH_REPORTS", "true")
+            // The automatic mapping upload needs the google-services plugin, which this build replaces (firebaseResources).
+            // release.yml keeps the R8 mapping file as an artifact instead (docs/security/CRASH_REPORTS.md).
+            configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> { mappingFileUploadEnabled = false }
             // Phones are ARM; the x86 builds of the map engine only serve PC emulators and would add ~50 MB.
             ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         }
@@ -148,6 +155,8 @@ android {
             initWith(getByName("release"))
             signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = ".staging"
+            buildConfigField("boolean", "CRASH_REPORTS", "false")
+            configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> { mappingFileUploadEnabled = false }
             ndk { abiFilters.clear() }
             useEmulators()
         }
@@ -224,6 +233,7 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-crashlytics")
     // App Check, monitoring only (docs/security/APP_CHECK.md): Play Integrity in release, the debug provider elsewhere.
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
     debugImplementation("com.google.firebase:firebase-appcheck-debug")

@@ -3,6 +3,7 @@ package com.catmap.dubai
 import android.app.Application
 import com.catmap.dubai.data.AppErrors
 import com.catmap.dubai.notifications.SystemNotifications
+import com.catmap.dubai.util.CrashReports
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -32,6 +33,10 @@ class CatMapApp : Application() {
         }
         container.finishPendingWipe()
         AppErrors.init(this)
+        if (container.firebaseReady) {
+            container.settings.settings.map { it.crashReports }.distinctUntilChanged()
+                .onEach { CrashReports.setEnabled(it) }.launchIn(container.scope)
+        }
 
         // The map initializes lazily on its UI thread in CommunityMap, when it is actually shown.
         container.scope.launch(Dispatchers.IO) {
